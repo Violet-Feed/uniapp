@@ -1,15 +1,33 @@
 {
 	"pages": [
 		{
+			"path": "pages/user/login",
+			"style": {
+				"navigationBarTitleText":"登录"
+			}
+		},
+		{
+			"path": "pages/user/register",
+			"style": {
+				"navigationBarTitleText":"注册"
+			}
+		},
+		{
 			"path": "pages/video/video",
 			"style": {
 				"navigationBarTitleText":"视频"
 			}
 		},
 		{
-			"path": "pages/im/im",
+			"path": "pages/im/home",
 			"style": {
 				"navigationBarTitleText":"消息"
+			}
+		},
+		{
+			"path": "pages/im/conversation",
+			"style": {
+				"navigationBarTitleText":"聊天窗口"
 			}
 		},
 		{
@@ -19,9 +37,27 @@
 			}
 		},
 		{
-			"path": "pages/user/user",
+			"path": "pages/user/me",
 			"style": {
 				"navigationBarTitleText":"我的"
+			}
+		},
+		{
+			"path": "pages/user/user",
+			"style": {
+				"navigationBarTitleText":"用户个人页"
+			}
+		},
+		{
+			"path": "pages/user/following_list",
+			"style": {
+				"navigationBarTitleText":"关注列表"
+			}
+		},
+		{
+			"path": "pages/user/followed_list",
+			"style": {
+				"navigationBarTitleText":"粉丝列表"
 			}
 		}
 	],
@@ -40,7 +76,7 @@
 			},
 			{
 				"text": "消息",
-				"pagePath": "pages/im/im"
+				"pagePath": "pages/im/home"
 			},
 			{
 				"text": "商城",
@@ -48,7 +84,7 @@
 			},
 			{
 				"text": "我的",
-				"pagePath": "pages/user/user"
+				"pagePath": "pages/user/me"
 			}
 		]
 	},
