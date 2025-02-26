@@ -71,10 +71,10 @@
     "vueVersion" : "3",
     "h5" : {
         "router" : {
-            "mode" : "hash"
+            "mode" : "history"
         },
         "devServer" : {
-            "https" : true,
+            "https" : false,
             "port" : ""
         }
     }

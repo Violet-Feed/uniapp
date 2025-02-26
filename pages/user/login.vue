@@ -19,13 +19,6 @@ export default {
             password: ''
         };
     },
-    onLoad() {
-        // 检查本地是否有 token
-        const token = uni.getStorageSync('token');
-        if (token) {
-            this.getUserInfo(token);
-        }
-    },
     methods: {
         login() {
             if (!this.username || !this.password) {
@@ -54,8 +47,9 @@ export default {
                                 title: '登录成功',
                                 icon: 'success'
                             });
-                            // 登录成功后获取用户信息
-                            this.getUserInfo(token);
+							uni.reLaunch({
+								url: '/pages/video/video'
+							});
                         } else {
                             uni.showToast({
                                 title: data.message,
@@ -63,54 +57,6 @@ export default {
                             });
                         }
                     } else {
-                        uni.showToast({
-                            title: '网络错误，请稍后重试',
-                            icon: 'none'
-                        });
-                    }
-                },
-                fail: (err) => {
-                    uni.showToast({
-                        title: '网络错误，请稍后重试',
-                        icon: 'none'
-                    });
-                }
-            });
-        },
-        getUserInfo(token) {
-            uni.request({
-                url: 'http://127.0.0.1:3000/api/action/user/get_info/',
-                method: 'GET',
-                header: {
-                    Authorization: `Bearer ${token}`
-                },
-                success: (res) => {
-                    if (res.statusCode === 200) {
-                        const data = res.data;
-                        if (data.message === "success") {
-                            // 存储用户信息到本地，可根据实际返回字段调整
-							getApp().globalData.userId =  data.userId;
-							getApp().globalData.username = data.username;
-							getApp().globalData.avatar = data.avatar;
-                            // uni.setStorageSync('user_id', data.user_id);
-                            // uni.setStorageSync('username', data.username);
-                            // uni.setStorageSync('avatar', data.avatar);
-                            uni.switchTab({
-                                url: '/pages/im/home'
-                            });
-                        } else {
-                            // 获取用户信息失败，跳转到登录界面
-                            uni.showToast({
-                                title: '登录过期',
-                                icon: 'none'
-                            });
-							uni.removeStorageSync('token');
-                            uni.navigateTo({
-                                url: '/pages/user/login'
-                            });
-                        }
-                    } else {
-                        // 请求失败
                         uni.showToast({
                             title: '网络错误，请稍后重试',
                             icon: 'none'

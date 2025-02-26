@@ -88,6 +88,37 @@ export default {
             this.$nextTick(() => {
                 this.scrollTop = this.$refs.chatMessages.scrollHeight;
             });
+			const token=getApp().globalData.token;
+			const con_id="1";
+			uni.request({
+			    url: 'http://127.0.0.1:3001/api/im/message/send',
+			    method: 'POST',
+				header: { 
+					'content-type': 'application/json',
+					Authorization: `Bearer ${token}`,
+					},
+			    data: {
+					con_id:con_id,
+					msg_type:1,
+			        msg_content: this.searchKeyword
+			    },
+			    success: (res) => {
+			        if (res.statusCode === 200) {
+			            
+			        } else {
+			            uni.showToast({
+			                title: '搜索失败，请稍后重试',
+			                icon: 'none'
+			            });
+			        }
+			    },
+			    fail: (err) => {
+			        uni.showToast({
+			            title: '网络错误，请稍后重试',
+			            icon: 'none'
+			        });
+			    }
+			});
         },
         goToUserProfile() {
             uni.navigateTo({

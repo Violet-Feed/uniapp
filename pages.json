@@ -1,18 +1,6 @@
 {
 	"pages": [
 		{
-			"path": "pages/user/login",
-			"style": {
-				"navigationBarTitleText":"登录"
-			}
-		},
-		{
-			"path": "pages/user/register",
-			"style": {
-				"navigationBarTitleText":"注册"
-			}
-		},
-		{
 			"path": "pages/video/video",
 			"style": {
 				"navigationBarTitleText":"视频"
@@ -58,6 +46,25 @@
 			"path": "pages/user/followed_list",
 			"style": {
 				"navigationBarTitleText":"粉丝列表"
+			}
+		},
+		{
+			"path": "pages/user/login",
+			"style": {
+				"navigationBarTitleText":"登录"
+			}
+		},
+		{
+			"path": "pages/user/register",
+			"style": {
+				"navigationBarTitleText":"注册"
+			}
+		},
+		{
+			"path" : "pages/im/search",
+			"style" : 
+			{
+				"navigationBarTitleText" : ""
 			}
 		}
 	],

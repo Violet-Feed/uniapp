@@ -1,5 +1,7 @@
 <template>
     <view class="session-container">
+        <!-- 搜索按钮 -->
+        <button @click="goToSearchPage">搜索</button>
         <!-- 会话列表 -->
         <view class="session-list">
             <view class="session-item" v-for="(session, index) in chatSessions" :key="index" @click="openChat(session)">
@@ -54,6 +56,12 @@ export default {
         };
     },
     methods: {
+        // 跳转到搜索页面的方法
+        goToSearchPage() {
+            uni.navigateTo({
+                url: '/pages/im/search'
+            });
+        },
         // 打开聊天页面的方法
         openChat(session) {
             uni.navigateTo({

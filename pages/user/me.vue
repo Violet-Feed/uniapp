@@ -8,6 +8,7 @@
             <view @click="goToFansList">粉丝数: {{ userInfo.followers }}</view>
             <view @click="goToFollowingList">关注数: {{ userInfo.following }}</view>
         </view>
+		<button style="background-color: #aa0000; color: white;" @click="logout">退出登录</button>
     </view>
 </template>
 
@@ -25,7 +26,6 @@ export default {
         };
     },
     onLoad(options) {
-		console.log(getApp().globalData.userId);
         this.userInfo.id = getApp().globalData.userId;
         this.userInfo.name = getApp().globalData.username;
         this.userInfo.avatar = getApp().globalData.avatar;
@@ -42,7 +42,24 @@ export default {
             uni.navigateTo({
                 url: `/pages/user/following_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
             });
-        }
+        },
+		logout() {
+			getApp().globalData.socketTask.close({
+				code: 1000, // 关闭原因代码，1000 表示正常关闭
+				reason: 'logout',
+				success() {
+				    console.log('WebSocket 连接关闭成功');
+				},
+				fail(err) {
+				    console.error('WebSocket 连接关闭失败:', err);
+				}
+			});
+			delete getApp().globalData.token;
+			uni.removeStorageSync('token');
+			uni.reLaunch({
+				url: '/pages/video/video' // 替换为你的首页路径
+			});
+		}
     }
 };
 </script>
