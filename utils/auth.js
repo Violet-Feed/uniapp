@@ -1,4 +1,9 @@
-import { connectWebSocket } from "@/utils/websocket.js";
+import {
+	connectWebSocket
+} from "@/utils/websocket.js";
+import {
+	getByInit
+} from '@/request/get_by_init';
 export const checkAuth = async () => {
 	const app = getApp();
 	const {
@@ -6,7 +11,7 @@ export const checkAuth = async () => {
 	} = app.globalData;
 
 	if (token) {
-		return true; // 已有 userId，权限验证通过
+		return true;
 	}
 
 	const localToken = uni.getStorageSync('token');
@@ -18,7 +23,7 @@ export const checkAuth = async () => {
 				url: 'http://127.0.0.1:3000/api/action/user/get_info/',
 				method: 'GET',
 				header: {
-					Authorization: `Bearer ${localToken}`
+					'Authorization': `Bearer ${localToken}`
 				}
 			});
 			if (res.statusCode === 200) {
@@ -32,6 +37,7 @@ export const checkAuth = async () => {
 					app.globalData.avatar = avatar;
 					app.globalData.username = username;
 					connectWebSocket();
+					getByInit();
 					return true; // 获取用户信息成功，权限验证通过
 				} else {
 					uni.showToast({

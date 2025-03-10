@@ -2,11 +2,21 @@
 </template>
 
 <script>
-	import {checkAuth} from '@/utils/auth.js';
+	import DB from '@/utils/sqlite.js'
+	import {
+		checkAuth
+	} from '@/utils/auth.js';
+	import {
+		getByInit
+	} from './request/get_by_init';
 	export default {
 		onLaunch() {
+			const platform = uni.getSystemInfoSync().platform
 			checkAuth();
 			this.initRouterGuard();
+			if (platform === "android" || platform == "ios") {
+				DB.openSqlite();
+			}
 		},
 		methods: {
 			initRouterGuard() {
@@ -14,7 +24,9 @@
 				routerMethods.forEach((method) => {
 					uni.addInterceptor(method, {
 						invoke(args) {
-							const noAuthPages = ['/pages/user/login', '/pages/user/register']; // 不需要权限验证的页面路径
+							const noAuthPages = ['/pages/user/login',
+								'/pages/user/register'
+							]; // 不需要权限验证的页面路径
 							if (!noAuthPages.includes(args.url)) {
 								return checkAuth().then((hasAuth) => {
 									if (hasAuth) {

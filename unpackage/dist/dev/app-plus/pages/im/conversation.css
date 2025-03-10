@@ -1,0 +1,109 @@
+
+.chat-container[data-v-a3a521f6] {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+		position: relative;
+}
+.chat-header[data-v-a3a521f6] {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: 10px;
+		border-bottom: 1px solid #eee;
+		position: fixed;
+		/* 固定顶栏 */
+		top: 0;
+		left: 0;
+		right: 0;
+		background-color: white;
+		/* 设置背景颜色 */
+		z-index: 1;
+		/* 设置层级，确保在消息列表之上 */
+}
+.chat-header .name[data-v-a3a521f6] {
+		font-weight: bold;
+		font-size: 18px;
+}
+.chat-messages[data-v-a3a521f6] {
+		flex: 1;
+		overflow-y: auto;
+		margin-top: 10px;
+		margin-bottom: 60px;
+		/* 为输入栏留出空间 */
+		padding-left: 10px;
+		/* 统一消息左右间距 */
+		padding-right: 10px;
+		box-sizing: border-box;
+		/* 确保 padding 包含在元素宽度内 */
+}
+.message[data-v-a3a521f6] {
+		display: flex;
+		margin-bottom: 10px;
+}
+.message-left[data-v-a3a521f6] {
+		justify-content: flex-start;
+}
+.message-right[data-v-a3a521f6] {
+		justify-content: flex-end;
+}
+.avatar[data-v-a3a521f6] {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		overflow: hidden;
+		margin: 0 10px;
+		/* 头像距离左右两侧的距离相同 */
+}
+.avatar uni-image[data-v-a3a521f6] {
+		width: 100%;
+		height: 100%;
+}
+.message-content[data-v-a3a521f6] {
+		max-width: 70%;
+}
+.bubble[data-v-a3a521f6] {
+		padding: 10px;
+		border-radius: 10px;
+		background-color: #f0f0f0;
+}
+.message-right .bubble[data-v-a3a521f6] {
+		background-color: #0084ff;
+		color: white;
+}
+.input-bar[data-v-a3a521f6] {
+		display: flex;
+		padding: 10px;
+		border-top: 1px solid #ccc;
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		background-color: white;
+		box-sizing: border-box;
+}
+.input-bar uni-input[data-v-a3a521f6] {
+		flex: 1;
+		padding: 10px;
+		border: 1px solid #ccc;
+		border-radius: 5px;
+		margin-right: 10px;
+		height: 40px;
+		/* 输入框高度 */
+		box-sizing: border-box;
+}
+.input-bar uni-button[data-v-a3a521f6] {
+		padding: 0 20px;
+		/* 调整按钮内边距 */
+		background-color: #0084ff;
+		color: white;
+		border: none;
+		border-radius: 5px;
+		height: 40px;
+		/* 按钮高度和输入框相同 */
+		box-sizing: border-box;
+		display: flex;
+		/* 使用 flex 布局让文字上下居中 */
+		justify-content: center;
+		align-items: center;
+}

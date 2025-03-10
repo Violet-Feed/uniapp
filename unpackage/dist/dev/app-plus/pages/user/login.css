@@ -1,0 +1,25 @@
+
+.login-container[data-v-6163e5ce] {
+		padding: 20px;
+}
+.input-group[data-v-6163e5ce] {
+		margin-bottom: 20px;
+}
+.input-group uni-input[data-v-6163e5ce] {
+		padding: 10px;
+		border: 1px solid #ccc;
+		border-radius: 5px;
+}
+uni-button[data-v-6163e5ce] {
+		padding: 10px;
+		background-color: #0084ff;
+		color: white;
+		border: none;
+		border-radius: 5px;
+}
+.register-link[data-v-6163e5ce] {
+		margin-top: 20px;
+		text-align: center;
+		color: #0084ff;
+		cursor: pointer;
+}
