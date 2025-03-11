@@ -30,17 +30,17 @@
 	export default {
 		data() {
 			return {
-				conIndex: getApp().globalData.userConIndex,
+				userConIndex: getApp().globalData.userConIndex,
 				conversationList: [],
 			};
 		},
 		onLoad() {
-			DB.selectConversation(this.conIndex)
+			DB.selectConversation(this.userConIndex)
 				.then((res) => {
 					this.conversationList = res;
 				})
 				.catch((err) => {
-					console.error('selectConversation err, err = ', error);
+					console.error('selectConversation err',err);
 				})
 		},
 		methods: {
@@ -53,7 +53,7 @@
 			// 打开聊天页面的方法
 			openChat(conversation) {
 				uni.navigateTo({
-					url: `/pages/im/conversation?id=${conversation.con_short_id}&name=${conversation.name}&avatar=${conversation.avatar}`
+					url: `/pages/im/conversation?conShortId=${conversation.con_short_id}&conId=${conversation.con_id}&conType=${conversation.con_type}&name=${conversation.name}`
 				});
 			}
 		}

@@ -3,23 +3,23 @@
 		<!-- 聊天消息列表 -->
 		<scroll-view class="chat-messages" scroll-y="true" :scroll-top="scrollTop" ref="chatMessages">
 			<view class="message"
-				:class="{ 'message-left': item.isSelf === false, 'message-right': item.isSelf === true }"
-				v-for="(item, index) in messages" :key="index">
+				:class="{ 'message-left': message.user_id!=userId, 'message-right': message.user_id==userId }"
+				v-for="(message, index) in messages" :key="index">
 				<!-- 对方消息，头像在左 -->
-				<template v-if="!item.isSelf">
-					<view class="avatar" @click="goToUserProfile">
-						<image :src="chatTarget.avatar"></image>
+				<template v-if="message.user_id!=userId">
+					<view class="avatar" @click="goToUserProfile(message)">
+						<image :src="conversation.avatar"></image>
 					</view>
 					<view class="message-content">
-						<view class="bubble">{{ item.content }}</view>
+						<view class="bubble">{{ message.msg_content }}</view>
 					</view>
 				</template>
 				<!-- 自己消息，头像在右 -->
 				<template v-else>
 					<view class="message-content">
-						<view class="bubble">{{ item.content }}</view>
+						<view class="bubble">{{ message.msg_content }}</view>
 					</view>
-					<view class="avatar" @click="goToUserProfile">
+					<view class="avatar" @click="goToUserProfile(message)">
 						<image :src="myAvatar"></image>
 					</view>
 				</template>
@@ -34,16 +34,19 @@
 </template>
 
 <script>
+	import JSONbig from 'json-bigint';
+	import DB from '@/utils/sqlite.js'
 	export default {
 		data() {
 			return {
-				chatTarget: {
-					id: null,
+				userId: getApp().globalData.userId,
+				conversation: {
+					conShortId: 0,
+					conId: '',
+					conType: 0,
 					name: '',
-					avatar: '',
-					followers: 100,
-					following: 50
 				},
+				conIndex: Number.MAX_VALUE,
 				messages: [],
 				inputText: '',
 				scrollTop: 0,
@@ -51,79 +54,75 @@
 			};
 		},
 		onLoad(options) {
-			// 获取传递过来的对方昵称
-			this.chatTarget.id = options.id;
-			this.chatTarget.name = options.name;
-			this.chatTarget.avatar = options.avatar;
-
-			// 动态设置导航栏标题
+			this.conversation.conShortId = Number(options.conShortId);
+			this.conversation.conId = options.conId;
+			this.conversation.conType = Number(options.conType);
+			this.conversation.name = options.name;
 			uni.setNavigationBarTitle({
-				title: this.chatTarget.name
+				title: this.conversation.name
 			});
-
-			// 加载聊天记录等其他逻辑
-			this.loadMessages();
+			DB.selectMessage(BigInt(this.conversation.conShortId), this.conIndex)
+				.then((res) => {
+					this.messages = res;
+					this.messages.reverse();
+				})
+				.catch((err) => {
+					console.error("selectMessage err", err);
+				})
 		},
 		methods: {
-			loadMessages() {
-				this.messages = [{
-						isSelf: false,
-						content: `你好，我是 ${this.chatTarget.name}`
-					},
-					{
-						isSelf: true,
-						content: '你好呀'
-					}
-				];
-				this.$nextTick(() => {
-					this.scrollTop = this.$refs.chatMessages.scrollHeight;
-				});
-			},
-			sendMessage() {
+			async sendMessage() {
 				if (this.inputText.trim() === '') return;
-				this.messages.push({
-					isSelf: true,
-					content: this.inputText
-				});
-				this.inputText = '';
-				this.$nextTick(() => {
-					this.scrollTop = this.$refs.chatMessages.scrollHeight;
-				});
 				const token = getApp().globalData.token;
-				const con_id = "1";
-				uni.request({
+				const data={
+					con_short_id: BigInt(this.conversation.conShortId),
+					con_id: this.conversation.conId,
+					con_type: this.conversation.conType,
+					msg_type: 1,
+					msg_content: this.inputText
+				}
+				const dataJson= JSONbig.stringify(data)
+				console.log(dataJson);
+				const res = await uni.request({
 					url: 'http://127.0.0.1:3001/api/im/message/send',
 					method: 'POST',
 					header: {
 						'content-type': 'application/json',
-						Authorization: `Bearer ${token}`,
+						'Authorization': `Bearer ${token}`,
 					},
-					data: {
-						con_id: con_id,
-						msg_type: 1,
-						msg_content: this.searchKeyword
-					},
-					success: (res) => {
-						if (res.statusCode === 200) {
-
-						} else {
-							uni.showToast({
-								title: '搜索失败，请稍后重试',
-								icon: 'none'
-							});
-						}
-					},
-					fail: (err) => {
+					data: dataJson,
+				});
+				console.log(res);
+				if (res.statusCode === 200) {
+					if (res.data.code === 1000) {
+						this.messages.push({
+							user_id: this.userId,
+							con_short_id: this.conversation.conShortId,
+							con_id: this.conversation.conId,
+							con_type: this.conversation.conType,
+							msg_type: 1,
+							msg_content: this.inputText
+						});
+						this.inputText = '';
+						this.$nextTick(() => {
+							this.scrollTop = this.$refs.chatMessages.scrollHeight;
+						});
+					} else {
 						uni.showToast({
-							title: '网络错误，请稍后重试',
+							title: '服务器错误',
 							icon: 'none'
 						});
 					}
-				});
+				} else {
+					uni.showToast({
+						title: '网络错误',
+						icon: 'none'
+					});
+				}
 			},
-			goToUserProfile() {
+			goToUserProfile(message) {
 				uni.navigateTo({
-					url: `/pages/user/user?id=${this.chatTarget.id}&name=${this.chatTarget.name}&avatar=${this.chatTarget.avatar}&followers=${this.chatTarget.followers}&following=${this.chatTarget.following}`
+					url: `/pages/user/user?id=${message.user_id}&name=${message.name}&avatar=${message.avatar}`
 				});
 			}
 		}

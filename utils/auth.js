@@ -17,44 +17,39 @@ export const checkAuth = async () => {
 	const localToken = uni.getStorageSync('token');
 	if (localToken) {
 		app.globalData.token = localToken;
-		try {
-			// 调用 getUserInfo 接口获取用户信息
-			const res = await uni.request({
-				url: 'http://127.0.0.1:3000/api/action/user/get_info/',
-				method: 'GET',
-				header: {
-					'Authorization': `Bearer ${localToken}`
-				}
-			});
-			if (res.statusCode === 200) {
-				if (res.data.message === "success") {
-					const {
-						userId,
-						avatar,
-						username
-					} = res.data;
-					app.globalData.userId = userId;
-					app.globalData.avatar = avatar;
-					app.globalData.username = username;
-					connectWebSocket();
-					getByInit();
-					return true; // 获取用户信息成功，权限验证通过
-				} else {
-					uni.showToast({
-						title: '登录过期',
-						icon: 'none'
-					});
-					throw new Error("invaild token")
-				}
+		const res = await uni.request({
+			url: 'http://127.0.0.1:3000/api/action/user/get_info/',
+			method: 'GET',
+			header: {
+				'Authorization': `Bearer ${localToken}`
+			}
+		});
+		
+		if (res.statusCode === 200) {
+			if (res.data.code === 1000) {
+				const {
+					userId,
+					avatar,
+					username
+				} = res.data;
+				app.globalData.userId = BigInt(userId);
+				app.globalData.avatar = avatar;
+				app.globalData.username = username;
+				connectWebSocket();
+				getByInit();
+				return true; // 获取用户信息成功，权限验证通过
 			} else {
 				uni.showToast({
-					title: '网络错误',
+					title: '登录过期',
 					icon: 'none'
 				});
+				throw new Error("invaild token")
 			}
-
-		} catch (error) {
-
+		} else {
+			uni.showToast({
+				title: '网络错误',
+				icon: 'none'
+			});
 		}
 	}
 

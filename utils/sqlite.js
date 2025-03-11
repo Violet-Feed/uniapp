@@ -68,8 +68,8 @@ function createTable(dbTable, data) {
                     extra TEXT,
                     member_count INTEGER,
                     badge_count INTEGER,
+					read_index_end INTEGER,
                     read_badge_count INTEGER,
-                    read_index_end INTEGER,
                     user_con_index INTEGER
                 );`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_con_short_id ON ${conTable} (con_short_id);`,
@@ -177,7 +177,7 @@ function insertMessage(data) {
 		userId
 	} = getApp().globalData;
 	const dbTable = "message_" + userId;
-	const sql = `INSERT INTO ${dbTable} VALUES ${data}`;
+	const sql = `INSERT OR IGNORE INTO ${dbTable} VALUES ${data}`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.executeSql({
 			name: dbName,
@@ -218,7 +218,7 @@ function selectMessage(conShortId, index) {
 	} = getApp().globalData;
 	const dbTable = "message_" + userId;
 	const sql =
-		`SELECT * FROM ${dbTable} WHERE con_short_id = ${conShortId} AND con_index < ${index} ORDER BY con_index DESC LIMIT 20`;
+		`SELECT * FROM ${dbTable} WHERE con_short_id = ${conShortId} AND con_index <= ${index} ORDER BY con_index DESC LIMIT 20`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.selectSql({
 			name: dbName,
