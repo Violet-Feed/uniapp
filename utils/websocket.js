@@ -1,8 +1,9 @@
+import JSONbig from 'json-bigint';
+import DB from '@/utils/sqlite.js'
 export const connectWebSocket = () => {
-	const app = getApp();
 	const {
 		token
-	} = app.globalData;
+	} = getApp().globalData;
 	if (!token) {
 		uni.reLaunch({
 			url: '/pages/user/login'
@@ -14,10 +15,10 @@ export const connectWebSocket = () => {
 	const socketTask = uni.connectSocket({
 		url: `ws://127.0.0.1:3001/api/im/ws?token=${token}`,
 		success() {
-			console.log('WebSocket 连接请求已发送');
+			//console.log('websocket send');
 		},
 		fail(err) {
-			console.error('WebSocket 连接请求失败:', err);
+			console.error('websocket send err', err);
 			setTimeout(() => {
 				connectWebSocket();
 			}, 3000);
@@ -25,33 +26,82 @@ export const connectWebSocket = () => {
 	});
 
 	socketTask.onOpen(() => {
-		console.log('WebSocket 连接已成功建立');
+		console.log('websocket connect');
 		heartBeatInterval = setInterval(() => {
 			socketTask.send({
 				data: 'ping',
 				success() {
-					console.log('ping 消息发送成功');
+					//console.log('ping');
 				},
 				fail(err) {
-					console.error('ping 消息发送失败:', err);
+					console.error('ping err', err);
 				}
 			});
 		}, 5000);
 	});
 
 	socketTask.onMessage((res) => {
-		console.log('收到服务器消息:', res.data);
+		const data = JSONbig.parse(res.data);
+		console.log('websocket receive data', data);
+		if(data.user_con_index!=undefined){
+			uni.$emit('normal_message', data);
+			getApp().globalData.userConIndex=data.user_con_index;
+			DB.updateConversation(data.msg_body.con_short_id, data.badge_count, data.user_con_index)
+				.then((res) => {
+					console.log(res.rowsAffected);
+					if (res.rowsAffected == 0) {
+						const {
+							con_short_id,
+							con_id,
+							con_type
+						} = data.msg_body;
+						const {
+							user_con_index,
+							badge_count
+						} = data;
+						const conValue =
+							`(${con_short_id}, '${con_id}', ${con_type}, '', '', '', '', 0, 0, 0, 0, 0, 0, ',', 0}, ${badge_count}, 0, 0, ${user_con_index})`;
+						DB.insertConversation(value).catch((err) => {
+							console.log('insertConversation err', err);
+						})
+						//TODO:获取core和setting
+					}
+				})
+				.catch((err) => {
+					console.log('updateConversation err', err);
+				});
+			const {
+				user_id,
+				con_short_id,
+				con_id,
+				con_type,
+				client_msg_id,
+				msg_id,
+				msg_type,
+				msg_content,
+				create_time,
+				extra,
+				con_index
+			} = data.msg_body;
+			const msgValue= `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+			DB.insertMessage(msgValue).catch((err) => {
+				console.log('insertMessage err', err);
+			});
+		}else if(data.user_cmd_index!=undefined){
+			uni.$emit('command_message', data);
+			getApp().userCmdIndex=data.user_cmd_index;
+		}
 	});
 
 	socketTask.onClose(() => {
-		console.log('WebSocket 连接已关闭');
+		console.log('websocket close');
 		clearInterval(heartBeatInterval);
 	});
 
 	socketTask.onError((err) => {
-		console.error('WebSocket 连接出错:', err);
+		console.error('websocket err', err);
 	});
 
 	// 将 socketTask 存储在全局变量中，方便在其他地方使用
-	app.globalData.socketTask = socketTask;
+	getApp().globalData.socketTask = socketTask;
 };

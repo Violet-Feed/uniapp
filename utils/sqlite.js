@@ -51,8 +51,7 @@ function createTable(dbTable, data) {
 	const msgTable = "message_" + userId;
 	const sqls = [
 		`CREATE TABLE IF NOT EXISTS ${conTable} (
-                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    con_short_id INTEGER,
+                    con_short_id INTEGER PRIMARY KEY,
                     con_id TEXT,
                     con_type INTEGER,
                     name TEXT,
@@ -72,22 +71,21 @@ function createTable(dbTable, data) {
                     read_badge_count INTEGER,
                     user_con_index INTEGER
                 );`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_con_short_id ON ${conTable} (con_short_id);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_con_index ON ${conTable} (user_con_index);`,
 		`CREATE TABLE IF NOT EXISTS ${msgTable} (
-					id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER,
 					con_short_id INTEGER,
 					con_id TEXT,
 					con_type INTEGER,
-					msg_id INTEGER,
+					client_msg_id INTEGER,
+					msg_id INTEGER PRIMARY KEY,
 					msg_type INTEGER,
 					msg_content TEXT,
 					create_time INTEGER,
+					extra TEXT,
 					con_index INTEGER
 				);`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_id ON ${msgTable} (msg_id);`,
-		`CREATE INDEX IF NOT EXISTS idx_con_short_id_con_index ON ${msgTable} (con_short_id, con_index);`
+		`CREATE INDEX IF NOT EXISTS idx_con_id_con_index ON ${msgTable} (con_id, con_index);`
 	];
 	return new Promise((resolve, reject) => {
 		let err = null;
@@ -104,15 +102,6 @@ function createTable(dbTable, data) {
 						err = e;
 					}
 				});
-				plus.sqlite.executeSql({
-					name: dbName,
-					sql: sqls[2],
-					success() {},
-					fail(e) {
-						console.error(e)
-						err = e;
-					}
-				});
 			},
 			fail(e) {
 				console.error(e)
@@ -121,20 +110,11 @@ function createTable(dbTable, data) {
 		});
 		plus.sqlite.executeSql({
 			name: dbName,
-			sql: sqls[3],
+			sql: sqls[2],
 			success() {
 				plus.sqlite.executeSql({
 					name: dbName,
-					sql: sqls[4],
-					success() {},
-					fail(e) {
-						console.error(e)
-						err = e;
-					}
-				});
-				plus.sqlite.executeSql({
-					name: dbName,
-					sql: sqls[5],
+					sql: sqls[3],
 					success() {},
 					fail(e) {
 						console.error(e)
@@ -197,6 +177,9 @@ function selectConversation(index) {
 		userId
 	} = getApp().globalData;
 	const dbTable = "conversation_" + userId;
+	if(index==undefined){
+		index=Number.MAX_VALUE;
+	}
 	const sql = `SELECT * FROM ${dbTable} WHERE user_con_index <= ${index} ORDER BY user_con_index DESC LIMIT 50`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.selectSql({
@@ -212,13 +195,13 @@ function selectConversation(index) {
 	});
 }
 
-function selectMessage(conShortId, index) {
+function selectMessage(conId, index) {
 	const {
 		userId
 	} = getApp().globalData;
 	const dbTable = "message_" + userId;
 	const sql =
-		`SELECT * FROM ${dbTable} WHERE con_short_id = ${conShortId} AND con_index <= ${index} ORDER BY con_index DESC LIMIT 20`;
+		`SELECT * FROM ${dbTable} WHERE con_id = '${conId}' AND con_index <= ${index} ORDER BY con_index DESC LIMIT 20`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.selectSql({
 			name: dbName,
@@ -233,34 +216,32 @@ function selectMessage(conShortId, index) {
 	});
 }
 
-// 删除表里的数据
-function deleteTableData(dbTable, condition = '') {
-	if (dbTable !== undefined) {
-		const sql = `DELETE FROM ${dbTable} ${condition}`;
-		return new Promise((resolve, reject) => {
-			plus.sqlite.executeSql({
-				name: dbName,
-				sql: sql,
-				success(e) {
-					resolve(e);
-				},
-				fail(e) {
-					reject(e);
-				}
-			});
+function selectConShortId(conId){
+	const {
+		userId
+	} = getApp().globalData;
+	const dbTable = "conversation_" + userId;
+	const sql = `SELECT con_short_id FROM ${dbTable} WHERE con_id = '${conId}' `;
+	return new Promise((resolve, reject) => {
+		plus.sqlite.selectSql({
+			name: dbName,
+			sql: sql,
+			success(e) {
+				resolve(e);
+			},
+			fail(e) {
+				reject(e);
+			}
 		});
-	}
-	return Promise.reject('错误删除');
+	});
 }
 
-// 修改数据表里的数据
-function updateTableData(dbTable, data, lname, lvalue) {
-	let sql;
-	if (lname === undefined) {
-		sql = `UPDATE ${dbTable} SET ${data}`;
-	} else {
-		sql = `UPDATE ${dbTable} SET ${data} WHERE ${lname} = '${lvalue}'`;
-	}
+function deleteConversation(conShortId) {
+	const {
+		userId
+	} = getApp().globalData;
+	const dbTable = "conversation_" + userId;
+	const sql = `DELETE FROM ${dbTable} WHERE con_short_id = ${conShortId} `;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.executeSql({
 			name: dbName,
@@ -275,7 +256,66 @@ function updateTableData(dbTable, data, lname, lvalue) {
 	});
 }
 
-// 默认导出整个对象
+function deleteMessage(msgId) {
+	const {
+		userId
+	} = getApp().globalData;
+	const dbTable = "message_" + userId;
+	const sql = `DELETE FROM ${dbTable} WHERE msg_id = ${msgId} `;
+	return new Promise((resolve, reject) => {
+		plus.sqlite.executeSql({
+			name: dbName,
+			sql: sql,
+			success(e) {
+				resolve(e);
+			},
+			fail(e) {
+				reject(e);
+			}
+		});
+	});
+}
+
+function updateConversation(conShortId,count,index) {
+	const {
+		userId
+	} = getApp().globalData;
+	const dbTable = "conversation_" + userId;
+	const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index} WHERE con_short_id = '${conShortId}'`;
+	return new Promise((resolve, reject) => {
+		plus.sqlite.executeSql({
+			name: dbName,
+			sql: sql,
+			success(e) {
+				resolve(e);
+			},
+			fail(e) {
+				reject(e);
+			}
+		});
+	});
+}
+
+function updateMessage(msgId) {
+	const {
+		userId
+	} = getApp().globalData;
+	const dbTable = "message_" + userId;
+	const sql = `UPDATE ${dbTable} SET ${data} WHERE msg_id = ${msgId}`;
+	return new Promise((resolve, reject) => {
+		plus.sqlite.executeSql({
+			name: dbName,
+			sql: sql,
+			success(e) {
+				resolve(e);
+			},
+			fail(e) {
+				reject(e);
+			}
+		});
+	});
+}
+
 export default {
 	isOpen,
 	openSqlite,
@@ -285,6 +325,9 @@ export default {
 	insertMessage,
 	selectConversation,
 	selectMessage,
-	deleteTableData,
-	updateTableData,
+	selectConShortId,
+	deleteConversation,
+	deleteMessage,
+	updateConversation,
+	updateMessage
 };

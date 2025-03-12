@@ -19,17 +19,17 @@
 </template>
 
 <script>
+	import JSONbig from 'json-bigint';
 	export default {
 		data() {
 			return {
-				searchKeyword: '', // 搜索关键词
-				userList: [], // 用户列表
-				hasSearched: false // 是否已经进行过搜索
+				searchKeyword: '',
+				userList: [],
+				hasSearched: false
 			};
 		},
 		methods: {
-			// 搜索用户的方法
-			searchUsers() {
+			async searchUsers() {
 				if (!this.searchKeyword) {
 					uni.showToast({
 						title: '请输入用户名',
@@ -39,7 +39,7 @@
 				}
 				this.hasSearched = true;
 				const token = getApp().globalData.token;
-				uni.request({
+				let res= await uni.request({
 					url: 'http://127.0.0.1:3000/api/action/user/search/',
 					method: 'GET',
 					header: {
@@ -48,26 +48,18 @@
 					data: {
 						term: this.searchKeyword
 					},
-					success: (res) => {
-						if (res.statusCode === 200) {
-							this.userList = res.data.userList;
-							console.log(res)
-						} else {
-							uni.showToast({
-								title: '搜索失败，请稍后重试',
-								icon: 'none'
-							});
-						}
-					},
-					fail: (err) => {
-						uni.showToast({
-							title: '网络错误，请稍后重试',
-							icon: 'none'
-						});
-					}
+					dataType: 'string',
 				});
+				if(res.statusCode===200){
+					res = JSONbig.parse(res.data);
+					this.userList = res.userList;
+				}else{
+					uni.showToast({
+						title: '网络错误',
+						icon: 'none'
+					});
+				}
 			},
-			// 跳转到用户个人页的方法
 			goToUserPage(user) {
 				uni.navigateTo({
 					url: `/pages/user/user?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`

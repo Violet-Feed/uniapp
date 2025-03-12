@@ -40,6 +40,8 @@
 .message[data-v-a3a521f6] {
 		display: flex;
 		margin-bottom: 10px;
+		align-items: center;
+		/* 垂直居中对齐 */
 }
 .message-left[data-v-a3a521f6] {
 		justify-content: flex-start;
@@ -106,4 +108,19 @@
 		/* 使用 flex 布局让文字上下居中 */
 		justify-content: center;
 		align-items: center;
+}
+.loading-spinner[data-v-a3a521f6] {
+		border: 2px solid rgba(0, 0, 0, 0.3);
+		border-left-color: rgba(0, 0, 0, 0.6);
+		border-radius: 50%;
+		width: 12px;
+		height: 12px;
+		animation: spin-a3a521f6 1s linear infinite;
+		margin-right: 10px;
+		align-self: center;
+}
+@keyframes spin-a3a521f6 {
+to {
+			transform: rotate(360deg);
+}
 }

@@ -5,6 +5,8 @@
 			<view class="message"
 				:class="{ 'message-left': message.user_id!=userId, 'message-right': message.user_id==userId }"
 				v-for="(message, index) in messages" :key="index">
+				<!-- 加载圈 -->
+				<view class="loading-spinner" v-if="message.status === -1"></view>
 				<!-- 对方消息，头像在左 -->
 				<template v-if="message.user_id!=userId">
 					<view class="avatar" @click="goToUserProfile(message)">
@@ -50,7 +52,7 @@
 				messages: [],
 				inputText: '',
 				scrollTop: 0,
-				myAvatar: '/static/logo.png'
+				myAvatar: '_doc/image/user_avatar_' + getApp().globalData.userId,
 			};
 		},
 		onLoad(options) {
@@ -61,27 +63,55 @@
 			uni.setNavigationBarTitle({
 				title: this.conversation.name
 			});
-			DB.selectMessage(BigInt(this.conversation.conShortId), this.conIndex)
+			if (this.conversation.conShortId == 0) {
+				DB.selectConShortId(this.conversation.conId)
+					.then((res) => {
+						if (res.length > 0) {
+							this.conversation.conShortId = BigInt(res[0].con_short_id)
+						}
+					})
+					.catch((err) => {
+						console.error("selectConShortId err", err);
+					})
+			} 
+			DB.selectMessage(this.conversation.conId, this.conIndex)
 				.then((res) => {
 					this.messages = res;
 					this.messages.reverse();
+					if(this.messages.length>0){
+						this.conIndex=this.messages[0].con_index-1;
+					}
 				})
 				.catch((err) => {
 					console.error("selectMessage err", err);
 				})
+			uni.$on('normal_message', (data) => {
+				if (this.conversation.conId == data.msg_body.con_id) {
+					for (let i = this.messages.length - 1; i >= 0; i--) {
+						if (this.messages[i].client_msg_id == data.msg_body.client_msg_id) {
+							this.messages[i].status = 0;
+						}
+					}
+				}
+			});
+		},
+		onUnload() {
+			uni.$off('message');
 		},
 		methods: {
 			async sendMessage() {
 				if (this.inputText.trim() === '') return;
 				const token = getApp().globalData.token;
-				const data={
+				const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
+				const data = {
 					con_short_id: BigInt(this.conversation.conShortId),
 					con_id: this.conversation.conId,
 					con_type: this.conversation.conType,
+					client_msg_id: clientMsgId,
 					msg_type: 1,
 					msg_content: this.inputText
 				}
-				const dataJson= JSONbig.stringify(data)
+				const dataJson = JSONbig.stringify(data)
 				console.log(dataJson);
 				const res = await uni.request({
 					url: 'http://127.0.0.1:3001/api/im/message/send',
@@ -92,7 +122,6 @@
 					},
 					data: dataJson,
 				});
-				console.log(res);
 				if (res.statusCode === 200) {
 					if (res.data.code === 1000) {
 						this.messages.push({
@@ -100,8 +129,10 @@
 							con_short_id: this.conversation.conShortId,
 							con_id: this.conversation.conId,
 							con_type: this.conversation.conType,
+							client_msg_id: clientMsgId,
 							msg_type: 1,
-							msg_content: this.inputText
+							msg_content: this.inputText,
+							status: -1,
 						});
 						this.inputText = '';
 						this.$nextTick(() => {
@@ -175,6 +206,8 @@
 	.message {
 		display: flex;
 		margin-bottom: 10px;
+		align-items: center;
+		/* 垂直居中对齐 */
 	}
 
 	.message-left {
@@ -251,5 +284,22 @@
 		/* 使用 flex 布局让文字上下居中 */
 		justify-content: center;
 		align-items: center;
+	}
+
+	.loading-spinner {
+		border: 2px solid rgba(0, 0, 0, 0.3);
+		border-left-color: rgba(0, 0, 0, 0.6);
+		border-radius: 50%;
+		width: 12px;
+		height: 12px;
+		animation: spin 1s linear infinite;
+		margin-right: 10px;
+		align-self: center;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

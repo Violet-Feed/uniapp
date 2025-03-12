@@ -2,7 +2,7 @@ if (typeof Promise !== "undefined" && !Promise.prototype.finally) {
   Promise.prototype.finally = function(callback) {
     const promise = this.constructor;
     return this.then(
-      (value) => promise.resolve(callback()).then(() => value),
+      (value2) => promise.resolve(callback()).then(() => value2),
       (reason) => promise.resolve(callback()).then(() => {
         throw reason;
       })
@@ -93,7 +93,7 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function createTable(dbTable, data) {
+  function createTable(dbTable, data2) {
     const {
       userId
     } = getApp().globalData;
@@ -101,8 +101,7 @@ if (uni.restoreGlobal) {
     const msgTable = "message_" + userId;
     const sqls = [
       `CREATE TABLE IF NOT EXISTS ${conTable} (
-                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    con_short_id INTEGER,
+                    con_short_id INTEGER PRIMARY KEY,
                     con_id TEXT,
                     con_type INTEGER,
                     name TEXT,
@@ -122,22 +121,21 @@ if (uni.restoreGlobal) {
                     read_badge_count INTEGER,
                     user_con_index INTEGER
                 );`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_con_short_id ON ${conTable} (con_short_id);`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_con_index ON ${conTable} (user_con_index);`,
       `CREATE TABLE IF NOT EXISTS ${msgTable} (
-					id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER,
 					con_short_id INTEGER,
 					con_id TEXT,
 					con_type INTEGER,
-					msg_id INTEGER,
+					client_msg_id INTEGER,
+					msg_id INTEGER PRIMARY KEY,
 					msg_type INTEGER,
 					msg_content TEXT,
 					create_time INTEGER,
+					extra TEXT,
 					con_index INTEGER
 				);`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_id ON ${msgTable} (msg_id);`,
-      `CREATE INDEX IF NOT EXISTS idx_con_short_id_con_index ON ${msgTable} (con_short_id, con_index);`
+      `CREATE INDEX IF NOT EXISTS idx_con_id_con_index ON ${msgTable} (con_id, con_index);`
     ];
     return new Promise((resolve, reject) => {
       let err = null;
@@ -151,53 +149,33 @@ if (uni.restoreGlobal) {
             success() {
             },
             fail(e) {
-              formatAppLog("error", "at utils/sqlite.js:103", e);
-              err = e;
-            }
-          });
-          plus.sqlite.executeSql({
-            name: dbName,
-            sql: sqls[2],
-            success() {
-            },
-            fail(e) {
-              formatAppLog("error", "at utils/sqlite.js:112", e);
+              formatAppLog("error", "at utils/sqlite.js:101", e);
               err = e;
             }
           });
         },
         fail(e) {
-          formatAppLog("error", "at utils/sqlite.js:118", e);
+          formatAppLog("error", "at utils/sqlite.js:107", e);
           err = e;
         }
       });
       plus.sqlite.executeSql({
         name: dbName,
-        sql: sqls[3],
+        sql: sqls[2],
         success() {
           plus.sqlite.executeSql({
             name: dbName,
-            sql: sqls[4],
+            sql: sqls[3],
             success() {
             },
             fail(e) {
-              formatAppLog("error", "at utils/sqlite.js:131", e);
-              err = e;
-            }
-          });
-          plus.sqlite.executeSql({
-            name: dbName,
-            sql: sqls[5],
-            success() {
-            },
-            fail(e) {
-              formatAppLog("error", "at utils/sqlite.js:140", e);
+              formatAppLog("error", "at utils/sqlite.js:120", e);
               err = e;
             }
           });
         },
         fail(e) {
-          formatAppLog("error", "at utils/sqlite.js:146", e);
+          formatAppLog("error", "at utils/sqlite.js:126", e);
           err = e;
         }
       });
@@ -207,12 +185,12 @@ if (uni.restoreGlobal) {
         reject();
     });
   }
-  function insertConversation(data) {
+  function insertConversation(data2) {
     const {
       userId
     } = getApp().globalData;
     const dbTable = "conversation_" + userId;
-    const sql = `INSERT OR REPLACE INTO ${dbTable} VALUES ${data}`;
+    const sql = `INSERT OR REPLACE INTO ${dbTable} VALUES ${data2}`;
     return new Promise((resolve, reject) => {
       plus.sqlite.executeSql({
         name: dbName,
@@ -226,12 +204,12 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function insertMessage(data) {
+  function insertMessage(data2) {
     const {
       userId
     } = getApp().globalData;
     const dbTable = "message_" + userId;
-    const sql = `INSERT OR IGNORE INTO ${dbTable} VALUES ${data}`;
+    const sql = `INSERT OR IGNORE INTO ${dbTable} VALUES ${data2}`;
     return new Promise((resolve, reject) => {
       plus.sqlite.executeSql({
         name: dbName,
@@ -250,6 +228,9 @@ if (uni.restoreGlobal) {
       userId
     } = getApp().globalData;
     const dbTable = "conversation_" + userId;
+    if (index == void 0) {
+      index = Number.MAX_VALUE;
+    }
     const sql = `SELECT * FROM ${dbTable} WHERE user_con_index <= ${index} ORDER BY user_con_index DESC LIMIT 50`;
     return new Promise((resolve, reject) => {
       plus.sqlite.selectSql({
@@ -264,12 +245,12 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function selectMessage(conShortId, index) {
+  function selectMessage(conId, index) {
     const {
       userId
     } = getApp().globalData;
     const dbTable = "message_" + userId;
-    const sql = `SELECT * FROM ${dbTable} WHERE con_short_id = ${conShortId} AND con_index <= ${index} ORDER BY con_index DESC LIMIT 20`;
+    const sql = `SELECT * FROM ${dbTable} WHERE con_id = '${conId}' AND con_index <= ${index} ORDER BY con_index DESC LIMIT 20`;
     return new Promise((resolve, reject) => {
       plus.sqlite.selectSql({
         name: dbName,
@@ -283,31 +264,88 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function deleteTableData(dbTable, condition = "") {
-    if (dbTable !== void 0) {
-      const sql = `DELETE FROM ${dbTable} ${condition}`;
-      return new Promise((resolve, reject) => {
-        plus.sqlite.executeSql({
-          name: dbName,
-          sql,
-          success(e) {
-            resolve(e);
-          },
-          fail(e) {
-            reject(e);
-          }
-        });
+  function selectConShortId(conId) {
+    const {
+      userId
+    } = getApp().globalData;
+    const dbTable = "conversation_" + userId;
+    const sql = `SELECT con_short_id FROM ${dbTable} WHERE con_id = '${conId}' `;
+    return new Promise((resolve, reject) => {
+      plus.sqlite.selectSql({
+        name: dbName,
+        sql,
+        success(e) {
+          resolve(e);
+        },
+        fail(e) {
+          reject(e);
+        }
       });
-    }
-    return Promise.reject("错误删除");
+    });
   }
-  function updateTableData(dbTable, data, lname, lvalue) {
-    let sql;
-    if (lname === void 0) {
-      sql = `UPDATE ${dbTable} SET ${data}`;
-    } else {
-      sql = `UPDATE ${dbTable} SET ${data} WHERE ${lname} = '${lvalue}'`;
-    }
+  function deleteConversation(conShortId) {
+    const {
+      userId
+    } = getApp().globalData;
+    const dbTable = "conversation_" + userId;
+    const sql = `DELETE FROM ${dbTable} WHERE con_short_id = ${conShortId} `;
+    return new Promise((resolve, reject) => {
+      plus.sqlite.executeSql({
+        name: dbName,
+        sql,
+        success(e) {
+          resolve(e);
+        },
+        fail(e) {
+          reject(e);
+        }
+      });
+    });
+  }
+  function deleteMessage(msgId) {
+    const {
+      userId
+    } = getApp().globalData;
+    const dbTable = "message_" + userId;
+    const sql = `DELETE FROM ${dbTable} WHERE msg_id = ${msgId} `;
+    return new Promise((resolve, reject) => {
+      plus.sqlite.executeSql({
+        name: dbName,
+        sql,
+        success(e) {
+          resolve(e);
+        },
+        fail(e) {
+          reject(e);
+        }
+      });
+    });
+  }
+  function updateConversation(conShortId, count, index) {
+    const {
+      userId
+    } = getApp().globalData;
+    const dbTable = "conversation_" + userId;
+    const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index} WHERE con_short_id = '${conShortId}'`;
+    return new Promise((resolve, reject) => {
+      plus.sqlite.executeSql({
+        name: dbName,
+        sql,
+        success(e) {
+          resolve(e);
+        },
+        fail(e) {
+          reject(e);
+        }
+      });
+    });
+  }
+  function updateMessage(msgId) {
+    const {
+      userId
+    } = getApp().globalData;
+    const dbTable = "message_" + userId;
+    const sql = `UPDATE ${dbTable} SET ${data} WHERE msg_id = ${msgId}`;
     return new Promise((resolve, reject) => {
       plus.sqlite.executeSql({
         name: dbName,
@@ -330,8 +368,11 @@ if (uni.restoreGlobal) {
     insertMessage,
     selectConversation,
     selectMessage,
-    deleteTableData,
-    updateTableData
+    selectConShortId,
+    deleteConversation,
+    deleteMessage,
+    updateConversation,
+    updateMessage
   };
   const _sfc_main$a = {
     data() {
@@ -344,8 +385,19 @@ if (uni.restoreGlobal) {
       DB.selectConversation(this.userConIndex).then((res) => {
         this.conversationList = res;
       }).catch((err) => {
-        formatAppLog("error", "at pages/im/home.vue:43", "selectConversation err", err);
+        formatAppLog("error", "at pages/im/home.vue:44", "selectConversation err", err);
       });
+      uni.$on("normal_message", (data2) => {
+        this.userConIndex = data2.user_con_index;
+        DB.selectConversation(this.userConIndex).then((res) => {
+          this.conversationList = res;
+        }).catch((err) => {
+          formatAppLog("error", "at pages/im/home.vue:63", "selectConversation err", err);
+        });
+      });
+    },
+    onUnload() {
+      uni.$off("message");
     },
     methods: {
       // 跳转到搜索页面的方法
@@ -399,7 +451,7 @@ if (uni.restoreGlobal) {
                 vue.createElementVNode(
                   "view",
                   { class: "last-message" },
-                  vue.toDisplayString(conversation.lastMessage),
+                  vue.toDisplayString(conversation.last_message),
                   1
                   /* TEXT */
                 )
@@ -2090,36 +2142,36 @@ if (uni.restoreGlobal) {
         }) + '"' : '"' + string + '"';
       }
       function str(key, holder) {
-        var i, k, v, length, mind = gap, partial, value = holder[key], isBigNumber = value != null && (value instanceof BigNumber2 || BigNumber2.isBigNumber(value));
-        if (value && typeof value === "object" && typeof value.toJSON === "function") {
-          value = value.toJSON(key);
+        var i, k, v, length, mind = gap, partial, value2 = holder[key], isBigNumber = value2 != null && (value2 instanceof BigNumber2 || BigNumber2.isBigNumber(value2));
+        if (value2 && typeof value2 === "object" && typeof value2.toJSON === "function") {
+          value2 = value2.toJSON(key);
         }
         if (typeof rep === "function") {
-          value = rep.call(holder, key, value);
+          value2 = rep.call(holder, key, value2);
         }
-        switch (typeof value) {
+        switch (typeof value2) {
           case "string":
             if (isBigNumber) {
-              return value;
+              return value2;
             } else {
-              return quote(value);
+              return quote(value2);
             }
           case "number":
-            return isFinite(value) ? String(value) : "null";
+            return isFinite(value2) ? String(value2) : "null";
           case "boolean":
           case "null":
           case "bigint":
-            return String(value);
+            return String(value2);
           case "object":
-            if (!value) {
+            if (!value2) {
               return "null";
             }
             gap += indent;
             partial = [];
-            if (Object.prototype.toString.apply(value) === "[object Array]") {
-              length = value.length;
+            if (Object.prototype.toString.apply(value2) === "[object Array]") {
+              length = value2.length;
               for (i = 0; i < length; i += 1) {
-                partial[i] = str(i, value) || "null";
+                partial[i] = str(i, value2) || "null";
               }
               v = partial.length === 0 ? "[]" : gap ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]" : "[" + partial.join(",") + "]";
               gap = mind;
@@ -2130,15 +2182,15 @@ if (uni.restoreGlobal) {
               for (i = 0; i < length; i += 1) {
                 if (typeof rep[i] === "string") {
                   k = rep[i];
-                  v = str(k, value);
+                  v = str(k, value2);
                   if (v) {
                     partial.push(quote(k) + (gap ? ": " : ":") + v);
                   }
                 }
               }
             } else {
-              Object.keys(value).forEach(function(k2) {
-                var v2 = str(k2, value);
+              Object.keys(value2).forEach(function(k2) {
+                var v2 = str(k2, value2);
                 if (v2) {
                   partial.push(quote(k2) + (gap ? ": " : ":") + v2);
                 }
@@ -2150,7 +2202,7 @@ if (uni.restoreGlobal) {
         }
       }
       if (typeof JSON.stringify !== "function") {
-        JSON.stringify = function(value, replacer, space) {
+        JSON.stringify = function(value2, replacer, space) {
           var i;
           gap = "";
           indent = "";
@@ -2165,7 +2217,7 @@ if (uni.restoreGlobal) {
           if (replacer && typeof replacer !== "function" && (typeof replacer !== "object" || typeof replacer.length !== "number")) {
             throw new Error("JSON.stringify");
           }
-          return str("", { "": value });
+          return str("", { "": value2 });
         };
       }
     })();
@@ -2339,7 +2391,7 @@ if (uni.restoreGlobal) {
           return null;
       }
       error("Unexpected '" + ch + "'");
-    }, value, array = function() {
+    }, value2, array = function() {
       var array2 = [];
       if (ch === "[") {
         next("[");
@@ -2349,7 +2401,7 @@ if (uni.restoreGlobal) {
           return array2;
         }
         while (ch) {
-          array2.push(value());
+          array2.push(value2());
           white();
           if (ch === "]") {
             next("]");
@@ -2380,20 +2432,20 @@ if (uni.restoreGlobal) {
             if (_options.protoAction === "error") {
               error("Object contains forbidden prototype property");
             } else if (_options.protoAction === "ignore") {
-              value();
+              value2();
             } else {
-              object2[key] = value();
+              object2[key] = value2();
             }
           } else if (suspectConstructorRx.test(key) === true) {
             if (_options.constructorAction === "error") {
               error("Object contains forbidden constructor property");
             } else if (_options.constructorAction === "ignore") {
-              value();
+              value2();
             } else {
-              object2[key] = value();
+              object2[key] = value2();
             }
           } else {
-            object2[key] = value();
+            object2[key] = value2();
           }
           white();
           if (ch === "}") {
@@ -2406,7 +2458,7 @@ if (uni.restoreGlobal) {
       }
       error("Bad object");
     };
-    value = function() {
+    value2 = function() {
       white();
       switch (ch) {
         case "{":
@@ -2426,24 +2478,24 @@ if (uni.restoreGlobal) {
       text = source + "";
       at = 0;
       ch = " ";
-      result = value();
+      result = value2();
       white();
       if (ch) {
         error("Syntax error");
       }
       return typeof reviver === "function" ? function walk(holder, key) {
-        var v, value2 = holder[key];
-        if (value2 && typeof value2 === "object") {
-          Object.keys(value2).forEach(function(k) {
-            v = walk(value2, k);
+        var v, value3 = holder[key];
+        if (value3 && typeof value3 === "object") {
+          Object.keys(value3).forEach(function(k) {
+            v = walk(value3, k);
             if (v !== void 0) {
-              value2[k] = v;
+              value3[k] = v;
             } else {
-              delete value2[k];
+              delete value3[k];
             }
           });
         }
-        return reviver.call(holder, key, value2);
+        return reviver.call(holder, key, value3);
       }({ "": result }, "") : result;
     };
   };
@@ -2474,7 +2526,7 @@ if (uni.restoreGlobal) {
         messages: [],
         inputText: "",
         scrollTop: 0,
-        myAvatar: "/static/logo.png"
+        myAvatar: "_doc/image/user_avatar_" + getApp().globalData.userId
       };
     },
     onLoad(options) {
@@ -2485,27 +2537,53 @@ if (uni.restoreGlobal) {
       uni.setNavigationBarTitle({
         title: this.conversation.name
       });
-      DB.selectMessage(BigInt(this.conversation.conShortId), this.conIndex).then((res) => {
+      if (this.conversation.conShortId == 0) {
+        DB.selectConShortId(this.conversation.conId).then((res) => {
+          if (res.length > 0) {
+            this.conversation.conShortId = BigInt(res[0].con_short_id);
+          }
+        }).catch((err) => {
+          formatAppLog("error", "at pages/im/conversation.vue:74", "selectConShortId err", err);
+        });
+      }
+      DB.selectMessage(this.conversation.conId, this.conIndex).then((res) => {
         this.messages = res;
         this.messages.reverse();
+        if (this.messages.length > 0) {
+          this.conIndex = this.messages[0].con_index - 1;
+        }
       }).catch((err) => {
-        formatAppLog("error", "at pages/im/conversation.vue:70", "selectMessage err", err);
+        formatAppLog("error", "at pages/im/conversation.vue:86", "selectMessage err", err);
       });
+      uni.$on("normal_message", (data2) => {
+        if (this.conversation.conId == data2.msg_body.con_id) {
+          for (let i = this.messages.length - 1; i >= 0; i--) {
+            if (this.messages[i].client_msg_id == data2.msg_body.client_msg_id) {
+              this.messages[i].status = 0;
+            }
+          }
+        }
+      });
+    },
+    onUnload() {
+      uni.$off("message");
     },
     methods: {
       async sendMessage() {
         if (this.inputText.trim() === "")
           return;
         const token = getApp().globalData.token;
-        const data = {
+        const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
+        const data2 = {
           con_short_id: BigInt(this.conversation.conShortId),
           con_id: this.conversation.conId,
           con_type: this.conversation.conType,
+          client_msg_id: clientMsgId,
           msg_type: 1,
           msg_content: this.inputText
         };
-        const dataJson = JSONbig.stringify(data);
-        formatAppLog("log", "at pages/im/conversation.vue:85", dataJson);
+        const dataJson = JSONbig.stringify(data2);
+        formatAppLog("log", "at pages/im/conversation.vue:115", dataJson);
         const res = await uni.request({
           url: "http://127.0.0.1:3001/api/im/message/send",
           method: "POST",
@@ -2515,7 +2593,6 @@ if (uni.restoreGlobal) {
           },
           data: dataJson
         });
-        formatAppLog("log", "at pages/im/conversation.vue:95", res);
         if (res.statusCode === 200) {
           if (res.data.code === 1e3) {
             this.messages.push({
@@ -2523,8 +2600,10 @@ if (uni.restoreGlobal) {
               con_short_id: this.conversation.conShortId,
               con_id: this.conversation.conId,
               con_type: this.conversation.conType,
+              client_msg_id: clientMsgId,
               msg_type: 1,
-              msg_content: this.inputText
+              msg_content: this.inputText,
+              status: -1
             });
             this.inputText = "";
             this.$nextTick(() => {
@@ -2570,10 +2649,15 @@ if (uni.restoreGlobal) {
                 key: index
               },
               [
+                vue.createCommentVNode(" 加载圈 "),
+                message.status === -1 ? (vue.openBlock(), vue.createElementBlock("view", {
+                  key: 0,
+                  class: "loading-spinner"
+                })) : vue.createCommentVNode("v-if", true),
                 vue.createCommentVNode(" 对方消息，头像在左 "),
                 message.user_id != $data.userId ? (vue.openBlock(), vue.createElementBlock(
                   vue.Fragment,
-                  { key: 0 },
+                  { key: 1 },
                   [
                     vue.createElementVNode("view", {
                       class: "avatar",
@@ -2597,7 +2681,7 @@ if (uni.restoreGlobal) {
                   /* STABLE_FRAGMENT */
                 )) : (vue.openBlock(), vue.createElementBlock(
                   vue.Fragment,
-                  { key: 1 },
+                  { key: 2 },
                   [
                     vue.createCommentVNode(" 自己消息，头像在右 "),
                     vue.createElementVNode("view", { class: "message-content" }, [
@@ -2762,19 +2846,25 @@ if (uni.restoreGlobal) {
           followers: 0,
           following: 0
         },
-        // 假设初始状态为未关注，可根据实际业务逻辑修改
         isFollowed: false
       };
     },
     onLoad(options) {
-      this.userInfo.id = options.id;
+      this.userInfo.id = BigInt(options.id);
       this.userInfo.name = options.name;
       this.userInfo.avatar = options.avatar;
     },
     methods: {
       goBackToChat() {
+        const userId = getApp().globalData.userId;
+        let conId;
+        if (userId < this.userInfo.id) {
+          conId = `${userId}:${this.userInfo.id}`;
+        } else {
+          conId = `${this.userInfo.id}:${useId}`;
+        }
         uni.navigateTo({
-          url: `/pages/im/conversation?id=${this.userInfo.id}&name=${this.userInfo.name}&avatar=${this.userInfo.avatar}`
+          url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.name}`
         });
       },
       goToFansList() {
@@ -2923,9 +3013,9 @@ if (uni.restoreGlobal) {
           }
         });
         if (res.statusCode === 200) {
-          const data = res.data;
-          if (data.message === "success") {
-            const token = data.token;
+          const data2 = res.data;
+          if (data2.message === "success") {
+            const token = data2.token;
             uni.setStorageSync("token", token);
             DB.createTable().catch((err) => {
               formatAppLog("error", "at pages/user/login.vue:51", "createTable err, err = ", err);
@@ -2939,7 +3029,7 @@ if (uni.restoreGlobal) {
             });
           } else {
             uni.showToast({
-              title: data.message,
+              title: data2.message,
               icon: "none"
             });
           }
@@ -3035,8 +3125,8 @@ if (uni.restoreGlobal) {
           },
           success: (res) => {
             if (res.statusCode === 200) {
-              const data = res.data;
-              if (data.message === "success") {
+              const data2 = res.data;
+              if (data2.message === "success") {
                 uni.showToast({
                   title: "注册成功",
                   icon: "success"
@@ -3046,7 +3136,7 @@ if (uni.restoreGlobal) {
                 });
               } else {
                 uni.showToast({
-                  title: data.message,
+                  title: data2.message,
                   icon: "none"
                 });
               }
@@ -3132,16 +3222,12 @@ if (uni.restoreGlobal) {
     data() {
       return {
         searchKeyword: "",
-        // 搜索关键词
         userList: [],
-        // 用户列表
         hasSearched: false
-        // 是否已经进行过搜索
       };
     },
     methods: {
-      // 搜索用户的方法
-      searchUsers() {
+      async searchUsers() {
         if (!this.searchKeyword) {
           uni.showToast({
             title: "请输入用户名",
@@ -3151,7 +3237,7 @@ if (uni.restoreGlobal) {
         }
         this.hasSearched = true;
         const token = getApp().globalData.token;
-        uni.request({
+        let res = await uni.request({
           url: "http://127.0.0.1:3000/api/action/user/search/",
           method: "GET",
           header: {
@@ -3160,26 +3246,18 @@ if (uni.restoreGlobal) {
           data: {
             term: this.searchKeyword
           },
-          success: (res) => {
-            if (res.statusCode === 200) {
-              this.userList = res.data.userList;
-              formatAppLog("log", "at pages/im/search.vue:54", res);
-            } else {
-              uni.showToast({
-                title: "搜索失败，请稍后重试",
-                icon: "none"
-              });
-            }
-          },
-          fail: (err) => {
-            uni.showToast({
-              title: "网络错误，请稍后重试",
-              icon: "none"
-            });
-          }
+          dataType: "string"
         });
+        if (res.statusCode === 200) {
+          res = JSONbig.parse(res.data);
+          this.userList = res.userList;
+        } else {
+          uni.showToast({
+            title: "网络错误",
+            icon: "none"
+          });
+        }
       },
-      // 跳转到用户个人页的方法
       goToUserPage(user) {
         uni.navigateTo({
           url: `/pages/user/user?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
@@ -3264,11 +3342,50 @@ if (uni.restoreGlobal) {
   __definePage("pages/user/login", PagesUserLogin);
   __definePage("pages/user/register", PagesUserRegister);
   __definePage("pages/im/search", PagesImSearch);
+  class Snowflake {
+    constructor() {
+      this.startTimestamp = 1288834974657;
+      this.dataCenterIdBits = 5;
+      this.workerIdBits = 5;
+      this.sequenceBits = 12;
+      this.timestampShift = this.sequenceBits + this.dataCenterIdBits + this.workerIdBits;
+      this.sequence = 0;
+      this.lastTimestamp = -1;
+    }
+    // 获取当前时间戳
+    getCurrentTimestamp() {
+      return Date.now();
+    }
+    // 等待下一毫秒
+    waitNextMillis(lastTimestamp) {
+      let timestamp = this.getCurrentTimestamp();
+      while (timestamp <= lastTimestamp) {
+        timestamp = this.getCurrentTimestamp();
+      }
+      return timestamp;
+    }
+    // 生成唯一 ID
+    nextId() {
+      let timestamp = this.getCurrentTimestamp();
+      if (timestamp < this.lastTimestamp) {
+        throw new Error("Clock moved backwards. Refusing to generate id for " + (this.lastTimestamp - timestamp) + " milliseconds");
+      }
+      if (timestamp === this.lastTimestamp) {
+        this.sequence = this.sequence + 1 & this.maxSequence;
+        if (this.sequence === 0) {
+          timestamp = this.waitNextMillis(this.lastTimestamp);
+        }
+      } else {
+        this.sequence = 0;
+      }
+      this.lastTimestamp = timestamp;
+      return BigInt(timestamp - this.startTimestamp) << BigInt(this.timestampShift) | BigInt(this.sequence);
+    }
+  }
   const connectWebSocket = () => {
-    const app = getApp();
     const {
       token
-    } = app.globalData;
+    } = getApp().globalData;
     if (!token) {
       uni.reLaunch({
         url: "/pages/user/login"
@@ -3279,40 +3396,74 @@ if (uni.restoreGlobal) {
     const socketTask = uni.connectSocket({
       url: `ws://127.0.0.1:3001/api/im/ws?token=${token}`,
       success() {
-        formatAppLog("log", "at utils/websocket.js:17", "WebSocket 连接请求已发送");
       },
       fail(err) {
-        formatAppLog("error", "at utils/websocket.js:20", "WebSocket 连接请求失败:", err);
+        formatAppLog("error", "at utils/websocket.js:21", "websocket send err", err);
         setTimeout(() => {
           connectWebSocket();
         }, 3e3);
       }
     });
     socketTask.onOpen(() => {
-      formatAppLog("log", "at utils/websocket.js:28", "WebSocket 连接已成功建立");
+      formatAppLog("log", "at utils/websocket.js:29", "websocket connect");
       heartBeatInterval = setInterval(() => {
         socketTask.send({
           data: "ping",
           success() {
-            formatAppLog("log", "at utils/websocket.js:33", "ping 消息发送成功");
           },
           fail(err) {
-            formatAppLog("error", "at utils/websocket.js:36", "ping 消息发送失败:", err);
+            formatAppLog("error", "at utils/websocket.js:37", "ping err", err);
           }
         });
       }, 5e3);
     });
     socketTask.onMessage((res) => {
-      formatAppLog("log", "at utils/websocket.js:43", "收到服务器消息:", res.data);
+      const data2 = JSONbig.parse(res.data);
+      formatAppLog("log", "at utils/websocket.js:45", "websocket receive data", data2);
+      if (data2.user_con_index != void 0) {
+        uni.$emit("normal_message", data2);
+        getApp().globalData.userConIndex = data2.user_con_index;
+        DB.updateConversation(data2.msg_body.con_short_id, data2.badge_count, data2.user_con_index).then((res2) => {
+          formatAppLog("log", "at utils/websocket.js:51", res2.rowsAffected);
+          if (res2.rowsAffected == 0) {
+            data2.msg_body;
+            DB.insertConversation(value).catch((err) => {
+              formatAppLog("log", "at utils/websocket.js:65", "insertConversation err", err);
+            });
+          }
+        }).catch((err) => {
+          formatAppLog("log", "at utils/websocket.js:71", "updateConversation err", err);
+        });
+        const {
+          user_id,
+          con_short_id,
+          con_id,
+          con_type,
+          client_msg_id,
+          msg_id,
+          msg_type,
+          msg_content,
+          create_time,
+          extra,
+          con_index
+        } = data2.msg_body;
+        const msgValue = `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+        DB.insertMessage(msgValue).catch((err) => {
+          formatAppLog("log", "at utils/websocket.js:88", "insertMessage err", err);
+        });
+      } else if (data2.user_cmd_index != void 0) {
+        uni.$emit("command_message", data2);
+        getApp().userCmdIndex = data2.user_cmd_index;
+      }
     });
     socketTask.onClose(() => {
-      formatAppLog("log", "at utils/websocket.js:47", "WebSocket 连接已关闭");
+      formatAppLog("log", "at utils/websocket.js:97", "websocket close");
       clearInterval(heartBeatInterval);
     });
     socketTask.onError((err) => {
-      formatAppLog("error", "at utils/websocket.js:52", "WebSocket 连接出错:", err);
+      formatAppLog("error", "at utils/websocket.js:102", "websocket err", err);
     });
-    app.globalData.socketTask = socketTask;
+    getApp().globalData.socketTask = socketTask;
   };
   const getByInit = () => {
     const {
@@ -3340,58 +3491,62 @@ if (uni.restoreGlobal) {
       res = JSONbig.parse(res.data);
       formatAppLog("log", "at request/get_by_init.js:28", res);
       if (res.code === 1e3) {
-        const conInfos = res.data.cons.map((item) => item.con_info);
-        const msgBodies = res.data.cons.flatMap((item) => item.msg_bodies);
-        const conValues = conInfos.map((conInfo) => {
-          const {
-            con_short_id,
-            con_id,
-            con_type,
-            user_con_index,
-            badge_count
-          } = conInfo;
-          const {
-            name,
-            avatar_uri,
-            description,
-            notice,
-            owner_id,
-            create_time,
-            status,
-            extra: coreExtra,
-            member_count
-          } = conInfo.con_core_info;
-          const {
-            min_index,
-            top_time_stamp,
-            push_status,
-            read_index_end,
-            read_badge_count,
-            extra: settingExtra
-          } = conInfo.con_setting_info;
-          const extra = `${coreExtra},${settingExtra}`;
-          return `(null, ${con_short_id}, '${con_id}', ${con_type}, '${name}', '${avatar_uri}', '${description}', '${notice}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index})`;
-        }).join(",");
-        const msgValues = msgBodies.map((msg) => {
-          const {
-            user_id,
-            con_short_id,
-            con_id,
-            con_type,
-            msg_id,
-            msg_type,
-            msg_content,
-            create_time,
-            con_index
-          } = msg;
-          return `(null, ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, ${con_index})`;
-        }).join(",");
-        DB.insertConversation(conValues).catch((err) => {
-          formatAppLog("error", "at request/get_by_init.js:77", "insertConversation err", err);
-        });
-        DB.insertMessage(msgValues).catch((err) => {
-          formatAppLog("error", "at request/get_by_init.js:80", "insertMessage err", err);
-        });
+        if (res.data.cons != void 0) {
+          const conInfos = res.data.cons.map((item) => item.con_info);
+          const msgBodies = res.data.cons.flatMap((item) => item.msg_bodies);
+          const conValues = conInfos.map((conInfo) => {
+            const {
+              con_short_id,
+              con_id,
+              con_type,
+              user_con_index,
+              badge_count
+            } = conInfo;
+            const {
+              name,
+              avatar_uri,
+              description,
+              notice,
+              owner_id,
+              create_time,
+              status,
+              extra: coreExtra,
+              member_count
+            } = conInfo.con_core_info;
+            const {
+              min_index,
+              top_time_stamp,
+              push_status,
+              read_index_end,
+              read_badge_count,
+              extra: settingExtra
+            } = conInfo.con_setting_info;
+            const extra = `${coreExtra},${settingExtra}`;
+            return `(${con_short_id}, '${con_id}', ${con_type}, '${name}', '${avatar_uri}', '${description}', '${notice}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index})`;
+          }).join(",");
+          const msgValues = msgBodies.map((msg) => {
+            const {
+              user_id,
+              con_short_id,
+              con_id,
+              con_type,
+              client_msg_id,
+              msg_id,
+              msg_type,
+              msg_content,
+              create_time,
+              extra,
+              con_index
+            } = msg;
+            return `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+          }).join(",");
+          DB.insertConversation(conValues).catch((err) => {
+            formatAppLog("error", "at request/get_by_init.js:80", "insertConversation err", err);
+          });
+          DB.insertMessage(msgValues).catch((err) => {
+            formatAppLog("error", "at request/get_by_init.js:83", "insertMessage err", err);
+          });
+        }
         getApp().globalData.userConIndex = res.data.user_con_index;
         getApp().globalData.userCmdIndex = res.data.user_cmd_index;
         if (res.data.has_more === true) {
@@ -3430,6 +3585,7 @@ if (uni.restoreGlobal) {
       });
       if (res.statusCode === 200) {
         if (res.data.code === 1e3) {
+          formatAppLog("log", "at utils/auth.js:30", res);
           const {
             userId,
             avatar,
@@ -3468,6 +3624,7 @@ if (uni.restoreGlobal) {
       if (platform === "android" || platform == "ios") {
         DB.openSqlite();
       }
+      getApp().globalData.msgIdGenerator = new Snowflake();
     },
     methods: {
       initRouterGuard() {

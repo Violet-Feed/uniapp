@@ -29,21 +29,25 @@
 					followers: 0,
 					following: 0
 				},
-				// 假设初始状态为未关注，可根据实际业务逻辑修改
 				isFollowed: false
 			};
 		},
 		onLoad(options) {
-			this.userInfo.id = options.id;
+			this.userInfo.id = BigInt(options.id);
 			this.userInfo.name = options.name;
 			this.userInfo.avatar = options.avatar;
-			// 这里可以根据实际业务逻辑从后端获取是否关注的状态
-			// 例如：调用接口获取关注状态并赋值给 this.isFollowed
 		},
 		methods: {
 			goBackToChat() {
+				const userId=getApp().globalData.userId;
+				let conId;
+				if(userId<this.userInfo.id){
+					conId=`${userId}:${this.userInfo.id}`
+				}else{
+					conId=`${this.userInfo.id}:${useId}`
+				}
 				uni.navigateTo({
-					url: `/pages/im/conversation?id=${this.userInfo.id}&name=${this.userInfo.name}&avatar=${this.userInfo.avatar}`
+					url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.name}`
 				});
 			},
 			goToFansList() {

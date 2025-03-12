@@ -4,7 +4,8 @@
 		<button @click="goToSearchPage">搜索</button>
 		<!-- 会话列表 -->
 		<view class="conversation-list">
-			<view class="conversation-item" v-for="(conversation, index) in conversationList" :key="index" @click="openChat(conversation)">
+			<view class="conversation-item" v-for="(conversation, index) in conversationList" :key="index"
+				@click="openChat(conversation)">
 				<!-- 头像 -->
 				<view class="avatar">
 					<image :src="conversation.avatar"></image>
@@ -14,7 +15,7 @@
 					<!-- 对方名称 -->
 					<view class="name">{{ conversation.name }}</view>
 					<!-- 最新消息 -->
-					<view class="last-message">{{ conversation.lastMessage }}</view>
+					<view class="last-message">{{ conversation.last_message }}</view>
 				</view>
 				<!-- 未读消息数量 -->
 				<view class="unread-count" v-if="conversation.badge_count-conversation.read_badge_count > 0">
@@ -40,8 +41,31 @@
 					this.conversationList = res;
 				})
 				.catch((err) => {
-					console.error('selectConversation err',err);
+					console.error('selectConversation err', err);
 				})
+			uni.$on('normal_message', (data) => {
+				// let index=-1;
+				// for (let i = 0; i < this.conversationList.length; i++) {
+				// 	if (this.conversationList[i].con_short_id == data.msg_body.con_short_id) {
+				// 		index = i;
+				// 		break;
+				// 	}
+				// }
+				// if (index !== -1) {
+				// 	const conversation = this.conversationList.splice(index, 1)[0];
+				// }
+				this.userConIndex=data.user_con_index;
+				DB.selectConversation(this.userConIndex)
+					.then((res) => {
+						this.conversationList = res;
+					})
+					.catch((err) => {
+						console.error('selectConversation err', err);
+					})
+			});
+		},
+		onUnload() {
+			uni.$off('message');
 		},
 		methods: {
 			// 跳转到搜索页面的方法

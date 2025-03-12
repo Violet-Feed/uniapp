@@ -3,6 +3,7 @@
 
 <script>
 	import DB from '@/utils/sqlite.js'
+	import Snowflake from '@/utils/snowflake.js';
 	import {
 		checkAuth
 	} from '@/utils/auth.js';
@@ -17,6 +18,7 @@
 			if (platform === "android" || platform == "ios") {
 				DB.openSqlite();
 			}
+			getApp().globalData.msgIdGenerator=new Snowflake();
 		},
 		methods: {
 			initRouterGuard() {

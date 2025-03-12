@@ -30,13 +30,15 @@ export const getByConversation = (conShortId, conIndex, limit) => {
 					con_short_id,
 					con_id,
 					con_type,
+					client_msg_id,
 					msg_id,
 					msg_type,
 					msg_content,
 					create_time,
+					extra,
 					con_index
 				} = msg;
-				return `(null, ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, ${con_index})`;
+				return `(${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
 			}).join(',');
 			DB.insertMessage(msgValues).catch((err) => {
 				console.error("insertMessage err", err);

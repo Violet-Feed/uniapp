@@ -27,6 +27,7 @@ export const checkAuth = async () => {
 		
 		if (res.statusCode === 200) {
 			if (res.data.code === 1000) {
+				console.log(res);
 				const {
 					userId,
 					avatar,
