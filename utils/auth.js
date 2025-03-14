@@ -1,62 +1,81 @@
+import JSONbig from 'json-bigint';
 import {
 	connectWebSocket
 } from "@/utils/websocket.js";
 import {
 	getByInit
 } from '@/request/get_by_init';
-export const checkAuth = async () => {
+import file from '@/utils/file.js';
+export const initAuth = async () => {
 	const app = getApp();
 	const {
-		token
+		token,
+		userId
 	} = app.globalData;
 
-	if (token) {
-		return true;
+	if (token && userId) {
+		return;
 	}
 
 	const localToken = uni.getStorageSync('token');
-	if (localToken) {
+	const localUserId = BigInt(JSONbig.parse(uni.getStorageSync('user_id')).data);
+	if (localToken && localUserId) {
 		app.globalData.token = localToken;
+		app.globalData.userId = localUserId;
+		const data = {
+			user_ids: [app.globalData.userId],
+		};
+		const dataJson = JSONbig.stringify(data);
 		const res = await uni.request({
-			url: 'http://127.0.0.1:3000/api/action/user/get_info/',
-			method: 'GET',
+			url: 'http://127.0.0.1:3000/api/action/user/get_infos',
+			method: 'POST',
 			header: {
+				'content-type': 'application/json',
 				'Authorization': `Bearer ${localToken}`
-			}
+			},
+			data: dataJson,
 		});
-		
 		if (res.statusCode === 200) {
 			if (res.data.code === 1000) {
-				console.log(res);
-				const {
-					userId,
+				let {
 					avatar,
 					username
-				} = res.data;
-				app.globalData.userId = BigInt(userId);
-				app.globalData.avatar = avatar;
+				} = res.data.data.user_infos[0];
+				if(avatar==""){
+					avatar="/static/user_avatar.png";
+				}else{
+					//file.download(avatar);
+				}
+				uni.setStorageSync("username_"+localUserId, username);
+				uni.setStorageSync("user_avatar_"+localUserId, avatar);
 				app.globalData.username = username;
+				app.globalData.avatar = avatar;
+				//download(avatar,localUserId);
 				connectWebSocket();
 				getByInit();
-				return true; // 获取用户信息成功，权限验证通过
 			} else {
 				uni.showToast({
-					title: '登录过期',
+					title: '服务器错误',
 					icon: 'none'
 				});
-				throw new Error("invaild token")
 			}
+		} else if (res.statusCode === 403) {
+			uni.showToast({
+				title: '登录过期',
+				icon: 'none'
+			});
+			uni.reLaunch({
+				url: '/pages/user/login'
+			});
 		} else {
 			uni.showToast({
 				title: '网络错误',
 				icon: 'none'
 			});
 		}
+	} else {
+		uni.reLaunch({
+			url: '/pages/user/login'
+		});
 	}
-
-	// 无权限，跳转到登录页面
-	uni.reLaunch({
-		url: '/pages/user/login'
-	});
-	return false;
 };

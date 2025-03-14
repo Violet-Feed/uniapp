@@ -52,7 +52,7 @@
 				messages: [],
 				inputText: '',
 				scrollTop: 0,
-				myAvatar: '_doc/image/user_avatar_' + getApp().globalData.userId,
+				myAvatar: getApp().globalData.avatar,
 			};
 		},
 		onLoad(options) {
@@ -153,7 +153,7 @@
 			},
 			goToUserProfile(message) {
 				uni.navigateTo({
-					url: `/pages/user/user?id=${message.user_id}&name=${message.name}&avatar=${message.avatar}`
+					url: `/pages/user/user_profile?userId=${BigInt(message.user_id)}`
 				});
 			}
 		}

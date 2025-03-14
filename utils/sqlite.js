@@ -43,10 +43,7 @@ function closeSqlite() {
 }
 
 // 数据库建表
-function createTable(dbTable, data) {
-	const {
-		userId
-	} = getApp().globalData;
+function createTable(userId) {
 	const conTable = "conversation_" + userId;
 	const msgTable = "message_" + userId;
 	const sqls = [
@@ -69,7 +66,8 @@ function createTable(dbTable, data) {
                     badge_count INTEGER,
 					read_index_end INTEGER,
                     read_badge_count INTEGER,
-                    user_con_index INTEGER
+                    user_con_index INTEGER,
+					last_message TEXT
                 );`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_con_index ON ${conTable} (user_con_index);`,
 		`CREATE TABLE IF NOT EXISTS ${msgTable} (

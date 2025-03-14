@@ -1,6 +1,6 @@
 <template>
 	<view>
-		
+		shop
 	</view>
 </template>
 

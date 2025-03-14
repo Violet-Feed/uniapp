@@ -8,7 +8,7 @@
 				@click="openChat(conversation)">
 				<!-- 头像 -->
 				<view class="avatar">
-					<image :src="conversation.avatar"></image>
+					<image :src="conversation.avatar_uri"></image>
 				</view>
 				<!-- 会话信息 -->
 				<view class="conversation-info">

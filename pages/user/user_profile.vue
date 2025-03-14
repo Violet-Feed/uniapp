@@ -3,7 +3,7 @@
 		<view class="avatar">
 			<image :src="userInfo.avatar"></image>
 		</view>
-		<view class="name">{{ userInfo.name }}</view>
+		<view class="name">{{ userInfo.username }}</view>
 		<view class="stats">
 			<view @click="goToFansList">粉丝数: {{ userInfo.followers }}</view>
 			<view @click="goToFollowingList">关注数: {{ userInfo.following }}</view>
@@ -33,31 +33,31 @@
 			};
 		},
 		onLoad(options) {
-			this.userInfo.id = BigInt(options.id);
-			this.userInfo.name = options.name;
-			this.userInfo.avatar = options.avatar;
+			this.userInfo.userId = BigInt(options.userId);
+			this.userInfo.username = uni.getStorageSync("username_"+options.userId);
+			this.userInfo.avatar = uni.getStorageSync("user_avatar_"+options.userId);
 		},
 		methods: {
 			goBackToChat() {
 				const userId=getApp().globalData.userId;
 				let conId;
-				if(userId<this.userInfo.id){
-					conId=`${userId}:${this.userInfo.id}`
+				if(userId<this.userInfo.userId){
+					conId=`${userId}:${this.userInfo.userId}`
 				}else{
-					conId=`${this.userInfo.id}:${useId}`
+					conId=`${this.userInfo.userId}:${userId}`
 				}
 				uni.navigateTo({
-					url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.name}`
+					url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.username}`
 				});
 			},
 			goToFansList() {
 				uni.navigateTo({
-					url: `/pages/user/followed_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+					url: `/pages/user/followed_list?userId=${this.userInfo.userId}`
 				});
 			},
 			goToFollowingList() {
 				uni.navigateTo({
-					url: `/pages/user/following_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+					url: `/pages/user/following_list?userId=${this.userInfo.userId}}`
 				});
 			},
 			toggleFollow() {

@@ -93,10 +93,7 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function createTable(dbTable, data2) {
-    const {
-      userId
-    } = getApp().globalData;
+  function createTable(userId) {
     const conTable = "conversation_" + userId;
     const msgTable = "message_" + userId;
     const sqls = [
@@ -119,7 +116,8 @@ if (uni.restoreGlobal) {
                     badge_count INTEGER,
 					read_index_end INTEGER,
                     read_badge_count INTEGER,
-                    user_con_index INTEGER
+                    user_con_index INTEGER,
+					last_message TEXT
                 );`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_con_index ON ${conTable} (user_con_index);`,
       `CREATE TABLE IF NOT EXISTS ${msgTable} (
@@ -149,13 +147,13 @@ if (uni.restoreGlobal) {
             success() {
             },
             fail(e) {
-              formatAppLog("error", "at utils/sqlite.js:101", e);
+              formatAppLog("error", "at utils/sqlite.js:99", e);
               err = e;
             }
           });
         },
         fail(e) {
-          formatAppLog("error", "at utils/sqlite.js:107", e);
+          formatAppLog("error", "at utils/sqlite.js:105", e);
           err = e;
         }
       });
@@ -169,13 +167,13 @@ if (uni.restoreGlobal) {
             success() {
             },
             fail(e) {
-              formatAppLog("error", "at utils/sqlite.js:120", e);
+              formatAppLog("error", "at utils/sqlite.js:118", e);
               err = e;
             }
           });
         },
         fail(e) {
-          formatAppLog("error", "at utils/sqlite.js:126", e);
+          formatAppLog("error", "at utils/sqlite.js:124", e);
           err = e;
         }
       });
@@ -434,7 +432,7 @@ if (uni.restoreGlobal) {
               vue.createCommentVNode(" 头像 "),
               vue.createElementVNode("view", { class: "avatar" }, [
                 vue.createElementVNode("image", {
-                  src: conversation.avatar
+                  src: conversation.avatar_uri
                 }, null, 8, ["src"])
               ]),
               vue.createCommentVNode(" 会话信息 "),
@@ -2526,7 +2524,7 @@ if (uni.restoreGlobal) {
         messages: [],
         inputText: "",
         scrollTop: 0,
-        myAvatar: "_doc/image/user_avatar_" + getApp().globalData.userId
+        myAvatar: getApp().globalData.avatar
       };
     },
     onLoad(options) {
@@ -2624,7 +2622,7 @@ if (uni.restoreGlobal) {
       },
       goToUserProfile(message) {
         uni.navigateTo({
-          url: `/pages/user/user?id=${message.user_id}&name=${message.name}&avatar=${message.avatar}`
+          url: `/pages/user/user_profile?userId=${BigInt(message.user_id)}`
         });
       }
     }
@@ -2741,15 +2739,15 @@ if (uni.restoreGlobal) {
     methods: {}
   };
   function _sfc_render$8(_ctx, _cache, $props, $setup, $data, $options) {
-    return vue.openBlock(), vue.createElementBlock("view");
+    return vue.openBlock(), vue.createElementBlock("view", null, " shop ");
   }
   const PagesShopShop = /* @__PURE__ */ _export_sfc(_sfc_main$8, [["render", _sfc_render$8], ["__file", "D:/H/Desktop/Violet/uniapp/pages/shop/shop.vue"]]);
   const _sfc_main$7 = {
     data() {
       return {
         userInfo: {
-          id: null,
-          name: "",
+          userId: null,
+          username: "",
           avatar: "",
           followers: 0,
           following: 0
@@ -2757,8 +2755,8 @@ if (uni.restoreGlobal) {
       };
     },
     onLoad(options) {
-      this.userInfo.id = getApp().globalData.userId;
-      this.userInfo.name = getApp().globalData.username;
+      this.userInfo.userId = getApp().globalData.userId;
+      this.userInfo.username = getApp().globalData.username;
       this.userInfo.avatar = getApp().globalData.avatar;
       this.userInfo.followers = 0;
       this.userInfo.following = 0;
@@ -2780,16 +2778,17 @@ if (uni.restoreGlobal) {
           // 关闭原因代码，1000 表示正常关闭
           reason: "logout",
           success() {
-            formatAppLog("log", "at pages/user/me.vue:51", "WebSocket 连接关闭成功");
+            formatAppLog("log", "at pages/user/my_profile.vue:51", "WebSocket 连接关闭成功");
           },
           fail(err) {
-            formatAppLog("error", "at pages/user/me.vue:54", "WebSocket 连接关闭失败:", err);
+            formatAppLog("error", "at pages/user/my_profile.vue:54", "WebSocket 连接关闭失败:", err);
           }
         });
         delete getApp().globalData.token;
         uni.removeStorageSync("token");
+        uni.removeStorageSync("user_id");
         uni.reLaunch({
-          url: "/pages/video/video"
+          url: "/pages/user/login"
           // 替换为你的首页路径
         });
       }
@@ -2805,7 +2804,7 @@ if (uni.restoreGlobal) {
       vue.createElementVNode(
         "view",
         { class: "name" },
-        vue.toDisplayString($data.userInfo.name),
+        vue.toDisplayString($data.userInfo.username),
         1
         /* TEXT */
       ),
@@ -2835,7 +2834,7 @@ if (uni.restoreGlobal) {
       }, "退出登录")
     ]);
   }
-  const PagesUserMe = /* @__PURE__ */ _export_sfc(_sfc_main$7, [["render", _sfc_render$7], ["__scopeId", "data-v-4dafeecb"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/me.vue"]]);
+  const PagesUserMyProfile = /* @__PURE__ */ _export_sfc(_sfc_main$7, [["render", _sfc_render$7], ["__scopeId", "data-v-1705435c"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/my_profile.vue"]]);
   const _sfc_main$6 = {
     data() {
       return {
@@ -2850,31 +2849,31 @@ if (uni.restoreGlobal) {
       };
     },
     onLoad(options) {
-      this.userInfo.id = BigInt(options.id);
-      this.userInfo.name = options.name;
-      this.userInfo.avatar = options.avatar;
+      this.userInfo.userId = BigInt(options.userId);
+      this.userInfo.username = uni.getStorageSync("username_" + options.userId);
+      this.userInfo.avatar = uni.getStorageSync("user_avatar_" + options.userId);
     },
     methods: {
       goBackToChat() {
         const userId = getApp().globalData.userId;
         let conId;
-        if (userId < this.userInfo.id) {
-          conId = `${userId}:${this.userInfo.id}`;
+        if (userId < this.userInfo.userId) {
+          conId = `${userId}:${this.userInfo.userId}`;
         } else {
-          conId = `${this.userInfo.id}:${useId}`;
+          conId = `${this.userInfo.userId}:${userId}`;
         }
         uni.navigateTo({
-          url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.name}`
+          url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.username}`
         });
       },
       goToFansList() {
         uni.navigateTo({
-          url: `/pages/user/followed_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+          url: `/pages/user/followed_list?userId=${this.userInfo.userId}`
         });
       },
       goToFollowingList() {
         uni.navigateTo({
-          url: `/pages/user/following_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+          url: `/pages/user/following_list?userId=${this.userInfo.userId}}`
         });
       },
       toggleFollow() {
@@ -2892,7 +2891,7 @@ if (uni.restoreGlobal) {
       vue.createElementVNode(
         "view",
         { class: "name" },
-        vue.toDisplayString($data.userInfo.name),
+        vue.toDisplayString($data.userInfo.username),
         1
         /* TEXT */
       ),
@@ -2934,7 +2933,7 @@ if (uni.restoreGlobal) {
       ])
     ]);
   }
-  const PagesUserUser = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["render", _sfc_render$6], ["__scopeId", "data-v-0f7520f0"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/user.vue"]]);
+  const PagesUserUserProfile = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["render", _sfc_render$6], ["__scopeId", "data-v-50cc649a"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/user_profile.vue"]]);
   const _sfc_main$5 = {
     data() {
       return {
@@ -2985,6 +2984,312 @@ if (uni.restoreGlobal) {
     ]);
   }
   const PagesUserFollowedList = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$4], ["__scopeId", "data-v-176c98ad"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/followed_list.vue"]]);
+  const connectWebSocket = () => {
+    const {
+      token
+    } = getApp().globalData;
+    if (!token) {
+      uni.reLaunch({
+        url: "/pages/user/login"
+      });
+      return;
+    }
+    let heartBeatInterval;
+    const socketTask = uni.connectSocket({
+      url: `ws://127.0.0.1:3001/api/im/ws?token=${token}`,
+      success() {
+      },
+      fail(err) {
+        formatAppLog("error", "at utils/websocket.js:21", "websocket send err", err);
+        setTimeout(() => {
+          connectWebSocket();
+        }, 3e3);
+      }
+    });
+    socketTask.onOpen(() => {
+      formatAppLog("log", "at utils/websocket.js:29", "websocket connect");
+      heartBeatInterval = setInterval(() => {
+        socketTask.send({
+          data: "ping",
+          success() {
+          },
+          fail(err) {
+            formatAppLog("error", "at utils/websocket.js:37", "ping err", err);
+          }
+        });
+      }, 5e3);
+    });
+    socketTask.onMessage((res) => {
+      const data2 = JSONbig.parse(res.data);
+      formatAppLog("log", "at utils/websocket.js:45", "websocket receive data", data2);
+      if (data2.user_con_index != void 0) {
+        uni.$emit("normal_message", data2);
+        getApp().globalData.userConIndex = data2.user_con_index;
+        DB.updateConversation(data2.msg_body.con_short_id, data2.badge_count, data2.user_con_index).then((res2) => {
+          formatAppLog("log", "at utils/websocket.js:51", res2.rowsAffected);
+          if (res2.rowsAffected == 0) {
+            data2.msg_body;
+            DB.insertConversation(value).catch((err) => {
+              formatAppLog("log", "at utils/websocket.js:65", "insertConversation err", err);
+            });
+          }
+        }).catch((err) => {
+          formatAppLog("log", "at utils/websocket.js:71", "updateConversation err", err);
+        });
+        const {
+          user_id,
+          con_short_id,
+          con_id,
+          con_type,
+          client_msg_id,
+          msg_id,
+          msg_type,
+          msg_content,
+          create_time,
+          extra,
+          con_index
+        } = data2.msg_body;
+        const msgValue = `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+        DB.insertMessage(msgValue).catch((err) => {
+          formatAppLog("log", "at utils/websocket.js:88", "insertMessage err", err);
+        });
+      } else if (data2.user_cmd_index != void 0) {
+        uni.$emit("command_message", data2);
+        getApp().userCmdIndex = data2.user_cmd_index;
+      }
+    });
+    socketTask.onClose(() => {
+      formatAppLog("log", "at utils/websocket.js:97", "websocket close");
+      clearInterval(heartBeatInterval);
+    });
+    socketTask.onError((err) => {
+      formatAppLog("error", "at utils/websocket.js:102", "websocket err", err);
+    });
+    getApp().globalData.socketTask = socketTask;
+  };
+  const getUserInfos = async (userIds) => {
+    const token = getApp().globalData.token;
+    const data2 = {
+      user_ids: userIds
+    };
+    const dataJson = JSONbig.stringify(data2);
+    let res = await uni.request({
+      url: "http://127.0.0.1:3000/api/action/user/get_infos",
+      method: "POST",
+      header: {
+        "content-type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      data: dataJson,
+      dataType: "string"
+    });
+    if (res.statusCode === 200) {
+      res = JSONbig.parse(res.data);
+      if (res.code === 1e3) {
+        return res.data.user_infos;
+      }
+    }
+  };
+  const getByInit = () => {
+    const {
+      token,
+      userId
+    } = getApp().globalData;
+    if (!token || !userId) {
+      return;
+    }
+    doGetByInit(token, userId, 0);
+  };
+  async function doGetByInit(token, userId, index) {
+    let res = await uni.request({
+      url: "http://127.0.0.1:3001/api/im/message/get_by_init",
+      method: "POST",
+      header: {
+        "content-type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      data: {
+        user_con_index: index
+      },
+      dataType: "string"
+    });
+    if (res.statusCode === 200) {
+      res = JSONbig.parse(res.data);
+      formatAppLog("log", "at request/get_by_init.js:33", res);
+      if (res.code === 1e3) {
+        if (res.data.cons != void 0) {
+          const msgValuesArray = [];
+          const conValuesArray = [];
+          for (const con of res.data.cons) {
+            const conInfo = con.con_info;
+            const msgBodies = con.msg_bodies;
+            for (const msg of msgBodies) {
+              const {
+                user_id,
+                con_short_id: con_short_id2,
+                con_id: con_id2,
+                con_type: con_type2,
+                client_msg_id,
+                msg_id,
+                msg_type,
+                msg_content,
+                create_time: create_time2,
+                extra: extra2,
+                con_index
+              } = msg;
+              const msgValue = `( ${user_id}, ${con_short_id2}, '${con_id2}', ${con_type2}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time2}, '${extra2}', ${con_index})`;
+              msgValuesArray.push(msgValue);
+            }
+            const last_message = msgBodies[msgBodies.length - 1].msg_content;
+            if (conInfo.con_type === 1) {
+              const parts = conInfo.con_id.split(":");
+              let targetId;
+              if (parts[0] == userId) {
+                targetId = BigInt(parts[1]);
+              } else {
+                targetId = BigInt(parts[0]);
+              }
+              const userInfos = await getUserInfos([targetId]);
+              let targetUsername = userInfos[0].username;
+              let targetAvatar = userInfos[0].avatar;
+              if (targetAvatar === "") {
+                targetAvatar = "/static/user_avatar.png";
+              }
+              conInfo.con_core_info.name = targetUsername;
+              conInfo.con_core_info.avatar_uri = targetAvatar;
+            } else {
+              if (conInfo.con_core_info.name === "") {
+                conInfo.con_core_info.name = "群聊";
+              }
+              if (conInfo.con_core_info.avatar_uri === "") {
+                conInfo.con_core_info.avatar_uri = "/static/conv_avatar.png";
+              }
+            }
+            const {
+              con_short_id,
+              con_id,
+              con_type,
+              user_con_index,
+              badge_count
+            } = conInfo;
+            const {
+              name,
+              avatar_uri,
+              description,
+              notice,
+              owner_id,
+              create_time,
+              status,
+              extra: coreExtra,
+              member_count
+            } = conInfo.con_core_info;
+            const {
+              min_index,
+              top_time_stamp,
+              push_status,
+              read_index_end,
+              read_badge_count,
+              extra: settingExtra
+            } = conInfo.con_setting_info;
+            const extra = `${coreExtra},${settingExtra}`;
+            const conValue = `(${con_short_id}, '${con_id}', ${con_type}, '${name}', '${avatar_uri}', '${description}', '${notice}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index}, '${last_message}')`;
+            conValuesArray.push(conValue);
+          }
+          const conValues = conValuesArray.join(",");
+          const msgValues = msgValuesArray.join(",");
+          DB.insertConversation(conValues).catch((err) => {
+            formatAppLog("error", "at request/get_by_init.js:122", "insertConversation err", err);
+          });
+          DB.insertMessage(msgValues).catch((err) => {
+            formatAppLog("error", "at request/get_by_init.js:125", "insertMessage err", err);
+          });
+        }
+        getApp().globalData.userConIndex = res.data.user_con_index;
+        getApp().globalData.userCmdIndex = res.data.user_cmd_index;
+        if (res.data.has_more === true) {
+          doGetByInit(token, userId, res.data.next_user_con_index);
+        }
+      } else {
+        uni.showToast({
+          title: "服务器错误",
+          icon: "none"
+        });
+      }
+    } else {
+      uni.showToast({
+        title: "网络错误",
+        icon: "none"
+      });
+    }
+  }
+  const initAuth = async () => {
+    const app = getApp();
+    const {
+      token,
+      userId
+    } = app.globalData;
+    if (token && userId) {
+      return;
+    }
+    const localToken = uni.getStorageSync("token");
+    const localUserId = BigInt(JSONbig.parse(uni.getStorageSync("user_id")).data);
+    if (localToken && localUserId) {
+      app.globalData.token = localToken;
+      app.globalData.userId = localUserId;
+      const data2 = {
+        user_ids: [app.globalData.userId]
+      };
+      const dataJson = JSONbig.stringify(data2);
+      const res = await uni.request({
+        url: "http://127.0.0.1:3000/api/action/user/get_infos",
+        method: "POST",
+        header: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${localToken}`
+        },
+        data: dataJson
+      });
+      if (res.statusCode === 200) {
+        if (res.data.code === 1e3) {
+          let {
+            avatar,
+            username
+          } = res.data.data.user_infos[0];
+          if (avatar == "") {
+            avatar = "/static/user_avatar.png";
+          }
+          uni.setStorageSync("username_" + localUserId, username);
+          uni.setStorageSync("user_avatar_" + localUserId, avatar);
+          app.globalData.username = username;
+          app.globalData.avatar = avatar;
+          connectWebSocket();
+          getByInit();
+        } else {
+          uni.showToast({
+            title: "服务器错误",
+            icon: "none"
+          });
+        }
+      } else if (res.statusCode === 403) {
+        uni.showToast({
+          title: "登录过期",
+          icon: "none"
+        });
+        uni.reLaunch({
+          url: "/pages/user/login"
+        });
+      } else {
+        uni.showToast({
+          title: "网络错误",
+          icon: "none"
+        });
+      }
+    } else {
+      uni.reLaunch({
+        url: "/pages/user/login"
+      });
+    }
+  };
   const _sfc_main$3 = {
     data() {
       return {
@@ -3001,25 +3306,27 @@ if (uni.restoreGlobal) {
           });
           return;
         }
-        const res = await uni.request({
-          url: "http://127.0.0.1:3000/api/action/user/login/",
+        let res = await uni.request({
+          url: "http://127.0.0.1:3000/api/action/user/login",
           method: "POST",
           header: {
-            "content-type": "application/x-www-form-urlencoded"
+            "content-type": "application/json"
           },
           data: {
             username: this.username,
             password: this.password
-          }
+          },
+          dataType: "string"
         });
         if (res.statusCode === 200) {
-          const data2 = res.data;
-          if (data2.message === "success") {
-            const token = data2.token;
-            uni.setStorageSync("token", token);
-            DB.createTable().catch((err) => {
-              formatAppLog("error", "at pages/user/login.vue:51", "createTable err, err = ", err);
+          res = JSONbig.parse(res.data);
+          if (res.code === 1e3) {
+            uni.setStorageSync("token", res.data.token);
+            uni.setStorageSync("user_id", res.data.user_id);
+            DB.createTable(res.data.user_id).catch((err) => {
+              formatAppLog("error", "at pages/user/login.vue:56", "createTable err", err);
             });
+            initAuth();
             uni.showToast({
               title: "登录成功",
               icon: "success"
@@ -3029,13 +3336,13 @@ if (uni.restoreGlobal) {
             });
           } else {
             uni.showToast({
-              title: data2.message,
+              title: res.message,
               icon: "none"
             });
           }
         } else {
           uni.showToast({
-            title: "网络错误，请稍后重试",
+            title: "网络错误",
             icon: "none"
           });
         }
@@ -3113,7 +3420,7 @@ if (uni.restoreGlobal) {
           return;
         }
         uni.request({
-          url: "http://127.0.0.1:3000/api/action/user/register/",
+          url: "http://127.0.0.1:3000/api/action/user/register",
           method: "POST",
           header: {
             "content-type": "application/x-www-form-urlencoded"
@@ -3238,13 +3545,13 @@ if (uni.restoreGlobal) {
         this.hasSearched = true;
         const token = getApp().globalData.token;
         let res = await uni.request({
-          url: "http://127.0.0.1:3000/api/action/user/search/",
+          url: "http://127.0.0.1:3000/api/action/user/search",
           method: "GET",
           header: {
             Authorization: `Bearer ${token}`
           },
           data: {
-            term: this.searchKeyword
+            keyword: this.searchKeyword
           },
           dataType: "string"
         });
@@ -3260,7 +3567,7 @@ if (uni.restoreGlobal) {
       },
       goToUserPage(user) {
         uni.navigateTo({
-          url: `/pages/user/user?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
+          url: `/pages/user/user_profile?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
         });
       }
     }
@@ -3335,8 +3642,8 @@ if (uni.restoreGlobal) {
   __definePage("pages/im/home", PagesImHome);
   __definePage("pages/im/conversation", PagesImConversation);
   __definePage("pages/shop/shop", PagesShopShop);
-  __definePage("pages/user/me", PagesUserMe);
-  __definePage("pages/user/user", PagesUserUser);
+  __definePage("pages/user/my_profile", PagesUserMyProfile);
+  __definePage("pages/user/user_profile", PagesUserUserProfile);
   __definePage("pages/user/following_list", PagesUserFollowingList);
   __definePage("pages/user/followed_list", PagesUserFollowedList);
   __definePage("pages/user/login", PagesUserLogin);
@@ -3382,273 +3689,14 @@ if (uni.restoreGlobal) {
       return BigInt(timestamp - this.startTimestamp) << BigInt(this.timestampShift) | BigInt(this.sequence);
     }
   }
-  const connectWebSocket = () => {
-    const {
-      token
-    } = getApp().globalData;
-    if (!token) {
-      uni.reLaunch({
-        url: "/pages/user/login"
-      });
-      return;
-    }
-    let heartBeatInterval;
-    const socketTask = uni.connectSocket({
-      url: `ws://127.0.0.1:3001/api/im/ws?token=${token}`,
-      success() {
-      },
-      fail(err) {
-        formatAppLog("error", "at utils/websocket.js:21", "websocket send err", err);
-        setTimeout(() => {
-          connectWebSocket();
-        }, 3e3);
-      }
-    });
-    socketTask.onOpen(() => {
-      formatAppLog("log", "at utils/websocket.js:29", "websocket connect");
-      heartBeatInterval = setInterval(() => {
-        socketTask.send({
-          data: "ping",
-          success() {
-          },
-          fail(err) {
-            formatAppLog("error", "at utils/websocket.js:37", "ping err", err);
-          }
-        });
-      }, 5e3);
-    });
-    socketTask.onMessage((res) => {
-      const data2 = JSONbig.parse(res.data);
-      formatAppLog("log", "at utils/websocket.js:45", "websocket receive data", data2);
-      if (data2.user_con_index != void 0) {
-        uni.$emit("normal_message", data2);
-        getApp().globalData.userConIndex = data2.user_con_index;
-        DB.updateConversation(data2.msg_body.con_short_id, data2.badge_count, data2.user_con_index).then((res2) => {
-          formatAppLog("log", "at utils/websocket.js:51", res2.rowsAffected);
-          if (res2.rowsAffected == 0) {
-            data2.msg_body;
-            DB.insertConversation(value).catch((err) => {
-              formatAppLog("log", "at utils/websocket.js:65", "insertConversation err", err);
-            });
-          }
-        }).catch((err) => {
-          formatAppLog("log", "at utils/websocket.js:71", "updateConversation err", err);
-        });
-        const {
-          user_id,
-          con_short_id,
-          con_id,
-          con_type,
-          client_msg_id,
-          msg_id,
-          msg_type,
-          msg_content,
-          create_time,
-          extra,
-          con_index
-        } = data2.msg_body;
-        const msgValue = `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
-        DB.insertMessage(msgValue).catch((err) => {
-          formatAppLog("log", "at utils/websocket.js:88", "insertMessage err", err);
-        });
-      } else if (data2.user_cmd_index != void 0) {
-        uni.$emit("command_message", data2);
-        getApp().userCmdIndex = data2.user_cmd_index;
-      }
-    });
-    socketTask.onClose(() => {
-      formatAppLog("log", "at utils/websocket.js:97", "websocket close");
-      clearInterval(heartBeatInterval);
-    });
-    socketTask.onError((err) => {
-      formatAppLog("error", "at utils/websocket.js:102", "websocket err", err);
-    });
-    getApp().globalData.socketTask = socketTask;
-  };
-  const getByInit = () => {
-    const {
-      token
-    } = getApp().globalData;
-    if (!token) {
-      return;
-    }
-    doGetByInit(token, 0);
-  };
-  async function doGetByInit(token, index) {
-    var res = await uni.request({
-      url: "http://127.0.0.1:3001/api/im/message/get_by_init",
-      method: "POST",
-      header: {
-        "content-type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      data: {
-        user_con_index: index
-      },
-      dataType: "string"
-    });
-    if (res.statusCode === 200) {
-      res = JSONbig.parse(res.data);
-      formatAppLog("log", "at request/get_by_init.js:28", res);
-      if (res.code === 1e3) {
-        if (res.data.cons != void 0) {
-          const conInfos = res.data.cons.map((item) => item.con_info);
-          const msgBodies = res.data.cons.flatMap((item) => item.msg_bodies);
-          const conValues = conInfos.map((conInfo) => {
-            const {
-              con_short_id,
-              con_id,
-              con_type,
-              user_con_index,
-              badge_count
-            } = conInfo;
-            const {
-              name,
-              avatar_uri,
-              description,
-              notice,
-              owner_id,
-              create_time,
-              status,
-              extra: coreExtra,
-              member_count
-            } = conInfo.con_core_info;
-            const {
-              min_index,
-              top_time_stamp,
-              push_status,
-              read_index_end,
-              read_badge_count,
-              extra: settingExtra
-            } = conInfo.con_setting_info;
-            const extra = `${coreExtra},${settingExtra}`;
-            return `(${con_short_id}, '${con_id}', ${con_type}, '${name}', '${avatar_uri}', '${description}', '${notice}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index})`;
-          }).join(",");
-          const msgValues = msgBodies.map((msg) => {
-            const {
-              user_id,
-              con_short_id,
-              con_id,
-              con_type,
-              client_msg_id,
-              msg_id,
-              msg_type,
-              msg_content,
-              create_time,
-              extra,
-              con_index
-            } = msg;
-            return `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
-          }).join(",");
-          DB.insertConversation(conValues).catch((err) => {
-            formatAppLog("error", "at request/get_by_init.js:80", "insertConversation err", err);
-          });
-          DB.insertMessage(msgValues).catch((err) => {
-            formatAppLog("error", "at request/get_by_init.js:83", "insertMessage err", err);
-          });
-        }
-        getApp().globalData.userConIndex = res.data.user_con_index;
-        getApp().globalData.userCmdIndex = res.data.user_cmd_index;
-        if (res.data.has_more === true) {
-          doGetByInit(token, res.data.next_user_con_index);
-        }
-      } else {
-        uni.showToast({
-          title: "服务器错误",
-          icon: "none"
-        });
-      }
-    } else {
-      uni.showToast({
-        title: "网络错误",
-        icon: "none"
-      });
-    }
-  }
-  const checkAuth = async () => {
-    const app = getApp();
-    const {
-      token
-    } = app.globalData;
-    if (token) {
-      return true;
-    }
-    const localToken = uni.getStorageSync("token");
-    if (localToken) {
-      app.globalData.token = localToken;
-      const res = await uni.request({
-        url: "http://127.0.0.1:3000/api/action/user/get_info/",
-        method: "GET",
-        header: {
-          "Authorization": `Bearer ${localToken}`
-        }
-      });
-      if (res.statusCode === 200) {
-        if (res.data.code === 1e3) {
-          formatAppLog("log", "at utils/auth.js:30", res);
-          const {
-            userId,
-            avatar,
-            username
-          } = res.data;
-          app.globalData.userId = BigInt(userId);
-          app.globalData.avatar = avatar;
-          app.globalData.username = username;
-          connectWebSocket();
-          getByInit();
-          return true;
-        } else {
-          uni.showToast({
-            title: "登录过期",
-            icon: "none"
-          });
-          throw new Error("invaild token");
-        }
-      } else {
-        uni.showToast({
-          title: "网络错误",
-          icon: "none"
-        });
-      }
-    }
-    uni.reLaunch({
-      url: "/pages/user/login"
-    });
-    return false;
-  };
   const _sfc_main = {
     onLaunch() {
       const platform = uni.getSystemInfoSync().platform;
-      checkAuth();
-      this.initRouterGuard();
       if (platform === "android" || platform == "ios") {
         DB.openSqlite();
       }
+      initAuth();
       getApp().globalData.msgIdGenerator = new Snowflake();
-    },
-    methods: {
-      initRouterGuard() {
-        const routerMethods = ["navigateTo", "redirectTo", "reLaunch", "switchTab"];
-        routerMethods.forEach((method) => {
-          uni.addInterceptor(method, {
-            invoke(args) {
-              const noAuthPages = [
-                "/pages/user/login",
-                "/pages/user/register"
-              ];
-              if (!noAuthPages.includes(args.url)) {
-                return checkAuth().then((hasAuth) => {
-                  if (hasAuth) {
-                    return args;
-                  }
-                  return false;
-                });
-              }
-              return args;
-            }
-          });
-        });
-      }
     }
   };
   function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {

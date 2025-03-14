@@ -3,7 +3,7 @@
 		<view class="avatar">
 			<image :src="userInfo.avatar"></image>
 		</view>
-		<view class="name">{{ userInfo.name }}</view>
+		<view class="name">{{ userInfo.username }}</view>
 		<view class="stats">
 			<view @click="goToFansList">粉丝数: {{ userInfo.followers }}</view>
 			<view @click="goToFollowingList">关注数: {{ userInfo.following }}</view>
@@ -17,8 +17,8 @@
 		data() {
 			return {
 				userInfo: {
-					id: null,
-					name: '',
+					userId: null,
+					username: '',
 					avatar: '',
 					followers: 0,
 					following: 0
@@ -26,8 +26,8 @@
 			};
 		},
 		onLoad(options) {
-			this.userInfo.id = getApp().globalData.userId;
-			this.userInfo.name = getApp().globalData.username;
+			this.userInfo.userId = getApp().globalData.userId;
+			this.userInfo.username = getApp().globalData.username;
 			this.userInfo.avatar = getApp().globalData.avatar;
 			this.userInfo.followers = 0;
 			this.userInfo.following = 0;
@@ -56,8 +56,9 @@
 				});
 				delete getApp().globalData.token;
 				uni.removeStorageSync('token');
+				uni.removeStorageSync('user_id');
 				uni.reLaunch({
-					url: '/pages/video/video' // 替换为你的首页路径
+					url: '/pages/user/login' // 替换为你的首页路径
 				});
 			}
 		}

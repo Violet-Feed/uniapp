@@ -12,7 +12,12 @@
 </template>
 
 <script>
+	import JSONbig from 'json-bigint';
+	import file from '@/utils/file.js';
 	import DB from '@/utils/sqlite.js'
+	import {
+		initAuth
+	} from '@/utils/auth';
 	export default {
 		data() {
 			return {
@@ -29,27 +34,28 @@
 					});
 					return;
 				}
-				const res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/action/user/login/',
+				let res = await uni.request({
+					url: 'http://127.0.0.1:3000/api/action/user/login',
 					method: 'POST',
 					header: {
-						'content-type': 'application/x-www-form-urlencoded'
+						'content-type': 'application/json'
 					},
 					data: {
 						username: this.username,
 						password: this.password
-					}
-				});
+					},
+					dataType: 'string',
 
+				});
 				if (res.statusCode === 200) {
-					const data = res.data;
-					if (data.message === "success") {
-						const token = data.token;
-						// 存储 token 到本地
-						uni.setStorageSync('token', token);
-						DB.createTable().catch((err) => {
-							console.error("createTable err, err = ", err);
+					res = JSONbig.parse(res.data);
+					if (res.code === 1000) {
+						uni.setStorageSync('token', res.data.token);
+						uni.setStorageSync('user_id', res.data.user_id);
+						DB.createTable(res.data.user_id).catch((err) => {
+							console.error("createTable err", err);
 						})
+						initAuth();
 						uni.showToast({
 							title: '登录成功',
 							icon: 'success'
@@ -59,13 +65,13 @@
 						});
 					} else {
 						uni.showToast({
-							title: data.message,
+							title: res.message,
 							icon: 'none'
 						});
 					}
 				} else {
 					uni.showToast({
-						title: '网络错误，请稍后重试',
+						title: '网络错误',
 						icon: 'none'
 					});
 				}

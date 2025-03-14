@@ -40,13 +40,13 @@
 				this.hasSearched = true;
 				const token = getApp().globalData.token;
 				let res= await uni.request({
-					url: 'http://127.0.0.1:3000/api/action/user/search/',
+					url: 'http://127.0.0.1:3000/api/action/user/search',
 					method: 'GET',
 					header: {
 						Authorization: `Bearer ${token}`,
 					},
 					data: {
-						term: this.searchKeyword
+						keyword: this.searchKeyword
 					},
 					dataType: 'string',
 				});
@@ -62,7 +62,7 @@
 			},
 			goToUserPage(user) {
 				uni.navigateTo({
-					url: `/pages/user/user?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
+					url: `/pages/user/user_profile?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
 				});
 			}
 		}

@@ -40,7 +40,7 @@
 					return;
 				}
 				uni.request({
-					url: 'http://127.0.0.1:3000/api/action/user/register/',
+					url: 'http://127.0.0.1:3000/api/action/user/register',
 					method: 'POST',
 					header: {
 						'content-type': 'application/x-www-form-urlencoded'

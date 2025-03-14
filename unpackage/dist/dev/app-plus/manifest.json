@@ -165,7 +165,7 @@
         },
         {
           "text": "我的",
-          "pagePath": "pages/user/me"
+          "pagePath": "pages/user/my_profile"
         }
       ],
       "selectedIndex": 0,
