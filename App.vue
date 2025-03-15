@@ -12,7 +12,10 @@
 	} from '@/request/get_by_init';
 	export default {
 		onLaunch() {
-			const platform = uni.getSystemInfoSync().platform
+			const deviceId=uni.getSystemInfoSync().deviceId;
+			const platform = uni.getSystemInfoSync().platform;
+			getApp().globalData.deviceId=deviceId;
+			getApp().globalData.platform=platform;
 			if (platform === "android" || platform == "ios") {
 				DB.openSqlite();
 			}

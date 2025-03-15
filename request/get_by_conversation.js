@@ -1,10 +1,15 @@
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js'
-export const getByConversation = (conShortId, conIndex, limit) => {
+export const getByConversation = async (conShortId, conIndex, limit) => {
 	const {
 		token
 	} = getApp().globalData;
-
+	const data={
+		con_short_id: BigInt(conShortId),
+		con_index: conIndex,
+		limit: limit,
+	}
+	const dataJson=JSONbig.stringify(data);
 	var res = await uni.request({
 		url: 'http://127.0.0.1:3001/api/im/message/get_by_conversation',
 		method: 'POST',
@@ -12,11 +17,7 @@ export const getByConversation = (conShortId, conIndex, limit) => {
 			'content-type': 'application/json',
 			'Authorization': `Bearer ${token}`
 		},
-		data: {
-			con_short_id: conShortId,
-			con_index: conIndex,
-			limit: limit,
-		},
+		data: dataJson,
 		dataType: 'string',
 	});
 	if (res.statusCode === 200) {
@@ -43,6 +44,7 @@ export const getByConversation = (conShortId, conIndex, limit) => {
 			DB.insertMessage(msgValues).catch((err) => {
 				console.error("insertMessage err", err);
 			});
+			return msgBodies;
 		} else {
 			uni.showToast({
 				title: '服务器错误',

@@ -37,13 +37,19 @@
 			}
 		},
 		{
+			"path": "pages/user/friend_list",
+			"style": {
+				"navigationBarTitleText":"互关列表"
+			}
+		},
+		{
 			"path": "pages/user/following_list",
 			"style": {
 				"navigationBarTitleText":"关注列表"
 			}
 		},
 		{
-			"path": "pages/user/followed_list",
+			"path": "pages/user/follower_list",
 			"style": {
 				"navigationBarTitleText":"粉丝列表"
 			}

@@ -38,16 +38,16 @@ if (uni.restoreGlobal) {
     }
     return target;
   };
-  const _sfc_main$b = {
+  const _sfc_main$c = {
     data() {
       return {};
     },
     methods: {}
   };
-  function _sfc_render$b(_ctx, _cache, $props, $setup, $data, $options) {
+  function _sfc_render$c(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", null, " video ");
   }
-  const PagesVideoVideo = /* @__PURE__ */ _export_sfc(_sfc_main$b, [["render", _sfc_render$b], ["__file", "D:/H/Desktop/Violet/uniapp/pages/video/video.vue"]]);
+  const PagesVideoVideo = /* @__PURE__ */ _export_sfc(_sfc_main$c, [["render", _sfc_render$c], ["__file", "D:/H/Desktop/Violet/uniapp/pages/video/video.vue"]]);
   function requireNativePlugin(name) {
     return weex.requireModule(name);
   }
@@ -221,7 +221,7 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function selectConversation(index) {
+  function pullConversation(index) {
     const {
       userId
     } = getApp().globalData;
@@ -243,7 +243,7 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function selectMessage(conId, index) {
+  function pullMessage(conId, index) {
     const {
       userId
     } = getApp().globalData;
@@ -262,12 +262,12 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function selectConShortId(conId) {
+  function selectConversation(conId) {
     const {
       userId
     } = getApp().globalData;
     const dbTable = "conversation_" + userId;
-    const sql = `SELECT con_short_id FROM ${dbTable} WHERE con_id = '${conId}' `;
+    const sql = `SELECT * FROM ${dbTable} WHERE con_id = '${conId}' `;
     return new Promise((resolve, reject) => {
       plus.sqlite.selectSql({
         name: dbName,
@@ -319,12 +319,12 @@ if (uni.restoreGlobal) {
       });
     });
   }
-  function updateConversation(conShortId, count, index) {
+  function updateConversation(conShortId, count, index, msg) {
     const {
       userId
     } = getApp().globalData;
     const dbTable = "conversation_" + userId;
-    const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index} WHERE con_short_id = '${conShortId}'`;
+    const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index}, last_message = ${msg} WHERE con_short_id = '${conShortId}'`;
     return new Promise((resolve, reject) => {
       plus.sqlite.executeSql({
         name: dbName,
@@ -364,15 +364,15 @@ if (uni.restoreGlobal) {
     createTable,
     insertConversation,
     insertMessage,
+    pullConversation,
+    pullMessage,
     selectConversation,
-    selectMessage,
-    selectConShortId,
     deleteConversation,
     deleteMessage,
     updateConversation,
     updateMessage
   };
-  const _sfc_main$a = {
+  const _sfc_main$b = {
     data() {
       return {
         userConIndex: getApp().globalData.userConIndex,
@@ -380,45 +380,50 @@ if (uni.restoreGlobal) {
       };
     },
     onLoad() {
-      DB.selectConversation(this.userConIndex).then((res) => {
+      DB.pullConversation(this.userConIndex).then((res) => {
         this.conversationList = res;
       }).catch((err) => {
-        formatAppLog("error", "at pages/im/home.vue:44", "selectConversation err", err);
+        formatAppLog("error", "at pages/im/home.vue:37", "pullConversation err", err);
       });
       uni.$on("normal_message", (data2) => {
         this.userConIndex = data2.user_con_index;
-        DB.selectConversation(this.userConIndex).then((res) => {
-          this.conversationList = res;
-        }).catch((err) => {
-          formatAppLog("error", "at pages/im/home.vue:63", "selectConversation err", err);
-        });
+        let index = -1;
+        for (let i = 0; i < this.conversationList.length; i++) {
+          if (this.conversationList[i].con_short_id == data2.msg_body.con_short_id) {
+            this.conversationList[i].badge_count = data2.badge_count;
+            this.conversationList[i].user_con_index = data2.user_con_index;
+            this.conversationList[i].last_message = data2.msg_body.msg_content;
+            index = i;
+            break;
+          }
+        }
+        if (index !== -1) {
+          const conversation = this.conversationList.splice(index, 1)[0];
+          this.conversationList.unshift(conversation);
+        }
       });
     },
     onUnload() {
       uni.$off("message");
     },
     methods: {
-      // 跳转到搜索页面的方法
       goToSearchPage() {
         uni.navigateTo({
           url: "/pages/im/search"
         });
       },
-      // 打开聊天页面的方法
       openChat(conversation) {
         uni.navigateTo({
-          url: `/pages/im/conversation?conShortId=${conversation.con_short_id}&conId=${conversation.con_id}&conType=${conversation.con_type}&name=${conversation.name}`
+          url: `/pages/im/conversation?conId=${conversation.con_id}&name=${conversation.name}&conType=${conversation.con_type}`
         });
       }
     }
   };
-  function _sfc_render$a(_ctx, _cache, $props, $setup, $data, $options) {
+  function _sfc_render$b(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "conversation-container" }, [
-      vue.createCommentVNode(" 搜索按钮 "),
       vue.createElementVNode("button", {
         onClick: _cache[0] || (_cache[0] = (...args) => $options.goToSearchPage && $options.goToSearchPage(...args))
       }, "搜索"),
-      vue.createCommentVNode(" 会话列表 "),
       vue.createElementVNode("view", { class: "conversation-list" }, [
         (vue.openBlock(true), vue.createElementBlock(
           vue.Fragment,
@@ -429,15 +434,12 @@ if (uni.restoreGlobal) {
               key: index,
               onClick: ($event) => $options.openChat(conversation)
             }, [
-              vue.createCommentVNode(" 头像 "),
               vue.createElementVNode("view", { class: "avatar" }, [
                 vue.createElementVNode("image", {
                   src: conversation.avatar_uri
                 }, null, 8, ["src"])
               ]),
-              vue.createCommentVNode(" 会话信息 "),
               vue.createElementVNode("view", { class: "conversation-info" }, [
-                vue.createCommentVNode(" 对方名称 "),
                 vue.createElementVNode(
                   "view",
                   { class: "name" },
@@ -445,7 +447,6 @@ if (uni.restoreGlobal) {
                   1
                   /* TEXT */
                 ),
-                vue.createCommentVNode(" 最新消息 "),
                 vue.createElementVNode(
                   "view",
                   { class: "last-message" },
@@ -454,7 +455,6 @@ if (uni.restoreGlobal) {
                   /* TEXT */
                 )
               ]),
-              vue.createCommentVNode(" 未读消息数量 "),
               conversation.badge_count - conversation.read_badge_count > 0 ? (vue.openBlock(), vue.createElementBlock(
                 "view",
                 {
@@ -473,7 +473,7 @@ if (uni.restoreGlobal) {
       ])
     ]);
   }
-  const PagesImHome = /* @__PURE__ */ _export_sfc(_sfc_main$a, [["render", _sfc_render$a], ["__scopeId", "data-v-1764cc5c"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/im/home.vue"]]);
+  const PagesImHome = /* @__PURE__ */ _export_sfc(_sfc_main$b, [["render", _sfc_render$b], ["__scopeId", "data-v-1764cc5c"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/im/home.vue"]]);
   var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
   function getDefaultExportFromCjs(x) {
     return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -2510,55 +2510,131 @@ if (uni.restoreGlobal) {
   jsonBigint.exports.stringify = json_stringify;
   var jsonBigintExports = jsonBigint.exports;
   const JSONbig = /* @__PURE__ */ getDefaultExportFromCjs(jsonBigintExports);
-  const _sfc_main$9 = {
+  const getByConversation = async (conShortId, conIndex, limit) => {
+    const {
+      token
+    } = getApp().globalData;
+    const data2 = {
+      con_short_id: BigInt(conShortId),
+      con_index: conIndex,
+      limit
+    };
+    const dataJson = JSONbig.stringify(data2);
+    var res = await uni.request({
+      url: "http://127.0.0.1:3001/api/im/message/get_by_conversation",
+      method: "POST",
+      header: {
+        "content-type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      data: dataJson,
+      dataType: "string"
+    });
+    if (res.statusCode === 200) {
+      res = JSONbig.parse(res.data);
+      formatAppLog("log", "at request/get_by_conversation.js:25", res);
+      if (res.code === 1e3) {
+        const msgBodies = res.data.msg_bodies;
+        const msgValues = msgBodies.map((msg) => {
+          const {
+            user_id,
+            con_short_id,
+            con_id,
+            con_type,
+            client_msg_id,
+            msg_id,
+            msg_type,
+            msg_content,
+            create_time,
+            extra,
+            con_index
+          } = msg;
+          return `(${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+        }).join(",");
+        DB.insertMessage(msgValues).catch((err) => {
+          formatAppLog("error", "at request/get_by_conversation.js:45", "insertMessage err", err);
+        });
+        return msgBodies;
+      } else {
+        uni.showToast({
+          title: "服务器错误",
+          icon: "none"
+        });
+      }
+    } else {
+      uni.showToast({
+        title: "网络错误",
+        icon: "none"
+      });
+    }
+  };
+  const _sfc_main$a = {
     data() {
       return {
         userId: getApp().globalData.userId,
-        conversation: {
-          conShortId: 0,
-          conId: "",
-          conType: 0,
-          name: ""
-        },
+        conversation: {},
         conIndex: Number.MAX_VALUE,
         messages: [],
         inputText: "",
         scrollTop: 0,
+        hasMore: true,
         myAvatar: getApp().globalData.avatar
       };
     },
     onLoad(options) {
-      this.conversation.conShortId = Number(options.conShortId);
-      this.conversation.conId = options.conId;
-      this.conversation.conType = Number(options.conType);
-      this.conversation.name = options.name;
+      this.conversation.con_short_id = 0;
+      this.conversation.con_id = options.conId;
+      this.conversation.con_type = Number(options.conType);
       uni.setNavigationBarTitle({
-        title: this.conversation.name
+        title: options.name
       });
-      if (this.conversation.conShortId == 0) {
-        DB.selectConShortId(this.conversation.conId).then((res) => {
-          if (res.length > 0) {
-            this.conversation.conShortId = BigInt(res[0].con_short_id);
-          }
-        }).catch((err) => {
-          formatAppLog("error", "at pages/im/conversation.vue:74", "selectConShortId err", err);
-        });
-      }
-      DB.selectMessage(this.conversation.conId, this.conIndex).then((res) => {
+      DB.selectConversation(options.conId).then((res) => {
+        if (res.length > 0) {
+          this.conversation = res[0];
+        }
+        return DB.pullMessage(this.conversation.con_id, this.conIndex);
+      }).then((res) => {
+        res.reverse();
         this.messages = res;
-        this.messages.reverse();
         if (this.messages.length > 0) {
           this.conIndex = this.messages[0].con_index - 1;
         }
+        if (this.conIndex <= this.conversation.min_index) {
+          this.hasMore = false;
+        } else if (this.messages.length < 20) {
+          return getByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
+        }
+      }).then((res) => {
+        if (res && res.length > 0) {
+          this.messages = res.concat(this.messages);
+          this.conIndex = this.messages[0].con_index - 1;
+        }
+        if (!res || res.length === 0 || this.conIndex <= this.conversation.min_index) {
+          this.hasMore = false;
+        }
+        setTimeout(() => {
+          this.scrollToBottom();
+        }, 100);
       }).catch((err) => {
-        formatAppLog("error", "at pages/im/conversation.vue:86", "selectMessage err", err);
+        formatAppLog("error", "at pages/im/conversation.vue:99", "pullMessage err", err);
       });
       uni.$on("normal_message", (data2) => {
-        if (this.conversation.conId == data2.msg_body.con_id) {
-          for (let i = this.messages.length - 1; i >= 0; i--) {
-            if (this.messages[i].client_msg_id == data2.msg_body.client_msg_id) {
-              this.messages[i].status = 0;
+        if (this.conversation.con_id == data2.msg_body.con_id) {
+          if (this.userId == data2.msg_body.user_id) {
+            for (let i = this.messages.length - 1; i >= 0; i--) {
+              if (this.messages[i].client_msg_id == data2.msg_body.client_msg_id) {
+                this.messages[i].msg_id = data2.msg_body.msg_id;
+                this.messages[i].con_index = data2.msg_body.con_index;
+                this.messages[i].status = 0;
+                break;
+              }
+              if (this.messages[i].con_index && this.messages[i].con_index < data2.msg_body.con_index) {
+                this.messages.push(data2.msg_body);
+                break;
+              }
             }
+          } else {
+            this.messages.push(data2.msg_body);
           }
         }
       });
@@ -2573,15 +2649,15 @@ if (uni.restoreGlobal) {
         const token = getApp().globalData.token;
         const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
         const data2 = {
-          con_short_id: BigInt(this.conversation.conShortId),
-          con_id: this.conversation.conId,
-          con_type: this.conversation.conType,
+          con_short_id: BigInt(this.conversation.con_short_id),
+          con_id: this.conversation.con_id,
+          con_type: this.conversation.con_type,
           client_msg_id: clientMsgId,
           msg_type: 1,
           msg_content: this.inputText
         };
         const dataJson = JSONbig.stringify(data2);
-        formatAppLog("log", "at pages/im/conversation.vue:115", dataJson);
+        formatAppLog("log", "at pages/im/conversation.vue:140", dataJson);
         const res = await uni.request({
           url: "http://127.0.0.1:3001/api/im/message/send",
           method: "POST",
@@ -2592,21 +2668,21 @@ if (uni.restoreGlobal) {
           data: dataJson
         });
         if (res.statusCode === 200) {
+          formatAppLog("log", "at pages/im/conversation.vue:151", res.data);
           if (res.data.code === 1e3) {
             this.messages.push({
               user_id: this.userId,
-              con_short_id: this.conversation.conShortId,
-              con_id: this.conversation.conId,
-              con_type: this.conversation.conType,
+              con_short_id: this.conversation.con_short_id,
+              con_id: this.conversation.con_id,
+              con_type: this.conversation.con_type,
               client_msg_id: clientMsgId,
               msg_type: 1,
               msg_content: this.inputText,
+              create_time: Date.now() / 1e3,
               status: -1
             });
             this.inputText = "";
-            this.$nextTick(() => {
-              this.scrollTop = this.$refs.chatMessages.scrollHeight;
-            });
+            this.scrollToBottom();
           } else {
             uni.showToast({
               title: "服务器错误",
@@ -2624,100 +2700,171 @@ if (uni.restoreGlobal) {
         uni.navigateTo({
           url: `/pages/user/user_profile?userId=${BigInt(message.user_id)}`
         });
+      },
+      scrollToBottom() {
+        this.$nextTick(() => {
+          const query = uni.createSelectorQuery();
+          query.select(".chat-messages").boundingClientRect();
+          query.select(".messages").boundingClientRect();
+          query.exec((res) => {
+            const scrollViewHeight = res[0].height;
+            const scrollContentHeight = res[1].height;
+            if (scrollContentHeight > scrollViewHeight) {
+              this.scrollTop = scrollContentHeight - scrollViewHeight;
+            }
+          });
+        });
+      },
+      onScroll(e) {
+        if (e.detail.scrollTop === 0 && this.hasMore) {
+          DB.pullMessage(this.conversation.con_id, this.conIndex).then((res) => {
+            res.reverse();
+            if (res.length > 0) {
+              if (this.conIndex != res[res.length - 1].con_index) {
+                formatAppLog("error", "at pages/im/conversation.vue:205", "TODO:getByConversation");
+              }
+              this.messages = res.concat(this.messages);
+              if (this.messages.length > 0) {
+                this.conIndex = this.messages[0].con_index - 1;
+              }
+            }
+            if (this.conIndex <= this.conversation.min_index) {
+              this.hasMore = false;
+            } else if (res.length < 20) {
+              return getByConversation(this.conversation.con_short_id, this.conIndex, 20 - res.length);
+            }
+          }).then((res) => {
+            if (res && res.length > 0) {
+              this.messages = res.concat(this.messages);
+              this.conIndex = this.messages[0].con_index - 1;
+            }
+            if (!res || res.length === 0 || this.conIndex <= this.conversation.min_index) {
+              this.hasMore = false;
+            }
+          }).catch((err) => {
+            formatAppLog("error", "at pages/im/conversation.vue:229", "pullMessage err", err);
+          });
+        }
+      },
+      formatTime(timestamp) {
+        const date = new Date(timestamp * 1e3);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1);
+        const day = String(date.getDate());
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${year}年${month}月${day}日 ${hour}:${minute}`;
+      },
+      shouldShowTime(index) {
+        if (index === 0) {
+          return true;
+        }
+        const currentTime = this.messages[index].create_time;
+        const prevTime = this.messages[index - 1].create_time;
+        const timeDiff = (currentTime - prevTime) / 60;
+        return timeDiff > 5;
       }
     }
   };
-  function _sfc_render$9(_ctx, _cache, $props, $setup, $data, $options) {
+  function _sfc_render$a(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "chat-container" }, [
-      vue.createCommentVNode(" 聊天消息列表 "),
       vue.createElementVNode("scroll-view", {
         class: "chat-messages",
         "scroll-y": "true",
         "scroll-top": $data.scrollTop,
-        ref: "chatMessages"
+        onScroll: _cache[0] || (_cache[0] = (...args) => $options.onScroll && $options.onScroll(...args))
       }, [
-        (vue.openBlock(true), vue.createElementBlock(
-          vue.Fragment,
-          null,
-          vue.renderList($data.messages, (message, index) => {
-            return vue.openBlock(), vue.createElementBlock(
-              "view",
-              {
-                class: vue.normalizeClass(["message", { "message-left": message.user_id != $data.userId, "message-right": message.user_id == $data.userId }]),
-                key: index
-              },
-              [
-                vue.createCommentVNode(" 加载圈 "),
-                message.status === -1 ? (vue.openBlock(), vue.createElementBlock("view", {
-                  key: 0,
-                  class: "loading-spinner"
-                })) : vue.createCommentVNode("v-if", true),
-                vue.createCommentVNode(" 对方消息，头像在左 "),
-                message.user_id != $data.userId ? (vue.openBlock(), vue.createElementBlock(
-                  vue.Fragment,
-                  { key: 1 },
+        vue.createElementVNode("view", { class: "messages" }, [
+          (vue.openBlock(true), vue.createElementBlock(
+            vue.Fragment,
+            null,
+            vue.renderList($data.messages, (message, index) => {
+              return vue.openBlock(), vue.createElementBlock("view", { key: index }, [
+                $options.shouldShowTime(index) ? (vue.openBlock(), vue.createElementBlock(
+                  "view",
+                  {
+                    key: 0,
+                    class: "message-time"
+                  },
+                  vue.toDisplayString($options.formatTime(message.create_time)),
+                  1
+                  /* TEXT */
+                )) : vue.createCommentVNode("v-if", true),
+                vue.createElementVNode(
+                  "view",
+                  {
+                    class: vue.normalizeClass(["message", { "message-left": message.user_id != $data.userId, "message-right": message.user_id == $data.userId }])
+                  },
                   [
-                    vue.createElementVNode("view", {
-                      class: "avatar",
-                      onClick: ($event) => $options.goToUserProfile(message)
-                    }, [
-                      vue.createElementVNode("image", {
-                        src: $data.conversation.avatar
-                      }, null, 8, ["src"])
-                    ], 8, ["onClick"]),
-                    vue.createElementVNode("view", { class: "message-content" }, [
-                      vue.createElementVNode(
-                        "view",
-                        { class: "bubble" },
-                        vue.toDisplayString(message.msg_content),
-                        1
-                        /* TEXT */
-                      )
-                    ])
+                    message.status === -1 ? (vue.openBlock(), vue.createElementBlock("view", {
+                      key: 0,
+                      class: "loading-spinner"
+                    })) : vue.createCommentVNode("v-if", true),
+                    message.user_id != $data.userId ? (vue.openBlock(), vue.createElementBlock(
+                      vue.Fragment,
+                      { key: 1 },
+                      [
+                        vue.createElementVNode("view", {
+                          class: "avatar",
+                          onClick: ($event) => $options.goToUserProfile(message)
+                        }, [
+                          vue.createElementVNode("image", {
+                            src: $data.conversation.avatar_uri
+                          }, null, 8, ["src"])
+                        ], 8, ["onClick"]),
+                        vue.createElementVNode("view", { class: "message-content" }, [
+                          vue.createElementVNode(
+                            "view",
+                            { class: "bubble" },
+                            vue.toDisplayString(message.msg_content),
+                            1
+                            /* TEXT */
+                          )
+                        ])
+                      ],
+                      64
+                      /* STABLE_FRAGMENT */
+                    )) : (vue.openBlock(), vue.createElementBlock(
+                      vue.Fragment,
+                      { key: 2 },
+                      [
+                        vue.createElementVNode("view", { class: "message-content" }, [
+                          vue.createElementVNode(
+                            "view",
+                            { class: "bubble" },
+                            vue.toDisplayString(message.msg_content),
+                            1
+                            /* TEXT */
+                          )
+                        ]),
+                        vue.createElementVNode("view", {
+                          class: "avatar",
+                          onClick: ($event) => $options.goToUserProfile(message)
+                        }, [
+                          vue.createElementVNode("image", { src: $data.myAvatar }, null, 8, ["src"])
+                        ], 8, ["onClick"])
+                      ],
+                      64
+                      /* STABLE_FRAGMENT */
+                    ))
                   ],
-                  64
-                  /* STABLE_FRAGMENT */
-                )) : (vue.openBlock(), vue.createElementBlock(
-                  vue.Fragment,
-                  { key: 2 },
-                  [
-                    vue.createCommentVNode(" 自己消息，头像在右 "),
-                    vue.createElementVNode("view", { class: "message-content" }, [
-                      vue.createElementVNode(
-                        "view",
-                        { class: "bubble" },
-                        vue.toDisplayString(message.msg_content),
-                        1
-                        /* TEXT */
-                      )
-                    ]),
-                    vue.createElementVNode("view", {
-                      class: "avatar",
-                      onClick: ($event) => $options.goToUserProfile(message)
-                    }, [
-                      vue.createElementVNode("image", { src: $data.myAvatar }, null, 8, ["src"])
-                    ], 8, ["onClick"])
-                  ],
-                  64
-                  /* STABLE_FRAGMENT */
-                ))
-              ],
-              2
-              /* CLASS */
-            );
-          }),
-          128
-          /* KEYED_FRAGMENT */
-        ))
-      ], 8, ["scroll-top"]),
-      vue.createCommentVNode(" 输入框和发送按钮，固定在屏幕底部 "),
+                  2
+                  /* CLASS */
+                )
+              ]);
+            }),
+            128
+            /* KEYED_FRAGMENT */
+          ))
+        ])
+      ], 40, ["scroll-top"]),
       vue.createElementVNode("view", { class: "input-bar" }, [
         vue.withDirectives(vue.createElementVNode(
           "input",
           {
-            "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => $data.inputText = $event),
+            "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => $data.inputText = $event),
             placeholder: "请输入消息",
-            onConfirm: _cache[1] || (_cache[1] = (...args) => $options.sendMessage && $options.sendMessage(...args))
+            onConfirm: _cache[2] || (_cache[2] = (...args) => $options.sendMessage && $options.sendMessage(...args))
           },
           null,
           544
@@ -2726,23 +2873,23 @@ if (uni.restoreGlobal) {
           [vue.vModelText, $data.inputText]
         ]),
         vue.createElementVNode("button", {
-          onClick: _cache[2] || (_cache[2] = (...args) => $options.sendMessage && $options.sendMessage(...args))
+          onClick: _cache[3] || (_cache[3] = (...args) => $options.sendMessage && $options.sendMessage(...args))
         }, "发送")
       ])
     ]);
   }
-  const PagesImConversation = /* @__PURE__ */ _export_sfc(_sfc_main$9, [["render", _sfc_render$9], ["__scopeId", "data-v-a3a521f6"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/im/conversation.vue"]]);
-  const _sfc_main$8 = {
+  const PagesImConversation = /* @__PURE__ */ _export_sfc(_sfc_main$a, [["render", _sfc_render$a], ["__scopeId", "data-v-a3a521f6"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/im/conversation.vue"]]);
+  const _sfc_main$9 = {
     data() {
       return {};
     },
     methods: {}
   };
-  function _sfc_render$8(_ctx, _cache, $props, $setup, $data, $options) {
+  function _sfc_render$9(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", null, " shop ");
   }
-  const PagesShopShop = /* @__PURE__ */ _export_sfc(_sfc_main$8, [["render", _sfc_render$8], ["__file", "D:/H/Desktop/Violet/uniapp/pages/shop/shop.vue"]]);
-  const _sfc_main$7 = {
+  const PagesShopShop = /* @__PURE__ */ _export_sfc(_sfc_main$9, [["render", _sfc_render$9], ["__file", "D:/H/Desktop/Violet/uniapp/pages/shop/shop.vue"]]);
+  const _sfc_main$8 = {
     data() {
       return {
         userInfo: {
@@ -2758,30 +2905,35 @@ if (uni.restoreGlobal) {
       this.userInfo.userId = getApp().globalData.userId;
       this.userInfo.username = getApp().globalData.username;
       this.userInfo.avatar = getApp().globalData.avatar;
-      this.userInfo.followers = 0;
+      this.userInfo.friend = 0;
       this.userInfo.following = 0;
+      this.userInfo.follower = 0;
     },
     methods: {
-      goToFansList() {
+      goToFriendList() {
         uni.navigateTo({
-          url: `/pages/user/followed_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+          url: `/pages/user/friend_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
         });
       },
       goToFollowingList() {
         uni.navigateTo({
-          url: `/pages/user/following_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+          url: `/pages/user/following_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+        });
+      },
+      goToFollowerList() {
+        uni.navigateTo({
+          url: `/pages/user/follower_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
         });
       },
       logout() {
         getApp().globalData.socketTask.close({
           code: 1e3,
-          // 关闭原因代码，1000 表示正常关闭
           reason: "logout",
           success() {
-            formatAppLog("log", "at pages/user/my_profile.vue:51", "WebSocket 连接关闭成功");
+            formatAppLog("log", "at pages/user/my_profile.vue:58", "WebSocket 连接关闭成功");
           },
           fail(err) {
-            formatAppLog("error", "at pages/user/my_profile.vue:54", "WebSocket 连接关闭失败:", err);
+            formatAppLog("error", "at pages/user/my_profile.vue:61", "WebSocket 连接关闭失败:", err);
           }
         });
         delete getApp().globalData.token;
@@ -2789,12 +2941,11 @@ if (uni.restoreGlobal) {
         uni.removeStorageSync("user_id");
         uni.reLaunch({
           url: "/pages/user/login"
-          // 替换为你的首页路径
         });
       }
     }
   };
-  function _sfc_render$7(_ctx, _cache, $props, $setup, $data, $options) {
+  function _sfc_render$8(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "user-profile-container" }, [
       vue.createElementVNode("view", { class: "avatar" }, [
         vue.createElementVNode("image", {
@@ -2812,9 +2963,9 @@ if (uni.restoreGlobal) {
         vue.createElementVNode(
           "view",
           {
-            onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFansList && $options.goToFansList(...args))
+            onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFriendList && $options.goToFriendList(...args))
           },
-          "粉丝数: " + vue.toDisplayString($data.userInfo.followers),
+          "互关数: " + vue.toDisplayString($data.userInfo.friend),
           1
           /* TEXT */
         ),
@@ -2824,249 +2975,26 @@ if (uni.restoreGlobal) {
             onClick: _cache[1] || (_cache[1] = (...args) => $options.goToFollowingList && $options.goToFollowingList(...args))
           },
           "关注数: " + vue.toDisplayString($data.userInfo.following),
+          1
+          /* TEXT */
+        ),
+        vue.createElementVNode(
+          "view",
+          {
+            onClick: _cache[2] || (_cache[2] = (...args) => $options.goToFollowerList && $options.goToFollowerList(...args))
+          },
+          "粉丝数: " + vue.toDisplayString($data.userInfo.follower),
           1
           /* TEXT */
         )
       ]),
       vue.createElementVNode("button", {
         style: { "background-color": "#aa0000", "color": "white" },
-        onClick: _cache[2] || (_cache[2] = (...args) => $options.logout && $options.logout(...args))
+        onClick: _cache[3] || (_cache[3] = (...args) => $options.logout && $options.logout(...args))
       }, "退出登录")
     ]);
   }
-  const PagesUserMyProfile = /* @__PURE__ */ _export_sfc(_sfc_main$7, [["render", _sfc_render$7], ["__scopeId", "data-v-1705435c"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/my_profile.vue"]]);
-  const _sfc_main$6 = {
-    data() {
-      return {
-        userInfo: {
-          id: null,
-          name: "",
-          avatar: "",
-          followers: 0,
-          following: 0
-        },
-        isFollowed: false
-      };
-    },
-    onLoad(options) {
-      this.userInfo.userId = BigInt(options.userId);
-      this.userInfo.username = uni.getStorageSync("username_" + options.userId);
-      this.userInfo.avatar = uni.getStorageSync("user_avatar_" + options.userId);
-    },
-    methods: {
-      goBackToChat() {
-        const userId = getApp().globalData.userId;
-        let conId;
-        if (userId < this.userInfo.userId) {
-          conId = `${userId}:${this.userInfo.userId}`;
-        } else {
-          conId = `${this.userInfo.userId}:${userId}`;
-        }
-        uni.navigateTo({
-          url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.username}`
-        });
-      },
-      goToFansList() {
-        uni.navigateTo({
-          url: `/pages/user/followed_list?userId=${this.userInfo.userId}`
-        });
-      },
-      goToFollowingList() {
-        uni.navigateTo({
-          url: `/pages/user/following_list?userId=${this.userInfo.userId}}`
-        });
-      },
-      toggleFollow() {
-        this.isFollowed = !this.isFollowed;
-      }
-    }
-  };
-  function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
-    return vue.openBlock(), vue.createElementBlock("view", { class: "user-profile-container" }, [
-      vue.createElementVNode("view", { class: "avatar" }, [
-        vue.createElementVNode("image", {
-          src: $data.userInfo.avatar
-        }, null, 8, ["src"])
-      ]),
-      vue.createElementVNode(
-        "view",
-        { class: "name" },
-        vue.toDisplayString($data.userInfo.username),
-        1
-        /* TEXT */
-      ),
-      vue.createElementVNode("view", { class: "stats" }, [
-        vue.createElementVNode(
-          "view",
-          {
-            onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFansList && $options.goToFansList(...args))
-          },
-          "粉丝数: " + vue.toDisplayString($data.userInfo.followers),
-          1
-          /* TEXT */
-        ),
-        vue.createElementVNode(
-          "view",
-          {
-            onClick: _cache[1] || (_cache[1] = (...args) => $options.goToFollowingList && $options.goToFollowingList(...args))
-          },
-          "关注数: " + vue.toDisplayString($data.userInfo.following),
-          1
-          /* TEXT */
-        )
-      ]),
-      vue.createElementVNode("view", { class: "button-group" }, [
-        vue.createElementVNode(
-          "button",
-          {
-            style: vue.normalizeStyle({ backgroundColor: $data.isFollowed ? "#ccc" : "#0084ff", color: $data.isFollowed ? "#333" : "white" }),
-            onClick: _cache[2] || (_cache[2] = (...args) => $options.toggleFollow && $options.toggleFollow(...args))
-          },
-          vue.toDisplayString($data.isFollowed ? "已关注" : "关注"),
-          5
-          /* TEXT, STYLE */
-        ),
-        vue.createElementVNode("button", {
-          style: { "background-color": "#0084ff", "color": "white" },
-          onClick: _cache[3] || (_cache[3] = (...args) => $options.goBackToChat && $options.goBackToChat(...args))
-        }, "发消息")
-      ])
-    ]);
-  }
-  const PagesUserUserProfile = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["render", _sfc_render$6], ["__scopeId", "data-v-50cc649a"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/user_profile.vue"]]);
-  const _sfc_main$5 = {
-    data() {
-      return {
-        userId: null,
-        userName: ""
-      };
-    },
-    onLoad(options) {
-      this.userId = options.id;
-      this.userName = options.name;
-    }
-  };
-  function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
-    return vue.openBlock(), vue.createElementBlock("view", { class: "following-list-container" }, [
-      vue.createElementVNode(
-        "view",
-        null,
-        "关注列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.userName),
-        1
-        /* TEXT */
-      ),
-      vue.createCommentVNode(" 这里可以添加具体的关注列表展示逻辑 ")
-    ]);
-  }
-  const PagesUserFollowingList = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["render", _sfc_render$5], ["__scopeId", "data-v-5d140a69"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/following_list.vue"]]);
-  const _sfc_main$4 = {
-    data() {
-      return {
-        userId: null,
-        userName: ""
-      };
-    },
-    onLoad(options) {
-      this.userId = options.id;
-      this.userName = options.name;
-    }
-  };
-  function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
-    return vue.openBlock(), vue.createElementBlock("view", { class: "fans-list-container" }, [
-      vue.createElementVNode(
-        "view",
-        null,
-        "粉丝列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.userName),
-        1
-        /* TEXT */
-      ),
-      vue.createCommentVNode(" 这里可以添加具体的粉丝列表展示逻辑 ")
-    ]);
-  }
-  const PagesUserFollowedList = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$4], ["__scopeId", "data-v-176c98ad"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/followed_list.vue"]]);
-  const connectWebSocket = () => {
-    const {
-      token
-    } = getApp().globalData;
-    if (!token) {
-      uni.reLaunch({
-        url: "/pages/user/login"
-      });
-      return;
-    }
-    let heartBeatInterval;
-    const socketTask = uni.connectSocket({
-      url: `ws://127.0.0.1:3001/api/im/ws?token=${token}`,
-      success() {
-      },
-      fail(err) {
-        formatAppLog("error", "at utils/websocket.js:21", "websocket send err", err);
-        setTimeout(() => {
-          connectWebSocket();
-        }, 3e3);
-      }
-    });
-    socketTask.onOpen(() => {
-      formatAppLog("log", "at utils/websocket.js:29", "websocket connect");
-      heartBeatInterval = setInterval(() => {
-        socketTask.send({
-          data: "ping",
-          success() {
-          },
-          fail(err) {
-            formatAppLog("error", "at utils/websocket.js:37", "ping err", err);
-          }
-        });
-      }, 5e3);
-    });
-    socketTask.onMessage((res) => {
-      const data2 = JSONbig.parse(res.data);
-      formatAppLog("log", "at utils/websocket.js:45", "websocket receive data", data2);
-      if (data2.user_con_index != void 0) {
-        uni.$emit("normal_message", data2);
-        getApp().globalData.userConIndex = data2.user_con_index;
-        DB.updateConversation(data2.msg_body.con_short_id, data2.badge_count, data2.user_con_index).then((res2) => {
-          formatAppLog("log", "at utils/websocket.js:51", res2.rowsAffected);
-          if (res2.rowsAffected == 0) {
-            data2.msg_body;
-            DB.insertConversation(value).catch((err) => {
-              formatAppLog("log", "at utils/websocket.js:65", "insertConversation err", err);
-            });
-          }
-        }).catch((err) => {
-          formatAppLog("log", "at utils/websocket.js:71", "updateConversation err", err);
-        });
-        const {
-          user_id,
-          con_short_id,
-          con_id,
-          con_type,
-          client_msg_id,
-          msg_id,
-          msg_type,
-          msg_content,
-          create_time,
-          extra,
-          con_index
-        } = data2.msg_body;
-        const msgValue = `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
-        DB.insertMessage(msgValue).catch((err) => {
-          formatAppLog("log", "at utils/websocket.js:88", "insertMessage err", err);
-        });
-      } else if (data2.user_cmd_index != void 0) {
-        uni.$emit("command_message", data2);
-        getApp().userCmdIndex = data2.user_cmd_index;
-      }
-    });
-    socketTask.onClose(() => {
-      formatAppLog("log", "at utils/websocket.js:97", "websocket close");
-      clearInterval(heartBeatInterval);
-    });
-    socketTask.onError((err) => {
-      formatAppLog("error", "at utils/websocket.js:102", "websocket err", err);
-    });
-    getApp().globalData.socketTask = socketTask;
-  };
+  const PagesUserMyProfile = /* @__PURE__ */ _export_sfc(_sfc_main$8, [["render", _sfc_render$8], ["__scopeId", "data-v-1705435c"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/my_profile.vue"]]);
   const getUserInfos = async (userIds) => {
     const token = getApp().globalData.token;
     const data2 = {
@@ -3089,6 +3017,278 @@ if (uni.restoreGlobal) {
         return res.data.user_infos;
       }
     }
+  };
+  const _sfc_main$7 = {
+    data() {
+      return {
+        userId: null,
+        username: "",
+        avatar: "",
+        follower: 0,
+        following: 0,
+        isFollowed: false
+      };
+    },
+    onLoad(options) {
+      this.userId = BigInt(options.userId);
+      this.username = uni.getStorageSync("username_" + options.userId);
+      this.avatar = uni.getStorageSync("user_avatar_" + options.userId);
+      if (!this.username || !this.avatar) {
+        getUserInfos([this.userId]).then((res) => {
+          this.username = res[0].username;
+          this.avatar = res[0].avatar;
+          if (this.avatar == "") {
+            this.avatar = "/static/user_avatar.png";
+          }
+        });
+      }
+    },
+    methods: {
+      goBackToChat() {
+        const userId = getApp().globalData.userId;
+        let conId;
+        if (userId < this.userId) {
+          conId = `${userId}:${this.userId}`;
+        } else {
+          conId = `${this.userId}:${userId}`;
+        }
+        uni.navigateTo({
+          url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.username}`
+        });
+      },
+      goToFansList() {
+        uni.navigateTo({
+          url: `/pages/user/follower_list?userId=${this.userId}`
+        });
+      },
+      goToFollowingList() {
+        uni.navigateTo({
+          url: `/pages/user/following_list?userId=${this.userId}}`
+        });
+      },
+      toggleFollow() {
+        this.isFollowed = !this.isFollowed;
+      }
+    }
+  };
+  function _sfc_render$7(_ctx, _cache, $props, $setup, $data, $options) {
+    return vue.openBlock(), vue.createElementBlock("view", { class: "user-profile-container" }, [
+      vue.createElementVNode("view", { class: "avatar" }, [
+        vue.createElementVNode("image", { src: $data.avatar }, null, 8, ["src"])
+      ]),
+      vue.createElementVNode(
+        "view",
+        { class: "name" },
+        vue.toDisplayString($data.username),
+        1
+        /* TEXT */
+      ),
+      vue.createElementVNode("view", { class: "stats" }, [
+        vue.createElementVNode(
+          "view",
+          {
+            onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFansList && $options.goToFansList(...args))
+          },
+          "粉丝数: " + vue.toDisplayString($data.follower),
+          1
+          /* TEXT */
+        ),
+        vue.createElementVNode(
+          "view",
+          {
+            onClick: _cache[1] || (_cache[1] = (...args) => $options.goToFollowingList && $options.goToFollowingList(...args))
+          },
+          "关注数: " + vue.toDisplayString($data.following),
+          1
+          /* TEXT */
+        )
+      ]),
+      vue.createElementVNode("view", { class: "button-group" }, [
+        vue.createElementVNode(
+          "button",
+          {
+            style: vue.normalizeStyle({ backgroundColor: $data.isFollowed ? "#ccc" : "#0084ff", color: $data.isFollowed ? "#333" : "white" }),
+            onClick: _cache[2] || (_cache[2] = (...args) => $options.toggleFollow && $options.toggleFollow(...args))
+          },
+          vue.toDisplayString($data.isFollowed ? "已关注" : "关注"),
+          5
+          /* TEXT, STYLE */
+        ),
+        vue.createElementVNode("button", {
+          style: { "background-color": "#0084ff", "color": "white" },
+          onClick: _cache[3] || (_cache[3] = (...args) => $options.goBackToChat && $options.goBackToChat(...args))
+        }, "发消息")
+      ])
+    ]);
+  }
+  const PagesUserUserProfile = /* @__PURE__ */ _export_sfc(_sfc_main$7, [["render", _sfc_render$7], ["__scopeId", "data-v-50cc649a"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/user_profile.vue"]]);
+  const _sfc_main$6 = {
+    data() {
+      return {
+        userId: null,
+        username: ""
+      };
+    },
+    onLoad(options) {
+      this.userId = options.userId;
+      this.username = options.username;
+    }
+  };
+  function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
+    return vue.openBlock(), vue.createElementBlock("view", { class: "friend-list-container" }, [
+      vue.createElementVNode(
+        "view",
+        null,
+        "互关列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.username),
+        1
+        /* TEXT */
+      ),
+      vue.createCommentVNode(" 这里可以添加具体的粉丝列表展示逻辑 ")
+    ]);
+  }
+  const PagesUserFriendList = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["render", _sfc_render$6], ["__scopeId", "data-v-45095eb2"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/friend_list.vue"]]);
+  const _sfc_main$5 = {
+    data() {
+      return {
+        userId: null,
+        username: ""
+      };
+    },
+    onLoad(options) {
+      this.userId = options.userId;
+      this.username = options.username;
+    }
+  };
+  function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
+    return vue.openBlock(), vue.createElementBlock("view", { class: "following-list-container" }, [
+      vue.createElementVNode(
+        "view",
+        null,
+        "关注列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.username),
+        1
+        /* TEXT */
+      ),
+      vue.createCommentVNode(" 这里可以添加具体的关注列表展示逻辑 ")
+    ]);
+  }
+  const PagesUserFollowingList = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["render", _sfc_render$5], ["__scopeId", "data-v-5d140a69"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/following_list.vue"]]);
+  const _sfc_main$4 = {
+    data() {
+      return {
+        userId: null,
+        username: ""
+      };
+    },
+    onLoad(options) {
+      this.userId = options.userId;
+      this.username = options.username;
+    }
+  };
+  function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
+    return vue.openBlock(), vue.createElementBlock("view", { class: "follower-list-container" }, [
+      vue.createElementVNode(
+        "view",
+        null,
+        "粉丝列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.username),
+        1
+        /* TEXT */
+      ),
+      vue.createCommentVNode(" 这里可以添加具体的粉丝列表展示逻辑 ")
+    ]);
+  }
+  const PagesUserFollowerList = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$4], ["__scopeId", "data-v-1ecc1525"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/follower_list.vue"]]);
+  const connectWebSocket = () => {
+    const {
+      token,
+      deviceId,
+      platform
+    } = getApp().globalData;
+    if (!token) {
+      uni.reLaunch({
+        url: "/pages/user/login"
+      });
+      return;
+    }
+    let heartBeatInterval;
+    const socketTask = uni.connectSocket({
+      url: `ws://127.0.0.1:3001/api/im/ws?token=${token}&device_id=${deviceId}&platform=${platform}`,
+      success() {
+      },
+      fail(err) {
+        formatAppLog("error", "at utils/websocket.js:23", "websocket send err", err);
+        setTimeout(() => {
+          connectWebSocket();
+        }, 3e3);
+      }
+    });
+    socketTask.onOpen(() => {
+      formatAppLog("log", "at utils/websocket.js:31", "websocket connect");
+      heartBeatInterval = setInterval(() => {
+        socketTask.send({
+          data: "ping",
+          success() {
+          },
+          fail(err) {
+            formatAppLog("error", "at utils/websocket.js:39", "ping err", err);
+          }
+        });
+      }, 5e3);
+    });
+    socketTask.onMessage((res) => {
+      const data2 = JSONbig.parse(res.data);
+      formatAppLog("log", "at utils/websocket.js:47", "websocket receive data", data2);
+      if (data2.user_con_index != void 0) {
+        uni.$emit("normal_message", data2);
+        if (data2.user_con_index != getApp().globalData.userConIndex + 1) {
+          formatAppLog("error", "at utils/websocket.js:51", "TODO:getByUser");
+        }
+        getApp().globalData.userConIndex = data2.user_con_index;
+        DB.selectConversation(data2.msg_body.con_id).then((res2) => {
+          if (res2.length > 0) {
+            DB.updateConversation(data2.msg_body.con_short_id, data2.badge_count, data2.user_con_index, data2.msg_body.msg_content).catch((err) => {
+              formatAppLog("log", "at utils/websocket.js:58", "updateConversation err", err);
+            });
+          } else {
+            formatAppLog("error", "at utils/websocket.js:61", "TODO:getConversation");
+            data2.msg_body;
+            DB.insertConversation(value).catch((err) => {
+              formatAppLog("log", "at utils/websocket.js:75", "insertConversation err", err);
+            });
+          }
+        });
+        const {
+          user_id,
+          con_short_id,
+          con_id,
+          con_type,
+          client_msg_id,
+          msg_id,
+          msg_type,
+          msg_content,
+          create_time,
+          extra,
+          con_index
+        } = data2.msg_body;
+        const msgValue = `( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+        DB.insertMessage(msgValue).catch((err) => {
+          formatAppLog("log", "at utils/websocket.js:95", "insertMessage err", err);
+        });
+      } else if (data2.user_cmd_index != void 0) {
+        uni.$emit("command_message", data2);
+        if (data2.user_cmd_index != getApp().globalData.userCmdIndex + 1) {
+          formatAppLog("error", "at utils/websocket.js:100", "TODO:getByUser");
+        }
+        getApp().userCmdIndex = data2.user_cmd_index;
+      }
+    });
+    socketTask.onClose(() => {
+      formatAppLog("log", "at utils/websocket.js:107", "websocket close");
+      clearInterval(heartBeatInterval);
+    });
+    socketTask.onError((err) => {
+      formatAppLog("error", "at utils/websocket.js:112", "websocket err", err);
+    });
+    getApp().globalData.socketTask = socketTask;
   };
   const getByInit = () => {
     const {
@@ -3542,7 +3742,6 @@ if (uni.restoreGlobal) {
           });
           return;
         }
-        this.hasSearched = true;
         const token = getApp().globalData.token;
         let res = await uni.request({
           url: "http://127.0.0.1:3000/api/action/user/search",
@@ -3558,6 +3757,12 @@ if (uni.restoreGlobal) {
         if (res.statusCode === 200) {
           res = JSONbig.parse(res.data);
           this.userList = res.userList;
+          this.hasSearched = true;
+          for (const user of this.userList) {
+            if (user.avatar == "") {
+              user.avatar = "/static/user_avatar.png";
+            }
+          }
         } else {
           uni.showToast({
             title: "网络错误",
@@ -3567,7 +3772,7 @@ if (uni.restoreGlobal) {
       },
       goToUserPage(user) {
         uni.navigateTo({
-          url: `/pages/user/user_profile?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
+          url: `/pages/user/user_profile?userId=${user.user_id}`
         });
       }
     }
@@ -3644,8 +3849,9 @@ if (uni.restoreGlobal) {
   __definePage("pages/shop/shop", PagesShopShop);
   __definePage("pages/user/my_profile", PagesUserMyProfile);
   __definePage("pages/user/user_profile", PagesUserUserProfile);
+  __definePage("pages/user/friend_list", PagesUserFriendList);
   __definePage("pages/user/following_list", PagesUserFollowingList);
-  __definePage("pages/user/followed_list", PagesUserFollowedList);
+  __definePage("pages/user/follower_list", PagesUserFollowerList);
   __definePage("pages/user/login", PagesUserLogin);
   __definePage("pages/user/register", PagesUserRegister);
   __definePage("pages/im/search", PagesImSearch);
@@ -3691,7 +3897,10 @@ if (uni.restoreGlobal) {
   }
   const _sfc_main = {
     onLaunch() {
+      const deviceId = uni.getSystemInfoSync().deviceId;
       const platform = uni.getSystemInfoSync().platform;
+      getApp().globalData.deviceId = deviceId;
+      getApp().globalData.platform = platform;
       if (platform === "android" || platform == "ios") {
         DB.openSqlite();
       }

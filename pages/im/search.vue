@@ -37,7 +37,6 @@
 					});
 					return;
 				}
-				this.hasSearched = true;
 				const token = getApp().globalData.token;
 				let res= await uni.request({
 					url: 'http://127.0.0.1:3000/api/action/user/search',
@@ -53,6 +52,12 @@
 				if(res.statusCode===200){
 					res = JSONbig.parse(res.data);
 					this.userList = res.userList;
+					this.hasSearched = true;
+					for(const user of this.userList){
+						if(user.avatar==""){
+							user.avatar="/static/user_avatar.png";
+						}
+					}
 				}else{
 					uni.showToast({
 						title: '网络错误',
@@ -62,7 +67,7 @@
 			},
 			goToUserPage(user) {
 				uni.navigateTo({
-					url: `/pages/user/user_profile?id=${user.userId}&name=${user.username}&avatar=${user.avatar}`
+					url: `/pages/user/user_profile?userId=${user.user_id}`
 				});
 			}
 		}

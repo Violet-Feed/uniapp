@@ -1,74 +1,76 @@
 <template>
 	<view class="user-profile-container">
 		<view class="avatar">
-			<image :src="userInfo.avatar"></image>
+			<image :src="avatar"></image>
 		</view>
-		<view class="name">{{ userInfo.username }}</view>
+		<view class="name">{{ username }}</view>
 		<view class="stats">
-			<view @click="goToFansList">粉丝数: {{ userInfo.followers }}</view>
-			<view @click="goToFollowingList">关注数: {{ userInfo.following }}</view>
+			<view @click="goToFollowerList">粉丝数: {{ follower }}</view>
+			<view @click="goToFollowingList">关注数: {{ following }}</view>
 		</view>
 		<view class="button-group">
 			<button :style="{ backgroundColor: isFollowed ? '#ccc' : '#0084ff', color: isFollowed ? '#333' : 'white' }"
 				@click="toggleFollow">
 				{{ isFollowed ? '已关注' : '关注' }}
 			</button>
-			<button style="background-color: #0084ff; color: white;" @click="goBackToChat">发消息</button>
+			<button style="background-color: #0084ff; color: white;" @click="goToChat">发消息</button>
 		</view>
 	</view>
 </template>
 
 <script>
+import { getUserInfos } from '@/request/get_user_infos';
+
 	export default {
 		data() {
 			return {
-				userInfo: {
-					id: null,
-					name: '',
-					avatar: '',
-					followers: 0,
-					following: 0
-				},
+				userId: null,
+				username: '',
+				avatar: '',
+				follower: 0,
+				following: 0,
 				isFollowed: false
 			};
 		},
 		onLoad(options) {
-			this.userInfo.userId = BigInt(options.userId);
-			this.userInfo.username = uni.getStorageSync("username_"+options.userId);
-			this.userInfo.avatar = uni.getStorageSync("user_avatar_"+options.userId);
+			this.userId = BigInt(options.userId);
+			this.username = uni.getStorageSync("username_"+options.userId);
+			this.avatar = uni.getStorageSync("user_avatar_"+options.userId);
+			if(!this.username||!this.avatar){
+				getUserInfos([this.userId]).then((res)=>{
+					this.username=res[0].username;
+					this.avatar=res[0].avatar;
+					if(this.avatar==""){
+						this.avatar="/static/user_avatar.png";
+					}
+				});
+			}
 		},
 		methods: {
-			goBackToChat() {
+			goToChat() {
 				const userId=getApp().globalData.userId;
 				let conId;
-				if(userId<this.userInfo.userId){
-					conId=`${userId}:${this.userInfo.userId}`
+				if(userId<this.userId){
+					conId=`${userId}:${this.userId}`
 				}else{
-					conId=`${this.userInfo.userId}:${userId}`
+					conId=`${this.userId}:${userId}`
 				}
 				uni.navigateTo({
-					url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.userInfo.username}`
+					url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.username}`
 				});
 			},
-			goToFansList() {
+			goToFollowerList() {
 				uni.navigateTo({
-					url: `/pages/user/followed_list?userId=${this.userInfo.userId}`
+					url: `/pages/user/follower_list?userId=${this.userId}`
 				});
 			},
 			goToFollowingList() {
 				uni.navigateTo({
-					url: `/pages/user/following_list?userId=${this.userInfo.userId}}`
+					url: `/pages/user/following_list?userId=${this.userId}}`
 				});
 			},
 			toggleFollow() {
 				this.isFollowed = !this.isFollowed;
-				// 这里可以添加实际的关注或取消关注的接口调用
-				// 例如：
-				// if (this.isFollowed) {
-				//     // 调用关注接口
-				// } else {
-				//     // 调用取消关注接口
-				// }
 			}
 		}
 	};
@@ -120,12 +122,9 @@
 	}
 
 	.button-group button {
-		padding: 10px 20px;
 		border: none;
 		border-radius: 5px;
 		flex: 1;
-		/* 让按钮宽度相同 */
-		max-width: 200px;
-		/* 可根据需要调整最大宽度 */
+		max-width: 100px;
 	}
 </style>

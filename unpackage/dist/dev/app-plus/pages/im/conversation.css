@@ -12,14 +12,11 @@
 		padding: 10px;
 		border-bottom: 1px solid #eee;
 		position: fixed;
-		/* 固定顶栏 */
 		top: 0;
 		left: 0;
 		right: 0;
 		background-color: white;
-		/* 设置背景颜色 */
 		z-index: 1;
-		/* 设置层级，确保在消息列表之上 */
 }
 .chat-header .name[data-v-a3a521f6] {
 		font-weight: bold;
@@ -29,19 +26,15 @@
 		flex: 1;
 		overflow-y: auto;
 		margin-top: 10px;
-		margin-bottom: 60px;
-		/* 为输入栏留出空间 */
+		margin-bottom: 70px;
 		padding-left: 10px;
-		/* 统一消息左右间距 */
 		padding-right: 10px;
 		box-sizing: border-box;
-		/* 确保 padding 包含在元素宽度内 */
 }
 .message[data-v-a3a521f6] {
 		display: flex;
 		margin-bottom: 10px;
 		align-items: center;
-		/* 垂直居中对齐 */
 }
 .message-left[data-v-a3a521f6] {
 		justify-content: flex-start;
@@ -55,7 +48,6 @@
 		border-radius: 50%;
 		overflow: hidden;
 		margin: 0 10px;
-		/* 头像距离左右两侧的距离相同 */
 }
 .avatar uni-image[data-v-a3a521f6] {
 		width: 100%;
@@ -91,21 +83,17 @@
 		border-radius: 5px;
 		margin-right: 10px;
 		height: 40px;
-		/* 输入框高度 */
 		box-sizing: border-box;
 }
 .input-bar uni-button[data-v-a3a521f6] {
 		padding: 0 20px;
-		/* 调整按钮内边距 */
 		background-color: #0084ff;
 		color: white;
 		border: none;
 		border-radius: 5px;
 		height: 40px;
-		/* 按钮高度和输入框相同 */
 		box-sizing: border-box;
 		display: flex;
-		/* 使用 flex 布局让文字上下居中 */
 		justify-content: center;
 		align-items: center;
 }
@@ -123,4 +111,10 @@
 to {
 			transform: rotate(360deg);
 }
+}
+.message-time[data-v-a3a521f6] {
+		text-align: center;
+		margin-bottom: 5px;
+		color: #999;
+		font-size: 12px;
 }

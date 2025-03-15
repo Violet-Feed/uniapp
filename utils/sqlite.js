@@ -170,7 +170,7 @@ function insertMessage(data) {
 	});
 }
 
-function selectConversation(index) {
+function pullConversation(index) {
 	const {
 		userId
 	} = getApp().globalData;
@@ -193,7 +193,7 @@ function selectConversation(index) {
 	});
 }
 
-function selectMessage(conId, index) {
+function pullMessage(conId, index) {
 	const {
 		userId
 	} = getApp().globalData;
@@ -214,12 +214,12 @@ function selectMessage(conId, index) {
 	});
 }
 
-function selectConShortId(conId){
+function selectConversation(conId){
 	const {
 		userId
 	} = getApp().globalData;
 	const dbTable = "conversation_" + userId;
-	const sql = `SELECT con_short_id FROM ${dbTable} WHERE con_id = '${conId}' `;
+	const sql = `SELECT * FROM ${dbTable} WHERE con_id = '${conId}' `;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.selectSql({
 			name: dbName,
@@ -274,12 +274,12 @@ function deleteMessage(msgId) {
 	});
 }
 
-function updateConversation(conShortId,count,index) {
+function updateConversation(conShortId,count,index,msg) {
 	const {
 		userId
 	} = getApp().globalData;
 	const dbTable = "conversation_" + userId;
-	const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index} WHERE con_short_id = '${conShortId}'`;
+	const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index}, last_message = ${msg} WHERE con_short_id = '${conShortId}'`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.executeSql({
 			name: dbName,
@@ -321,9 +321,9 @@ export default {
 	createTable,
 	insertConversation,
 	insertMessage,
+	pullConversation,
+	pullMessage,
 	selectConversation,
-	selectMessage,
-	selectConShortId,
 	deleteConversation,
 	deleteMessage,
 	updateConversation,

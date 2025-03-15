@@ -31,7 +31,8 @@
 		cursor: pointer;
 }
 uni-button[data-v-1705435c] {
-		padding: 10px 20px;
+		font-size: 12px; 
+		margin-top: 250px;
 		background-color: #0084ff;
 		color: white;
 		border: none;

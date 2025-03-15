@@ -5,8 +5,9 @@
 		</view>
 		<view class="name">{{ userInfo.username }}</view>
 		<view class="stats">
-			<view @click="goToFansList">粉丝数: {{ userInfo.followers }}</view>
+			<view @click="goToFriendList">互关数: {{ userInfo.friend }}</view>
 			<view @click="goToFollowingList">关注数: {{ userInfo.following }}</view>
+			<view @click="goToFollowerList">粉丝数: {{ userInfo.follower }}</view>
 		</view>
 		<button style="background-color: #aa0000; color: white;" @click="logout">退出登录</button>
 	</view>
@@ -29,23 +30,29 @@
 			this.userInfo.userId = getApp().globalData.userId;
 			this.userInfo.username = getApp().globalData.username;
 			this.userInfo.avatar = getApp().globalData.avatar;
-			this.userInfo.followers = 0;
+			this.userInfo.friend = 0;
 			this.userInfo.following = 0;
+			this.userInfo.follower = 0;
 		},
 		methods: {
-			goToFansList() {
+			goToFriendList() {
 				uni.navigateTo({
-					url: `/pages/user/followed_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+					url: `/pages/user/friend_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
 				});
 			},
 			goToFollowingList() {
 				uni.navigateTo({
-					url: `/pages/user/following_list?id=${this.userInfo.id}&name=${this.userInfo.name}`
+					url: `/pages/user/following_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+				});
+			},
+			goToFollowerList() {
+				uni.navigateTo({
+					url: `/pages/user/follower_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
 				});
 			},
 			logout() {
 				getApp().globalData.socketTask.close({
-					code: 1000, // 关闭原因代码，1000 表示正常关闭
+					code: 1000,
 					reason: 'logout',
 					success() {
 						console.log('WebSocket 连接关闭成功');
@@ -58,7 +65,7 @@
 				uni.removeStorageSync('token');
 				uni.removeStorageSync('user_id');
 				uni.reLaunch({
-					url: '/pages/user/login' // 替换为你的首页路径
+					url: '/pages/user/login'
 				});
 			}
 		}
@@ -104,7 +111,8 @@
 	}
 
 	button {
-		padding: 10px 20px;
+		font-size: 12px; 
+		margin-top: 250px;
 		background-color: #0084ff;
 		color: white;
 		border: none;

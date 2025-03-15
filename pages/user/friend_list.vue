@@ -1,6 +1,6 @@
 <template>
-	<view class="fans-list-container">
-		<view>粉丝列表 - {{ userId }} - {{ userName }}</view>
+	<view class="friend-list-container">
+		<view>互关列表 - {{ userId }} - {{ username }}</view>
 		<!-- 这里可以添加具体的粉丝列表展示逻辑 -->
 	</view>
 </template>
@@ -10,18 +10,18 @@
 		data() {
 			return {
 				userId: null,
-				userName: ''
+				username: ''
 			};
 		},
 		onLoad(options) {
-			this.userId = options.id;
-			this.userName = options.name;
+			this.userId = options.userId;
+			this.username = options.username;
 		}
 	};
 </script>
 
 <style scoped>
-	.fans-list-container {
+	.friend-list-container {
 		padding: 20px;
 	}
 </style>

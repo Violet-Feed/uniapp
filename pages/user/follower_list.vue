@@ -1,7 +1,7 @@
 <template>
-	<view class="following-list-container">
-		<view>关注列表 - {{ userId }} - {{ username }}</view>
-		<!-- 这里可以添加具体的关注列表展示逻辑 -->
+	<view class="follower-list-container">
+		<view>粉丝列表 - {{ userId }} - {{ username }}</view>
+		<!-- 这里可以添加具体的粉丝列表展示逻辑 -->
 	</view>
 </template>
 
@@ -21,7 +21,7 @@
 </script>
 
 <style scoped>
-	.following-list-container {
+	.follower-list-container {
 		padding: 20px;
 	}
 </style>
