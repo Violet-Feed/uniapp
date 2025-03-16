@@ -40,9 +40,10 @@
 				const token = getApp().globalData.token;
 				let res= await uni.request({
 					url: 'http://127.0.0.1:3000/api/action/user/search',
-					method: 'GET',
+					method: 'POST',
 					header: {
-						Authorization: `Bearer ${token}`,
+						'content-type': 'application/x-www-form-urlencoded',
+						'Authorization': `Bearer ${token}`,
 					},
 					data: {
 						keyword: this.searchKeyword

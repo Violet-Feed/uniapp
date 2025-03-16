@@ -1,13 +1,13 @@
 <template>
 	<view class="user-profile-container">
 		<view class="avatar">
-			<image :src="userInfo.avatar"></image>
+			<image :src="avatar"></image>
 		</view>
-		<view class="name">{{ userInfo.username }}</view>
+		<view class="name">{{ username }}</view>
 		<view class="stats">
-			<view @click="goToFriendList">互关数: {{ userInfo.friend }}</view>
-			<view @click="goToFollowingList">关注数: {{ userInfo.following }}</view>
-			<view @click="goToFollowerList">粉丝数: {{ userInfo.follower }}</view>
+			<view @click="goToFriendList">互关数: {{ friendCount }}</view>
+			<view @click="goToFollowingList">关注数: {{ followingCount }}</view>
+			<view @click="goToFollowerList">粉丝数: {{ followerCount }}</view>
 		</view>
 		<button style="background-color: #aa0000; color: white;" @click="logout">退出登录</button>
 	</view>
@@ -17,37 +17,36 @@
 	export default {
 		data() {
 			return {
-				userInfo: {
-					userId: null,
-					username: '',
-					avatar: '',
-					followers: 0,
-					following: 0
-				}
+				userId: null,
+				username: '',
+				avatar: '',
+				friendCount:0,
+				followingCount: 0,
+				followerCount: 0,
 			};
 		},
 		onLoad(options) {
-			this.userInfo.userId = getApp().globalData.userId;
-			this.userInfo.username = getApp().globalData.username;
-			this.userInfo.avatar = getApp().globalData.avatar;
-			this.userInfo.friend = 0;
-			this.userInfo.following = 0;
-			this.userInfo.follower = 0;
+			this.userId = getApp().globalData.userId;
+			this.username = getApp().globalData.username;
+			this.avatar = getApp().globalData.avatar;
+			this.friendCount = 0;
+			this.followingCount = 0;
+			this.followerCount = 0;
 		},
 		methods: {
 			goToFriendList() {
 				uni.navigateTo({
-					url: `/pages/user/friend_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+					url: `/pages/user/friend_list?userId=${this.userId}`
 				});
 			},
 			goToFollowingList() {
 				uni.navigateTo({
-					url: `/pages/user/following_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+					url: `/pages/user/following_list?userId=${this.userId}`
 				});
 			},
 			goToFollowerList() {
 				uni.navigateTo({
-					url: `/pages/user/follower_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+					url: `/pages/user/follower_list?userId=${this.userId}`
 				});
 			},
 			logout() {

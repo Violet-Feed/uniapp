@@ -1,21 +1,42 @@
 <template>
 	<view class="follower-list-container">
-		<view>粉丝列表 - {{ userId }} - {{ username }}</view>
-		<!-- 这里可以添加具体的粉丝列表展示逻辑 -->
+		<view></view>
 	</view>
 </template>
 
 <script>
+	import JSONbig from 'json-bigint';
 	export default {
 		data() {
 			return {
 				userId: null,
-				username: ''
+				followerList:[]
 			};
 		},
-		onLoad(options) {
+		async onLoad(options) {
 			this.userId = options.userId;
-			this.username = options.username;
+			const token = getApp().globalData.token;
+			const data = {
+				user_id: this.userId
+			};
+			const dataJson = JSONbig.stringify(data);
+			let res = await uni.request({
+				url: 'http://127.0.0.1:3000/api/action/relation/get_follower_list',
+				method: 'POST',
+				header: {
+					'content-type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				data: dataJson,
+				dataType: 'string',
+			});
+			if (res.statusCode === 200) {
+				console.log(res);
+				res = JSONbig.parse(res.data);
+				if (res.code === 1000) {
+					
+				}
+			}
 		}
 	};
 </script>

@@ -2892,37 +2892,36 @@ if (uni.restoreGlobal) {
   const _sfc_main$8 = {
     data() {
       return {
-        userInfo: {
-          userId: null,
-          username: "",
-          avatar: "",
-          followers: 0,
-          following: 0
-        }
+        userId: null,
+        username: "",
+        avatar: "",
+        friendCount: 0,
+        followingCount: 0,
+        followerCount: 0
       };
     },
     onLoad(options) {
-      this.userInfo.userId = getApp().globalData.userId;
-      this.userInfo.username = getApp().globalData.username;
-      this.userInfo.avatar = getApp().globalData.avatar;
-      this.userInfo.friend = 0;
-      this.userInfo.following = 0;
-      this.userInfo.follower = 0;
+      this.userId = getApp().globalData.userId;
+      this.username = getApp().globalData.username;
+      this.avatar = getApp().globalData.avatar;
+      this.friendCount = 0;
+      this.followingCount = 0;
+      this.followerCount = 0;
     },
     methods: {
       goToFriendList() {
         uni.navigateTo({
-          url: `/pages/user/friend_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+          url: `/pages/user/friend_list?userId=${this.userId}`
         });
       },
       goToFollowingList() {
         uni.navigateTo({
-          url: `/pages/user/following_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+          url: `/pages/user/following_list?userId=${this.userId}`
         });
       },
       goToFollowerList() {
         uni.navigateTo({
-          url: `/pages/user/follower_list?userId=${this.userInfo.userId}&username=${this.userInfo.username}`
+          url: `/pages/user/follower_list?userId=${this.userId}`
         });
       },
       logout() {
@@ -2930,10 +2929,10 @@ if (uni.restoreGlobal) {
           code: 1e3,
           reason: "logout",
           success() {
-            formatAppLog("log", "at pages/user/my_profile.vue:58", "WebSocket 连接关闭成功");
+            formatAppLog("log", "at pages/user/my_profile.vue:57", "WebSocket 连接关闭成功");
           },
           fail(err) {
-            formatAppLog("error", "at pages/user/my_profile.vue:61", "WebSocket 连接关闭失败:", err);
+            formatAppLog("error", "at pages/user/my_profile.vue:60", "WebSocket 连接关闭失败:", err);
           }
         });
         delete getApp().globalData.token;
@@ -2948,14 +2947,12 @@ if (uni.restoreGlobal) {
   function _sfc_render$8(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "user-profile-container" }, [
       vue.createElementVNode("view", { class: "avatar" }, [
-        vue.createElementVNode("image", {
-          src: $data.userInfo.avatar
-        }, null, 8, ["src"])
+        vue.createElementVNode("image", { src: $data.avatar }, null, 8, ["src"])
       ]),
       vue.createElementVNode(
         "view",
         { class: "name" },
-        vue.toDisplayString($data.userInfo.username),
+        vue.toDisplayString($data.username),
         1
         /* TEXT */
       ),
@@ -2965,7 +2962,7 @@ if (uni.restoreGlobal) {
           {
             onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFriendList && $options.goToFriendList(...args))
           },
-          "互关数: " + vue.toDisplayString($data.userInfo.friend),
+          "互关数: " + vue.toDisplayString($data.friendCount),
           1
           /* TEXT */
         ),
@@ -2974,7 +2971,7 @@ if (uni.restoreGlobal) {
           {
             onClick: _cache[1] || (_cache[1] = (...args) => $options.goToFollowingList && $options.goToFollowingList(...args))
           },
-          "关注数: " + vue.toDisplayString($data.userInfo.following),
+          "关注数: " + vue.toDisplayString($data.followingCount),
           1
           /* TEXT */
         ),
@@ -2983,7 +2980,7 @@ if (uni.restoreGlobal) {
           {
             onClick: _cache[2] || (_cache[2] = (...args) => $options.goToFollowerList && $options.goToFollowerList(...args))
           },
-          "粉丝数: " + vue.toDisplayString($data.userInfo.follower),
+          "粉丝数: " + vue.toDisplayString($data.followerCount),
           1
           /* TEXT */
         )
@@ -3024,8 +3021,8 @@ if (uni.restoreGlobal) {
         userId: null,
         username: "",
         avatar: "",
-        follower: 0,
-        following: 0,
+        followerCount: 0,
+        followingCount: 0,
         isFollowed: false
       };
     },
@@ -3044,7 +3041,7 @@ if (uni.restoreGlobal) {
       }
     },
     methods: {
-      goBackToChat() {
+      goToChat() {
         const userId = getApp().globalData.userId;
         let conId;
         if (userId < this.userId) {
@@ -3056,18 +3053,60 @@ if (uni.restoreGlobal) {
           url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=1&name=${this.username}`
         });
       },
-      goToFansList() {
+      goToFollowerList() {
         uni.navigateTo({
           url: `/pages/user/follower_list?userId=${this.userId}`
         });
       },
       goToFollowingList() {
         uni.navigateTo({
-          url: `/pages/user/following_list?userId=${this.userId}}`
+          url: `/pages/user/following_list?userId=${this.userId}`
         });
       },
-      toggleFollow() {
-        this.isFollowed = !this.isFollowed;
+      async toggleFollow() {
+        const token = getApp().globalData.token;
+        const data2 = {
+          from_user_id: getApp().globalData.userId,
+          to_user_id: this.userId
+        };
+        const dataJson = JSONbig.stringify(data2);
+        if (this.isFollowed) {
+          let res = await uni.request({
+            url: "http://127.0.0.1:3000/api/action/relation/unfollow",
+            method: "POST",
+            header: {
+              "content-type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            data: dataJson,
+            dataType: "string"
+          });
+          if (res.statusCode === 200) {
+            formatAppLog("log", "at pages/user/user_profile.vue:93", res);
+            this.isFollowed = false;
+            res = JSONbig.parse(res.data);
+            if (res.code === 1e3)
+              ;
+          }
+        } else {
+          let res = await uni.request({
+            url: "http://127.0.0.1:3000/api/action/relation/follow",
+            method: "POST",
+            header: {
+              "content-type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            data: dataJson,
+            dataType: "string"
+          });
+          if (res.statusCode === 200) {
+            formatAppLog("log", "at pages/user/user_profile.vue:112", res);
+            this.isFollowed = true;
+            res = JSONbig.parse(res.data);
+            if (res.code === 1e3)
+              ;
+          }
+        }
       }
     }
   };
@@ -3087,18 +3126,18 @@ if (uni.restoreGlobal) {
         vue.createElementVNode(
           "view",
           {
-            onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFansList && $options.goToFansList(...args))
+            onClick: _cache[0] || (_cache[0] = (...args) => $options.goToFollowingList && $options.goToFollowingList(...args))
           },
-          "粉丝数: " + vue.toDisplayString($data.follower),
+          "关注数: " + vue.toDisplayString($data.followingCount),
           1
           /* TEXT */
         ),
         vue.createElementVNode(
           "view",
           {
-            onClick: _cache[1] || (_cache[1] = (...args) => $options.goToFollowingList && $options.goToFollowingList(...args))
+            onClick: _cache[1] || (_cache[1] = (...args) => $options.goToFollowerList && $options.goToFollowerList(...args))
           },
-          "关注数: " + vue.toDisplayString($data.following),
+          "粉丝数: " + vue.toDisplayString($data.followerCount),
           1
           /* TEXT */
         )
@@ -3116,7 +3155,7 @@ if (uni.restoreGlobal) {
         ),
         vue.createElementVNode("button", {
           style: { "background-color": "#0084ff", "color": "white" },
-          onClick: _cache[3] || (_cache[3] = (...args) => $options.goBackToChat && $options.goBackToChat(...args))
+          onClick: _cache[3] || (_cache[3] = (...args) => $options.goToChat && $options.goToChat(...args))
         }, "发消息")
       ])
     ]);
@@ -3126,24 +3165,37 @@ if (uni.restoreGlobal) {
     data() {
       return {
         userId: null,
-        username: ""
+        friendList: []
       };
     },
-    onLoad(options) {
+    async onLoad(options) {
       this.userId = options.userId;
-      this.username = options.username;
+      const token = getApp().globalData.token;
+      const data2 = {
+        user_id: this.userId
+      };
+      const dataJson = JSONbig.stringify(data2);
+      let res = await uni.request({
+        url: "http://127.0.0.1:3000/api/action/relation/get_friend_list",
+        method: "POST",
+        header: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        data: dataJson,
+        dataType: "string"
+      });
+      if (res.statusCode === 200) {
+        formatAppLog("log", "at pages/user/friend_list.vue:34", res);
+        res = JSONbig.parse(res.data);
+        if (res.code === 1e3)
+          ;
+      }
     }
   };
   function _sfc_render$6(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "friend-list-container" }, [
-      vue.createElementVNode(
-        "view",
-        null,
-        "互关列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.username),
-        1
-        /* TEXT */
-      ),
-      vue.createCommentVNode(" 这里可以添加具体的粉丝列表展示逻辑 ")
+      vue.createElementVNode("view")
     ]);
   }
   const PagesUserFriendList = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["render", _sfc_render$6], ["__scopeId", "data-v-45095eb2"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/friend_list.vue"]]);
@@ -3151,24 +3203,37 @@ if (uni.restoreGlobal) {
     data() {
       return {
         userId: null,
-        username: ""
+        followingList: []
       };
     },
-    onLoad(options) {
+    async onLoad(options) {
       this.userId = options.userId;
-      this.username = options.username;
+      const token = getApp().globalData.token;
+      const data2 = {
+        user_id: this.userId
+      };
+      const dataJson = JSONbig.stringify(data2);
+      let res = await uni.request({
+        url: "http://127.0.0.1:3000/api/action/relation/get_following_list",
+        method: "POST",
+        header: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        data: dataJson,
+        dataType: "string"
+      });
+      if (res.statusCode === 200) {
+        formatAppLog("log", "at pages/user/following_list.vue:34", res);
+        res = JSONbig.parse(res.data);
+        if (res.code === 1e3)
+          ;
+      }
     }
   };
   function _sfc_render$5(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "following-list-container" }, [
-      vue.createElementVNode(
-        "view",
-        null,
-        "关注列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.username),
-        1
-        /* TEXT */
-      ),
-      vue.createCommentVNode(" 这里可以添加具体的关注列表展示逻辑 ")
+      vue.createElementVNode("view")
     ]);
   }
   const PagesUserFollowingList = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["render", _sfc_render$5], ["__scopeId", "data-v-5d140a69"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/following_list.vue"]]);
@@ -3176,24 +3241,37 @@ if (uni.restoreGlobal) {
     data() {
       return {
         userId: null,
-        username: ""
+        followerList: []
       };
     },
-    onLoad(options) {
+    async onLoad(options) {
       this.userId = options.userId;
-      this.username = options.username;
+      const token = getApp().globalData.token;
+      const data2 = {
+        user_id: this.userId
+      };
+      const dataJson = JSONbig.stringify(data2);
+      let res = await uni.request({
+        url: "http://127.0.0.1:3000/api/action/relation/get_follower_list",
+        method: "POST",
+        header: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        data: dataJson,
+        dataType: "string"
+      });
+      if (res.statusCode === 200) {
+        formatAppLog("log", "at pages/user/follower_list.vue:34", res);
+        res = JSONbig.parse(res.data);
+        if (res.code === 1e3)
+          ;
+      }
     }
   };
   function _sfc_render$4(_ctx, _cache, $props, $setup, $data, $options) {
     return vue.openBlock(), vue.createElementBlock("view", { class: "follower-list-container" }, [
-      vue.createElementVNode(
-        "view",
-        null,
-        "粉丝列表 - " + vue.toDisplayString($data.userId) + " - " + vue.toDisplayString($data.username),
-        1
-        /* TEXT */
-      ),
-      vue.createCommentVNode(" 这里可以添加具体的粉丝列表展示逻辑 ")
+      vue.createElementVNode("view")
     ]);
   }
   const PagesUserFollowerList = /* @__PURE__ */ _export_sfc(_sfc_main$4, [["render", _sfc_render$4], ["__scopeId", "data-v-1ecc1525"], ["__file", "D:/H/Desktop/Violet/uniapp/pages/user/follower_list.vue"]]);
@@ -3745,9 +3823,10 @@ if (uni.restoreGlobal) {
         const token = getApp().globalData.token;
         let res = await uni.request({
           url: "http://127.0.0.1:3000/api/action/user/search",
-          method: "GET",
+          method: "POST",
           header: {
-            Authorization: `Bearer ${token}`
+            "content-type": "application/x-www-form-urlencoded",
+            "Authorization": `Bearer ${token}`
           },
           data: {
             keyword: this.searchKeyword
