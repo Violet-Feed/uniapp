@@ -70,7 +70,14 @@
 			"path" : "pages/im/search",
 			"style" : 
 			{
-				"navigationBarTitleText" : ""
+				"navigationBarTitleText" : "搜索"
+			}
+		},
+		{
+			"path" : "pages/netty",
+			"style" : 
+			{
+				"navigationBarTitleText" : "Netty"
 			}
 		}
 	],

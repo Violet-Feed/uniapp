@@ -47,6 +47,7 @@
 					}
 				});
 			}
+			//TODO:is+count
 		},
 		methods: {
 			goToChat() {
