@@ -14,6 +14,7 @@
 </template>
 
 <script>
+	import { initSocketConnection } from '@/utils/netty.js'; 
 	export default {
 		data() {
 			return {
@@ -29,9 +30,9 @@
 			this.userId = getApp().globalData.userId;
 			this.username = getApp().globalData.username;
 			this.avatar = getApp().globalData.avatar;
-			this.friendCount = 0;
-			this.followingCount = 0;
-			this.followerCount = 0;
+			this.friendCount = getApp().globalData.friendCount;
+			this.followingCount = getApp().globalData.followingCount;
+			this.followerCount = getApp().globalData.followerCount;
 		},
 		methods: {
 			goToFriendList() {
@@ -50,16 +51,17 @@
 				});
 			},
 			logout() {
-				getApp().globalData.socketTask.close({
-					code: 1000,
-					reason: 'logout',
-					success() {
-						console.log('WebSocket 连接关闭成功');
-					},
-					fail(err) {
-						console.error('WebSocket 连接关闭失败:', err);
-					}
-				});
+				// getApp().globalData.socketTask.close({
+				// 	code: 1000,
+				// 	reason: 'logout',
+				// 	success() {
+				// 		console.log('WebSocket 连接关闭成功');
+				// 	},
+				// 	fail(err) {
+				// 		console.error('WebSocket 连接关闭失败:', err);
+				// 	}
+				// });
+				getApp().globalData.socket.close();
 				delete getApp().globalData.token;
 				uni.removeStorageSync('token');
 				uni.removeStorageSync('user_id');

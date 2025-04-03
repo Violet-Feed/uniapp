@@ -38,11 +38,11 @@
 					return;
 				}
 				const token = getApp().globalData.token;
-				let res= await uni.request({
-					url: 'http://127.0.0.1:3000/api/action/user/search',
+				let res = await uni.request({
+					url: 'http://127.0.0.1:3000/api/user/search_users',
 					method: 'POST',
 					header: {
-						'content-type': 'application/x-www-form-urlencoded',
+						'content-type': 'application/json',
 						'Authorization': `Bearer ${token}`,
 					},
 					data: {
@@ -50,16 +50,23 @@
 					},
 					dataType: 'string',
 				});
-				if(res.statusCode===200){
+				if (res.statusCode === 200) {
 					res = JSONbig.parse(res.data);
-					this.userList = res.userList;
-					this.hasSearched = true;
-					for(const user of this.userList){
-						if(user.avatar==""){
-							user.avatar="/static/user_avatar.png";
+					if (res.code === 1000) {
+						this.userList = res.data.user_infos;
+						this.hasSearched = true;
+						for (const user of this.userList) {
+							if (user.avatar == "") {
+								user.avatar = "/static/user_avatar.png";
+							}
 						}
+					} else {
+						uni.showToast({
+							title: '服务器错误',
+							icon: 'none'
+						});
 					}
-				}else{
+				} else {
 					uni.showToast({
 						title: '网络错误',
 						icon: 'none'

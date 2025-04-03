@@ -48,7 +48,7 @@
 			return {
 				userId: getApp().globalData.userId,
 				conversation: {},
-				conIndex: Number.MAX_VALUE,
+				conIndex: Number.MAX_SAFE_INTEGER,
 				messages: [],
 				inputText: '',
 				scrollTop: 0,
@@ -139,7 +139,7 @@
 				const dataJson = JSONbig.stringify(data);
 				console.log(dataJson);
 				const res = await uni.request({
-					url: 'http://127.0.0.1:3001/api/im/message/send',
+					url: 'http://127.0.0.1:3000/api/im/send_message',
 					method: 'POST',
 					header: {
 						'content-type': 'application/json',

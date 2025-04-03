@@ -19,7 +19,7 @@
 			if (platform === "android" || platform == "ios") {
 				DB.openSqlite();
 			}
-			//initAuth();
+			initAuth();
 			getApp().globalData.msgIdGenerator=new Snowflake();
 		},
 	};

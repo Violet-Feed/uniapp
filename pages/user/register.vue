@@ -40,10 +40,10 @@
 					return;
 				}
 				uni.request({
-					url: 'http://127.0.0.1:3000/api/action/user/register',
+					url: 'http://127.0.0.1:3000/api/user/register',
 					method: 'POST',
 					header: {
-						'content-type': 'application/x-www-form-urlencoded'
+						'content-type': 'application/json'
 					},
 					data: {
 						username: this.username,
@@ -53,7 +53,7 @@
 					success: (res) => {
 						if (res.statusCode === 200) {
 							const data = res.data;
-							if (data.message === "success") {
+							if (data.code === 1000) {
 								uni.showToast({
 									title: '注册成功',
 									icon: 'success'

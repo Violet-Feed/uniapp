@@ -11,7 +11,7 @@ export const getByConversation = async (conShortId, conIndex, limit) => {
 	}
 	const dataJson=JSONbig.stringify(data);
 	var res = await uni.request({
-		url: 'http://127.0.0.1:3001/api/im/message/get_by_conversation',
+		url: 'http://127.0.0.1:3000/api/im/get_message_by_conversation',
 		method: 'POST',
 		header: {
 			'content-type': 'application/json',

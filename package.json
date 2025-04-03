@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "json-bigint": "^1.0.0"
+    "json-bigint": "^1.0.0",
+    "text-encoding": "^0.7.0"
   }
 }

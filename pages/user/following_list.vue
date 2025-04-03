@@ -1,6 +1,13 @@
 <template>
-	<view class="following-list-container">
-		<view></view>
+	<view class="user-list-container">
+		<view class="user-list" v-if="userList.length > 0">
+			<view class="user-item" v-for="(user, index) in userList" :key="index" @click="goToUserPage(user)">
+				<view class="avatar">
+					<image :src="user.avatar"></image>
+				</view>
+				<view class="user-name">{{ user.username }}</view>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -10,7 +17,7 @@
 		data() {
 			return {
 				userId: null,
-				followingList:[]
+				userList: []
 			};
 		},
 		async onLoad(options) {
@@ -21,7 +28,7 @@
 			};
 			const dataJson = JSONbig.stringify(data);
 			let res = await uni.request({
-				url: 'http://127.0.0.1:3000/api/action/relation/get_following_list',
+				url: 'http://127.0.0.1:3000/api/relation/get_following_list',
 				method: 'POST',
 				header: {
 					'content-type': 'application/json',
@@ -31,18 +38,59 @@
 				dataType: 'string',
 			});
 			if (res.statusCode === 200) {
-				console.log(res);
 				res = JSONbig.parse(res.data);
 				if (res.code === 1000) {
-					
+					this.userList=res.data.user_infos;
+					for (const user of this.userList) {
+						if (user.avatar == "") {
+							user.avatar = "/static/user_avatar.png";
+						}
+					}
 				}
+			}
+		},
+		methods: {
+			goToUserPage(user) {
+				uni.navigateTo({
+					url: `/pages/user/user_profile?userId=${user.user_id}`
+				});
 			}
 		}
 	};
 </script>
 
 <style scoped>
-	.following-list-container {
+	/* .user-list-container {
 		padding: 20px;
+	} */
+
+	.user-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.user-item {
+		display: flex;
+		align-items: center;
+		padding: 10px;
+		border-bottom: 1px solid #eee;
+		cursor: pointer;
+	}
+
+	.avatar {
+		width: 50px;
+		height: 50px;
+		border-radius: 50%;
+		overflow: hidden;
+		margin-right: 10px;
+	}
+
+	.avatar image {
+		width: 100%;
+		height: 100%;
+	}
+
+	.user-name {
+		font-weight: bold;
 	}
 </style>

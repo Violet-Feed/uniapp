@@ -2,6 +2,7 @@ import JSONbig from 'json-bigint';
 import {
 	connectWebSocket
 } from "@/utils/websocket.js";
+import Socket from '@/utils/netty.js';
 import {
 	getByInit
 } from '@/request/get_by_init';
@@ -23,11 +24,12 @@ export const initAuth = async () => {
 		app.globalData.token = localToken;
 		app.globalData.userId = localUserId;
 		const data = {
-			user_ids: [app.globalData.userId],
+			user_id: app.globalData.userId,
+			need_follow_info:true,
 		};
 		const dataJson = JSONbig.stringify(data);
 		const res = await uni.request({
-			url: 'http://127.0.0.1:3000/api/action/user/get_infos',
+			url: 'http://127.0.0.1:3000/api/user/get_user_profile',
 			method: 'POST',
 			header: {
 				'content-type': 'application/json',
@@ -40,7 +42,7 @@ export const initAuth = async () => {
 				let {
 					avatar,
 					username
-				} = res.data.data.user_infos[0];
+				} = res.data.data.user_info;
 				if(avatar==""){
 					avatar="/static/user_avatar.png";
 				}else{
@@ -50,8 +52,14 @@ export const initAuth = async () => {
 				uni.setStorageSync("user_avatar_"+localUserId, avatar);
 				app.globalData.username = username;
 				app.globalData.avatar = avatar;
+				app.globalData.followingCount = res.data.data.following_count;
+				app.globalData.followerCount = res.data.data.follower_count;
+				app.globalData.friendCount = res.data.data.friend_count;
 				//download(avatar,localUserId);
-				connectWebSocket();
+				//connectWebSocket();
+				const socket=new Socket();
+				app.globalData.socket=socket;
+				socket.start();
 				getByInit();
 			} else {
 				uni.showToast({

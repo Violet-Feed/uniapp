@@ -35,7 +35,7 @@
 					return;
 				}
 				let res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/action/user/login',
+					url: 'http://127.0.0.1:3000/api/user/login',
 					method: 'POST',
 					header: {
 						'content-type': 'application/json'
@@ -45,7 +45,6 @@
 						password: this.password
 					},
 					dataType: 'string',
-
 				});
 				if (res.statusCode === 200) {
 					res = JSONbig.parse(res.data);

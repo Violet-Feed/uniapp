@@ -19,6 +19,13 @@
 			}
 		},
 		{
+			"path" : "pages/im/search",
+			"style" : 
+			{
+				"navigationBarTitleText" : "搜索"
+			}
+		},
+		{
 			"path": "pages/shop/shop",
 			"style": {
 				"navigationBarTitleText":"商城"
@@ -64,20 +71,6 @@
 			"path": "pages/user/register",
 			"style": {
 				"navigationBarTitleText":"注册"
-			}
-		},
-		{
-			"path" : "pages/im/search",
-			"style" : 
-			{
-				"navigationBarTitleText" : "搜索"
-			}
-		},
-		{
-			"path" : "pages/netty",
-			"style" : 
-			{
-				"navigationBarTitleText" : "Netty"
 			}
 		}
 	],

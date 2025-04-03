@@ -2,7 +2,7 @@ import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
 import file from '@/utils/file';
 import {
-	getUserInfos
+	getUserProfile
 } from '@/request/get_user_infos.js';
 export const getByInit = () => {
 	const {
@@ -17,7 +17,7 @@ export const getByInit = () => {
 
 async function doGetByInit(token, userId, index) {
 	let res = await uni.request({
-		url: 'http://127.0.0.1:3001/api/im/message/get_by_init',
+		url: 'http://127.0.0.1:3000/api/im/get_message_by_init',
 		method: 'POST',
 		header: {
 			'content-type': 'application/json',
@@ -65,9 +65,9 @@ async function doGetByInit(token, userId, index) {
 						} else {
 							targetId = BigInt(parts[0]);
 						}
-						const userInfos = await getUserInfos([targetId]);
-						let targetUsername = userInfos[0].username;
-						let targetAvatar = userInfos[0].avatar;
+						const userProfile = await getUserProfile(targetId,false);
+						let targetUsername = userProfile.user_info.username;
+						let targetAvatar = userProfile.user_info.avatar;
 						if (targetAvatar === "") {
 							targetAvatar = "/static/user_avatar.png";
 						} else {

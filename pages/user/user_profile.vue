@@ -21,7 +21,7 @@
 <script>
 	import JSONbig from 'json-bigint';
 	import {
-		getUserInfos
+		getUserProfile
 	} from '@/request/get_user_infos';
 	export default {
 		data() {
@@ -36,17 +36,19 @@
 		},
 		onLoad(options) {
 			this.userId = BigInt(options.userId);
-			this.username = uni.getStorageSync("username_" + options.userId);
-			this.avatar = uni.getStorageSync("user_avatar_" + options.userId);
-			if (!this.username || !this.avatar) {
-				getUserInfos([this.userId]).then((res) => {
-					this.username = res[0].username;
-					this.avatar = res[0].avatar;
+			// this.username = uni.getStorageSync("username_" + options.userId);
+			// this.avatar = uni.getStorageSync("user_avatar_" + options.userId);
+			// if (!this.username || !this.avatar) {
+				getUserProfile(this.userId,true).then((res) => {
+					this.username = res.user_info.username;
+					this.avatar = res.user_info.avatar;
 					if (this.avatar == "") {
 						this.avatar = "/static/user_avatar.png";
 					}
+					this.followingCount=res.following_count;
+					this.followerCount=res.follower_count;
 				});
-			}
+			//}
 			//TODO:is+count
 		},
 		methods: {
@@ -81,7 +83,7 @@
 				const dataJson = JSONbig.stringify(data);
 				if (this.isFollowed) {
 					let res = await uni.request({
-						url: 'http://127.0.0.1:3000/api/action/relation/unfollow',
+						url: 'http://127.0.0.1:3000/api/relation/unfollow',
 						method: 'POST',
 						header: {
 							'content-type': 'application/json',
@@ -100,7 +102,7 @@
 					}
 				} else {
 					let res = await uni.request({
-						url: 'http://127.0.0.1:3000/api/action/relation/follow',
+						url: 'http://127.0.0.1:3000/api/relation/follow',
 						method: 'POST',
 						header: {
 							'content-type': 'application/json',

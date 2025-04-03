@@ -2,7 +2,6 @@
 	<view>
 		video
 	</view>
-	<button @click="ToNetty">Netty</button>
 </template>
 
 <script>
@@ -10,13 +9,6 @@
 		data() {
 			return {
 				
-			}
-		},
-		methods: {
-			ToNetty(){
-				uni.navigateTo({
-					url: '/pages/netty'
-				});
 			}
 		}
 	}
