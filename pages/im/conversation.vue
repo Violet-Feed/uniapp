@@ -101,6 +101,7 @@
 
 			uni.$on('normal_message', (data) => {
 				if (this.conversation.con_id == data.msg_body.con_id) {
+					//TODO:device_id
 					if (this.userId == data.msg_body.user_id) {
 						for (let i = this.messages.length - 1; i >= 0; i--) {
 							if (this.messages[i].client_msg_id == data.msg_body.client_msg_id) {

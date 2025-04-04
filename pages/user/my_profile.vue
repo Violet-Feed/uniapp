@@ -14,7 +14,6 @@
 </template>
 
 <script>
-	import { initSocketConnection } from '@/utils/netty.js'; 
 	export default {
 		data() {
 			return {
@@ -51,16 +50,6 @@
 				});
 			},
 			logout() {
-				// getApp().globalData.socketTask.close({
-				// 	code: 1000,
-				// 	reason: 'logout',
-				// 	success() {
-				// 		console.log('WebSocket 连接关闭成功');
-				// 	},
-				// 	fail(err) {
-				// 		console.error('WebSocket 连接关闭失败:', err);
-				// 	}
-				// });
 				getApp().globalData.socket.close();
 				delete getApp().globalData.token;
 				uni.removeStorageSync('token');

@@ -1,7 +1,4 @@
 import JSONbig from 'json-bigint';
-import {
-	connectWebSocket
-} from "@/utils/websocket.js";
 import Socket from '@/utils/netty.js';
 import {
 	getByInit
