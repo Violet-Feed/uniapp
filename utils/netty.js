@@ -1,6 +1,11 @@
+import JSONbig from 'json-bigint';
 import {
-	TextDecoder
-} from 'text-encoding';
+	encodePacketType,
+	encodeConnectPacket,
+	decodeConnectPacket,
+	decodeNormalPacket,
+	decodeCommandPacket
+} from '@/proto_gen/packet.js';
 
 class Socket {
 	socket = null;
@@ -8,6 +13,7 @@ class Socket {
 	socketReader = null;
 	listenIntervalId = null;
 	heartIntervalId = null;
+	headLength = 5;
 
 	start() {
 		try {
@@ -36,58 +42,72 @@ class Socket {
 	}
 
 	listenToServer() {
-		const headLength=5;
-		let reading=false;
+		let reading = false;
 		this.listenIntervalId = setInterval(() => {
 			try {
 				if (!reading && this.socketReader && this.socketReader.available()) {
-					reading=true;
-					const headByte = new DataView(new ArrayBuffer(headLength));
-					for(let i=0;i<headLength;++i){
-						if(this.socketReader && this.socketReader.available()){
+					reading = true;
+					const headByte = new DataView(new ArrayBuffer(this.headLength));
+					for (let i = 0; i < this.headLength; ++i) {
+						if (this.socketReader && this.socketReader.available()) {
 							const byte = this.socketReader.read();
 							headByte.setInt8(i, byte);
 						}
 					}
-					const packetType=headByte.getInt8(0,false)
+					const packetType = headByte.getInt8(0, false)
 					const dataLength = headByte.getInt32(1, false);
 					const dataByte = new Int8Array(dataLength);
-					for(let i=0;i<dataLength;++i){
-						if(this.socketReader && this.socketReader.available()){
+					for (let i = 0; i < dataLength; ++i) {
+						if (this.socketReader && this.socketReader.available()) {
 							const byte = this.socketReader.read();
-							dataByte[i]=byte;
+							dataByte[i] = byte;
 						}
 					}
-					const decoder = new TextDecoder();
-					const data = decoder.decode(dataByte);
-					console.log('接收到消息:'+data);
-					if(packetType==3){
-						const obj=JSON.parse(data);
-						console.log(obj);
+					if (packetType == encodePacketType.Heartbeat) {
+
+					} else if (packetType == encodePacketType.Normal) {
+						const data = decodeNormalPacket(dataByte);
+						console.log(JSONbig.stringify(data));
+					} else if (packetType == encodePacketType.Command) {
+						const data = decodeCommandPacket(dataByte);
+						console.log(JSONbig.stringify(data));
 					}
-					reading=false;
+					reading = false;
 				}
 			} catch (e) {
 				console.error('读取消息出错:', e);
 				this.close();
 			}
-		}, 1);
+		}, 10);
+	}
+
+	toInt64(value) {
+		const mask32 = 0xFFFFFFFFn;
+		const low = Number(value & mask32);
+		const high = Number(value >> 32n);
+		return {
+			low,
+			high,
+			unsigned: false
+		};
 	}
 
 	heartBeat() {
 		if (this.socketWriter) {
-			const data = getApp().globalData.userId;
-			const encoder = new TextEncoder();
-			const dataByte = encoder.encode(data);
-			const headByte = new Int8Array(5);
+			const userId = getApp().globalData.userId;
+			const connectPacket = {
+				user_id: this.toInt64(userId)
+			};
+			const dataByte = encodeConnectPacket(connectPacket);
+			const headByte = new Int8Array(this.headLength);
 			const headDataView = new DataView(headByte.buffer);
-			headDataView.setInt8(0, 1);
+			headDataView.setInt8(0, encodePacketType.Connect);
 			headDataView.setInt32(1, dataByte.length, false);
 			try {
-				for(let i=0;i<headByte.length;++i){
+				for (let i = 0; i < headByte.length; ++i) {
 					this.socketWriter.write(headByte[i]);
 				}
-				for(let i=0;i<dataByte.length;++i){
+				for (let i = 0; i < dataByte.length; ++i) {
 					this.socketWriter.write(dataByte[i]);
 				}
 				this.socketWriter.flush();
@@ -99,19 +119,13 @@ class Socket {
 		}
 		this.heartIntervalId = setInterval(() => {
 			if (this.socketWriter) {
-				const data = "ping";
-				const encoder = new TextEncoder();
-				const dataByte = encoder.encode(data);
-				const headByte = new Int8Array(5);
+				const headByte = new Int8Array(this.headLength);
 				const headDataView = new DataView(headByte.buffer);
-				headDataView.setInt8(0, 2);
-				headDataView.setInt32(1, dataByte.length, false);
+				headDataView.setInt8(0, encodePacketType.Heartbeat);
+				headDataView.setInt32(1, 0, false);
 				try {
-					for(let i=0;i<headByte.length;++i){
+					for (let i = 0; i < headByte.length; ++i) {
 						this.socketWriter.write(headByte[i]);
-					}
-					for(let i=0;i<dataByte.length;++i){
-						this.socketWriter.write(dataByte[i]);
 					}
 					this.socketWriter.flush();
 				} catch (e) {

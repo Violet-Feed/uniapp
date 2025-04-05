@@ -4,6 +4,14 @@ adb -s 127.0.0.1:5555 reverse tcp:3001 tcp:3001
 
 npm install json-bigint
 
-npm install protobufjs
+npx pbjs --es6 proto_gen/packet.js proto/packet.proto
 
-npm install text-encoding
+readVarint64函数返回值修改为：
+```
+part0 = BigInt(part0);
+part1 = BigInt(part1);
+part2 = BigInt(part2);
+const low = part0 | (part1 << 28n);
+const high = (part1 >> 4n) | (part2 << 24n);
+return (high << 32n) | low;
+```

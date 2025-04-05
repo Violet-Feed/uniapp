@@ -15,10 +15,11 @@
 			getApp().globalData.platform=platform;
 			if (platform !== "android") {
 				console.log("暂不支持该平台")
+			}else{
+				DB.openSqlite();
+				initAuth();
+				getApp().globalData.msgIdGenerator=new Snowflake();
 			}
-			DB.openSqlite();
-			initAuth();
-			getApp().globalData.msgIdGenerator=new Snowflake();
 		},
 	};
 </script>
