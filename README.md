@@ -2,12 +2,14 @@ adb -s 127.0.0.1:5555 reverse tcp:3000 tcp:3000
 
 adb -s 127.0.0.1:5555 reverse tcp:3001 tcp:3001
 
+adb -s 127.0.0.1:5555 shell
+
 npm install json-bigint
 
 npx pbjs --es6 proto_gen/packet.js proto/packet.proto
 
 readVarint64函数返回值修改为：
-```
+```javascript
 part0 = BigInt(part0);
 part1 = BigInt(part1);
 part2 = BigInt(part2);

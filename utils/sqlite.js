@@ -279,7 +279,7 @@ function updateConversation(conShortId,count,index,msg) {
 		userId
 	} = getApp().globalData;
 	const dbTable = "conversation_" + userId;
-	const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index}, last_message = ${msg} WHERE con_short_id = '${conShortId}'`;
+	const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index}, last_message = '${msg}' WHERE con_short_id = ${conShortId}`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.executeSql({
 			name: dbName,

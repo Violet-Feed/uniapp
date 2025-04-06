@@ -1,24 +1,26 @@
 class Snowflake {
     constructor() {
         // 起始时间戳
-        this.startTimestamp = 1288834974657;
+        this.startTimestamp = 1288834974657n;
         // 数据中心 ID 所占位数
-        this.dataCenterIdBits = 5;
+        this.dataCenterIdBits = 5n;
         // 机器 ID 所占位数
-        this.workerIdBits = 5;
+        this.workerIdBits = 5n;
         // 序列号所占位数
-        this.sequenceBits = 12;
+        this.sequenceBits = 12n;
 
         // 时间戳左移位数
         this.timestampShift = this.sequenceBits + this.dataCenterIdBits + this.workerIdBits;
+		
+		this.maxSequence=-1n ^ (-1n << this.sequenceBits)
 
-        this.sequence = 0;
-        this.lastTimestamp = -1;
+        this.sequence = 0n;
+        this.lastTimestamp = -1n;
     }
 
     // 获取当前时间戳
     getCurrentTimestamp() {
-        return Date.now();
+        return BigInt(Date.now());
     }
 
     // 等待下一毫秒
@@ -39,16 +41,16 @@ class Snowflake {
         }
 
         if (timestamp === this.lastTimestamp) {
-            this.sequence = (this.sequence + 1) & this.maxSequence;
-            if (this.sequence === 0) {
+            this.sequence = (this.sequence + 1n) & this.maxSequence;
+            if (this.sequence === 0n) {
                 timestamp = this.waitNextMillis(this.lastTimestamp);
             }
         } else {
-            this.sequence = 0;
+            this.sequence = 0n;
         }
 
         this.lastTimestamp = timestamp;
-        return (BigInt(timestamp - this.startTimestamp) << BigInt(this.timestampShift)) | BigInt(this.sequence);
+        return (timestamp - this.startTimestamp) << this.timestampShift | this.sequence;
     }
 }
 export default Snowflake;

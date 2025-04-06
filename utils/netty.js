@@ -1,4 +1,5 @@
 import JSONbig from 'json-bigint';
+import DB from '@/utils/sqlite.js'
 import {
 	encodePacketType,
 	encodeConnectPacket,
@@ -51,12 +52,12 @@ class Socket {
 					for (let i = 0; i < this.headLength; ++i) {
 						if (this.socketReader && this.socketReader.available()) {
 							const byte = this.socketReader.read();
-							headByte.setInt8(i, byte);
+							headByte.setUint8(i, byte);
 						}
 					}
-					const packetType = headByte.getInt8(0, false)
-					const dataLength = headByte.getInt32(1, false);
-					const dataByte = new Int8Array(dataLength);
+					const packetType = headByte.getUint8(0, false)
+					const dataLength = headByte.getUint32(1, false);
+					const dataByte = new Uint8Array(dataLength);
 					for (let i = 0; i < dataLength; ++i) {
 						if (this.socketReader && this.socketReader.available()) {
 							const byte = this.socketReader.read();
@@ -68,9 +69,11 @@ class Socket {
 					} else if (packetType == encodePacketType.Normal) {
 						const data = decodeNormalPacket(dataByte);
 						console.log(JSONbig.stringify(data));
+						this.handleNormalPacket(data);
 					} else if (packetType == encodePacketType.Command) {
 						const data = decodeCommandPacket(dataByte);
 						console.log(JSONbig.stringify(data));
+						this.handleCommandPacket(data);
 					}
 					reading = false;
 				}
@@ -79,17 +82,6 @@ class Socket {
 				this.close();
 			}
 		}, 10);
-	}
-
-	toInt64(value) {
-		const mask32 = 0xFFFFFFFFn;
-		const low = Number(value & mask32);
-		const high = Number(value >> 32n);
-		return {
-			low,
-			high,
-			unsigned: false
-		};
 	}
 
 	heartBeat() {
@@ -101,8 +93,8 @@ class Socket {
 			const dataByte = encodeConnectPacket(connectPacket);
 			const headByte = new Int8Array(this.headLength);
 			const headDataView = new DataView(headByte.buffer);
-			headDataView.setInt8(0, encodePacketType.Connect);
-			headDataView.setInt32(1, dataByte.length, false);
+			headDataView.setUint8(0, encodePacketType.Connect);
+			headDataView.setUint32(1, dataByte.length, false);
 			try {
 				for (let i = 0; i < headByte.length; ++i) {
 					this.socketWriter.write(headByte[i]);
@@ -121,8 +113,8 @@ class Socket {
 			if (this.socketWriter) {
 				const headByte = new Int8Array(this.headLength);
 				const headDataView = new DataView(headByte.buffer);
-				headDataView.setInt8(0, encodePacketType.Heartbeat);
-				headDataView.setInt32(1, 0, false);
+				headDataView.setUint8(0, encodePacketType.Heartbeat);
+				headDataView.setUint32(1, 0, false);
 				try {
 					for (let i = 0; i < headByte.length; ++i) {
 						this.socketWriter.write(headByte[i]);
@@ -152,6 +144,85 @@ class Socket {
 				console.error('关闭连接出错:', e);
 			}
 		}
+	}
+	
+	toInt64(value) {
+		const mask32 = 0xFFFFFFFFn;
+		const low = Number(value & mask32);
+		const high = Number(value >> 32n);
+		return {
+			low,
+			high,
+			unsigned: false
+		};
+	}
+	
+	handleNormalPacket(data){
+		if(data.pre_user_con_index==undefined){
+			data.pre_user_con_index=0;
+		}
+		if(data.badge_count==undefined){
+			data.badge_count=0;
+		}
+		if(data.msg_body.extra==undefined){
+			data.msg_body.extra=''
+		}
+		if (data.pre_user_con_index != getApp().globalData.userConIndex) {
+			console.error("TODO:getByUser")
+		}
+		getApp().globalData.userConIndex = data.user_con_index;
+		uni.$emit('normal', data);
+		DB.selectConversation(data.msg_body.con_id).then((res) => {
+			if (res.length > 0) {
+				DB.updateConversation(data.msg_body.con_short_id, data.badge_count, data
+					.user_con_index, data.msg_body.msg_content).catch((err) => {
+					console.log('updateConversation err', err);
+				});
+			} else {
+				console.error("TODO:getConversation");
+				const {
+					con_short_id,
+					con_id,
+					con_type,
+					msg_content
+				} = data.msg_body;
+				const {
+					user_con_index,
+					badge_count
+				} = data;
+				const conValue =
+					`(${con_short_id}, '${con_id}', ${con_type}, '', '', '', '', 0, 0, 0, 0, 0, 0, ',', 0, ${badge_count}, 0, 0, ${user_con_index}, ${msg_content})`;
+				DB.insertConversation(value).catch((err) => {
+					console.log('insertConversation err', err);
+				})
+			}
+		})
+		const {
+			user_id,
+			con_short_id,
+			con_id,
+			con_type,
+			client_msg_id,
+			msg_id,
+			msg_type,
+			msg_content,
+			create_time,
+			extra,
+			con_index
+		} = data.msg_body;
+		const msgValue =
+			`( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+		DB.insertMessage(msgValue).catch((err) => {
+			console.log('insertMessage err', err);
+		});
+	}
+	
+	handleCommandPacket(data){
+		if (data.user_cmd_index != getApp().globalData.userCmdIndex + 1) {
+			console.error("TODO:getByUser")
+		}
+		getApp().userCmdIndex = data.user_cmd_index;
+		uni.$emit('command', data);
 	}
 }
 

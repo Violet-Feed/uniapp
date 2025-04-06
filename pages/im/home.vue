@@ -36,7 +36,7 @@
 				.catch((err) => {
 					console.error('pullConversation err', err);
 				})
-			uni.$on('normal_message', (data) => {
+			uni.$on('normal', (data) => {
 				this.userConIndex=data.user_con_index;
 				let index=-1;
 				for (let i = 0; i < this.conversationList.length; i++) {
@@ -55,7 +55,7 @@
 			});
 		},
 		onUnload() {
-			uni.$off('message');
+			uni.$off('normal');
 		},
 		methods: {
 			goToSearchPage() {
