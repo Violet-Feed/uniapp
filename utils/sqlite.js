@@ -274,12 +274,22 @@ function deleteMessage(msgId) {
 	});
 }
 
-function updateConversation(conShortId,count,index,msg) {
+function updateConversation(conShortId,data) {
 	const {
 		userId
 	} = getApp().globalData;
 	const dbTable = "conversation_" + userId;
-	const sql = `UPDATE ${dbTable} SET badge_count = ${count}, user_con_index = ${index}, last_message = '${msg}' WHERE con_short_id = ${conShortId}`;
+	let setClause = [];
+	data.forEach((value, key) => {
+		if (typeof value === 'string') {
+			value = value.replace(/'/g, "''");
+			setClause.push(`${key} = '${value}'`);
+		} else {
+			setClause.push(`${key} = ${value}`);
+		}
+	});
+	const setClauseStr = setClause.join(', ');
+	const sql = `UPDATE ${dbTable} SET ${setClauseStr} WHERE con_short_id = ${conShortId}`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.executeSql({
 			name: dbName,

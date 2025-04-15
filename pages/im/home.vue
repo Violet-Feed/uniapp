@@ -20,6 +20,7 @@
 </template>
 
 <script>
+	import JSONbig from 'json-bigint';
 	import DB from '@/utils/sqlite.js'
 	export default {
 		data() {
@@ -40,7 +41,7 @@
 				this.userConIndex=data.user_con_index;
 				let index=-1;
 				for (let i = 0; i < this.conversationList.length; i++) {
-					if (this.conversationList[i].con_short_id == data.msg_body.con_short_id) {
+					if (this.conversationList[i].con_id == data.msg_body.con_id) {
 						this.conversationList[i].badge_count=data.badge_count;
 						this.conversationList[i].user_con_index=data.user_con_index;
 						this.conversationList[i].last_message=data.msg_body.msg_content;
@@ -53,9 +54,24 @@
 					this.conversationList.unshift(conversation);
 				}
 			});
+			uni.$on('command', (data) => {
+				for (let i = 0; i < this.conversationList.length; i++) {
+					if (this.conversationList[i].con_id == data.msg_body.con_id) {
+						const cmdMessage=JSONbig.parse(data.msg_body.msg_content);
+						if(data.msg_body.msg_type==101){
+							this.conversationList[i].read_index_end=cmdMessage.read_index_end;
+							this.conversationList[i].read_badge_count=cmdMessage.read_badge_count;
+						}else if(data.msg_body.msg_type==102){
+							
+						}
+						break;
+					}
+				}
+			});
 		},
 		onUnload() {
 			uni.$off('normal');
+			uni.$off('command');
 		},
 		methods: {
 			goToSearchPage() {

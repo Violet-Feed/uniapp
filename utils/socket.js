@@ -15,6 +15,7 @@ class Socket {
 	listenIntervalId = null;
 	heartIntervalId = null;
 	headLength = 5;
+	userId = getApp().globalData.userId;
 
 	start() {
 		try {
@@ -86,9 +87,8 @@ class Socket {
 
 	heartBeat() {
 		if (this.socketWriter) {
-			const userId = getApp().globalData.userId;
 			const connectPacket = {
-				user_id: this.toInt64(userId)
+				user_id: this.toInt64(this.userId)
 			};
 			const dataByte = encodeConnectPacket(connectPacket);
 			const headByte = new Int8Array(this.headLength);
@@ -170,12 +170,16 @@ class Socket {
 		if (data.pre_user_con_index != getApp().globalData.userConIndex) {
 			console.error("TODO:getByUser")
 		}
+		uni.setStorageSync('user_con_index_'+this.userId, Number(data.user_con_index));
 		getApp().globalData.userConIndex = data.user_con_index;
 		uni.$emit('normal', data);
 		DB.selectConversation(data.msg_body.con_id).then((res) => {
 			if (res.length > 0) {
-				DB.updateConversation(data.msg_body.con_short_id, data.badge_count, data
-					.user_con_index, data.msg_body.msg_content).catch((err) => {
+				const map=new Map();
+				map.set("badge_count",data.badge_count);
+				map.set("user_con_index",data.user_con_index);
+				map.set("last_message",data.msg_body.msg_content);
+				DB.updateConversation(data.msg_body.con_short_id, map).catch((err) => {
 					console.log('updateConversation err', err);
 				});
 			} else {
@@ -191,7 +195,7 @@ class Socket {
 					badge_count
 				} = data;
 				const conValue =
-					`(${con_short_id}, '${con_id}', ${con_type}, '', '', '', '', 0, 0, 0, 0, 0, 0, ',', 0, ${badge_count}, 0, 0, ${user_con_index}, ${msg_content})`;
+					`(${con_short_id}, '${con_id}', ${con_type}, '', '', '', '', 0, 0, 0, 0, 0, 0, ',', 0, ${badge_count}, 0, 0, ${user_con_index}, ${msg_content.replace(/'/g, "''")})`;
 				DB.insertConversation(value).catch((err) => {
 					console.log('insertConversation err', err);
 				})
@@ -211,7 +215,7 @@ class Socket {
 			con_index
 		} = data.msg_body;
 		const msgValue =
-			`( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+			`( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content.replace(/'/g, "''")}', ${create_time}, '${extra.replace(/'/g, "''")}', ${con_index})`;
 		DB.insertMessage(msgValue).catch((err) => {
 			console.log('insertMessage err', err);
 		});
@@ -221,8 +225,20 @@ class Socket {
 		if (data.user_cmd_index != getApp().globalData.userCmdIndex + 1) {
 			console.error("TODO:getByUser")
 		}
+		uni.setStorageSync('user_cmd_index_'+this.userId, Number(data.user_cmd_index));
 		getApp().userCmdIndex = data.user_cmd_index;
 		uni.$emit('command', data);
+		const cmdMessage=JSONbig.parse(data.msg_body.msg_content);
+		if(data.msg_body.msg_type==101){
+			const map=new Map();
+			map.set("read_index_end",cmdMessage.read_index_end)
+			map.set("read_badge_count",cmdMessage.read_badge_count)
+			DB.updateConversation(data.msg_body.con_short_id,map).catch((err) => {
+				console.log('updateConversation err', err);
+			});
+		}else if(data.msg_body.msg_type==102){
+			
+		}
 	}
 }
 

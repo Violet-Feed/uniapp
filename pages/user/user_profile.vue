@@ -9,9 +9,9 @@
 			<view @click="goToFollowerList">粉丝数: {{ followerCount }}</view>
 		</view>
 		<view class="button-group">
-			<button :style="{ backgroundColor: isFollowed ? '#ccc' : '#0084ff', color: isFollowed ? '#333' : 'white' }"
+			<button :style="{ backgroundColor: isFollowing ? '#ccc' : '#0084ff', color: isFollowing ? '#333' : 'white' }"
 				@click="toggleFollow">
-				{{ isFollowed ? '已关注' : '关注' }}
+				{{ isFollowing ? '已关注' : '关注' }}
 			</button>
 			<button style="background-color: #0084ff; color: white;" @click="goToChat">发消息</button>
 		</view>
@@ -22,7 +22,7 @@
 	import JSONbig from 'json-bigint';
 	import {
 		getUserProfile
-	} from '@/request/get_user_infos';
+	} from '@/request/get_user_profile.js';
 	export default {
 		data() {
 			return {
@@ -31,7 +31,7 @@
 				avatar: '',
 				followerCount: 0,
 				followingCount: 0,
-				isFollowed: false
+				isFollowing: false
 			};
 		},
 		onLoad(options) {
@@ -39,7 +39,7 @@
 			// this.username = uni.getStorageSync("username_" + options.userId);
 			// this.avatar = uni.getStorageSync("user_avatar_" + options.userId);
 			// if (!this.username || !this.avatar) {
-				getUserProfile(this.userId,true).then((res) => {
+				getUserProfile(this.userId,true,false).then((res) => {
 					this.username = res.user_info.username;
 					this.avatar = res.user_info.avatar;
 					if (this.avatar == "") {
@@ -47,9 +47,9 @@
 					}
 					this.followingCount=res.following_count;
 					this.followerCount=res.follower_count;
+					this.isFollowing=res.is_following;
 				});
 			//}
-			//TODO:is+count
 		},
 		methods: {
 			goToChat() {
@@ -81,7 +81,7 @@
 					to_user_id: this.userId
 				};
 				const dataJson = JSONbig.stringify(data);
-				if (this.isFollowed) {
+				if (this.isFollowing) {
 					let res = await uni.request({
 						url: 'http://127.0.0.1:3000/api/relation/unfollow',
 						method: 'POST',
@@ -93,11 +93,11 @@
 						dataType: 'string',
 					});
 					if (res.statusCode === 200) {
-						console.log(res);
-						this.isFollowed = false;
 						res = JSONbig.parse(res.data);
 						if (res.code === 1000) {
-
+							this.isFollowing = false;
+							this.followerCount--;
+							getApp().globalData.followingCount--;
 						}
 					}
 				} else {
@@ -112,11 +112,11 @@
 						dataType: 'string',
 					});
 					if (res.statusCode === 200) {
-						console.log(res);
-						this.isFollowed = true;
 						res = JSONbig.parse(res.data);
 						if (res.code === 1000) {
-
+							this.isFollowing = true;
+							this.followerCount++;
+							getApp().globalData.followingCount++;
 						}
 					}
 				}

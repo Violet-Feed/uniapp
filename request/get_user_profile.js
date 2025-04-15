@@ -1,9 +1,10 @@
 import JSONbig from 'json-bigint';
-export const getUserProfile = async (userId,needFollowInfo) => {
+export const getUserProfile = async (userId,needFollowInfo,needFriendInfo) => {
 	const token = getApp().globalData.token;
 	const data = {
 		user_id: userId,
 		need_follow_info: needFollowInfo,
+		need_friend_info: needFriendInfo
 	};
 	const dataJson = JSONbig.stringify(data);
 	let res = await uni.request({
@@ -19,7 +20,27 @@ export const getUserProfile = async (userId,needFollowInfo) => {
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
 		if (res.code === 1000) {
+			console.log(res.data);
 			return res.data;
+		}else {
+			uni.showToast({
+				title: '服务器错误',
+				icon: 'none'
+			});
 		}
+	} else if (res.statusCode === 403) {
+		uni.showToast({
+			title: '登录过期',
+			icon: 'none'
+		});
+		uni.reLaunch({
+			url: '/pages/user/login'
+		});
+	} else {
+		uni.showToast({
+			title: '网络错误',
+			icon: 'none'
+		});
 	}
+	return undefined;
 }

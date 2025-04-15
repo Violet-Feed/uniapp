@@ -29,6 +29,8 @@
 			this.userId = getApp().globalData.userId;
 			this.username = getApp().globalData.username;
 			this.avatar = getApp().globalData.avatar;
+		},
+		onShow(){
 			this.friendCount = getApp().globalData.friendCount;
 			this.followingCount = getApp().globalData.followingCount;
 			this.followerCount = getApp().globalData.followerCount;

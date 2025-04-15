@@ -16,8 +16,8 @@
 	import file from '@/utils/file.js';
 	import DB from '@/utils/sqlite.js'
 	import {
-		initAuth
-	} from '@/utils/auth';
+		init
+	} from '@/utils/init.js';
 	export default {
 		data() {
 			return {
@@ -54,7 +54,7 @@
 						DB.createTable(res.data.user_id).catch((err) => {
 							console.error("createTable err", err);
 						})
-						initAuth();
+						init();
 						uni.showToast({
 							title: '登录成功',
 							icon: 'success'

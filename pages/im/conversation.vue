@@ -10,7 +10,7 @@
                     </view>
                     <view class="message"
                           :class="{ 'message-left': message.user_id!=userId, 'message-right': message.user_id==userId }">
-                        <view class="loading-spinner" v-if="message.status === -1"></view>
+                        <view class="loading-spinner" v-if="message.status == -1"></view>
                         <template v-if="message.user_id!=userId">
                             <view class="avatar" @click="goToUserProfile(message)">
                                 <image :src="conversation.avatar_uri"></image>
@@ -43,8 +43,10 @@ import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js'
 import {
     getByConversation
-} from '@/request/get_by_conversation';
-
+} from '@/request/get_message_by_conversation.js';
+import {
+    markRead
+} from '@/request/mark_read.js';
 export default {
     data() {
         return {
@@ -70,9 +72,8 @@ export default {
         if (res.length > 0) {
             this.conversation = res[0];
             res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
-            res.reverse();
-            this.messages = res;
-            if (this.messages.length > 0) {
+            if (res.length > 0) {
+				this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
             }
             if (this.conIndex <= this.conversation.min_index) {
@@ -80,6 +81,7 @@ export default {
             } else if (this.messages.length < 20) {
                 res = await getByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
                 if (res.length > 0) {
+					res.reverse();
                     this.messages = res.concat(this.messages);
                     this.conIndex = this.messages[0].con_index - 1;
                 }
@@ -87,6 +89,7 @@ export default {
                     this.hasMore = false;
                 }
             }
+			markRead(this.conversation.con_short_id,this.messages[this.messages.length-1].con_index,this.conversation.badge_count);
         }
         setTimeout(() => {
             this.scrollToBottom();
@@ -94,26 +97,35 @@ export default {
         uni.$on('normal', (data) => {
             if (this.conversation.con_id == data.msg_body.con_id) {
                 //TODO:device_id
-                if (this.userId == data.msg_body.user_id) {
-                    for (let i = this.messages.length - 1; i >= 0; i--) {
-                        if (this.messages[i].msg_id == data.msg_body.msg_id) {
-                            this.messages[i].con_index = data.msg_body.con_index;
-                            this.messages[i].status = 0;
-                            return;
-                        }
-                        if (this.messages[i].con_index && this.messages[i].con_index < data.msg_body
-                            .con_index) {
-                            break;
-                        }
-                    }
-                }
-                this.messages.push(data.msg_body);
-                this.scrollToBottom();
+				if (this.userId == data.msg_body.user_id) {
+					for (let i = this.messages.length - 1; i >= 0; i--) {
+						if (BigInt(this.messages[i].msg_id) == data.msg_body.msg_id) {
+							this.messages[i]=data.msg_body;
+							return;
+						}
+						if (this.messages[i].con_index && BigInt(this.messages[i].con_index) < data.msg_body.con_index) {
+							break;
+						}
+					}
+				}
+				this.messages.push(data.msg_body);
             }
         });
+		uni.$on('command', (data) => {
+			if (this.conversation.con_id == data.msg_body.con_id) {
+				const cmdMessage=JSONbig.parse(data.msg_body.msg_content);
+				if(data.msg_body.msg_type==101){
+					this.conversation.read_index_end=cmdMessage.read_index_end;
+					this.conversation.read_badge_count=cmdMessage.read_badge_count;
+				}else if(data.msg_body.msg_type==102){
+					
+				}
+			}
+		});
     },
     onUnload() {
         uni.$off('normal');
+        uni.$off('command');
     },
     methods: {
         async sendMessage() {
@@ -143,18 +155,20 @@ export default {
             if (res.statusCode === 200) {
                 res = JSONbig.parse(res.data);
                 if (res.code === 1000) {
-                    this.messages.push({
-                        user_id: this.userId,
-                        con_short_id: this.conversation.con_short_id,
-                        con_id: this.conversation.con_id,
-                        con_type: this.conversation.con_type,
-                        client_msg_id: clientMsgId,
-                        msg_id: res.data.msg_id,
-                        msg_type: 1,
-                        msg_content: this.inputText,
-                        create_time: Date.now() / 1000,
-                        status: -1
-                    });
+					if(this.messages[this.messages.length-1].client_msg_id<clientMsgId){
+						this.messages.push({
+						    user_id: this.userId,
+						    con_short_id: this.conversation.con_short_id,
+						    con_id: this.conversation.con_id,
+						    con_type: this.conversation.con_type,
+						    client_msg_id: clientMsgId,
+						    msg_id: res.data.msg_id,
+						    msg_type: 1,
+						    msg_content: this.inputText,
+						    create_time: Date.now() / 1000,
+						    status: -1
+						});
+					}
                     this.inputText = '';
                     this.scrollToBottom();
                 } else {
@@ -185,11 +199,8 @@ export default {
         async onScroll(e) {
             if (e.detail.scrollTop == 0 && this.hasMore) {
                 this.isLoading = true; // 开始加载，显示加载提示
-				console.log(this.conIndex)
                 let res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
                 let newMessages=res.reverse();
-				console.log(newMessages)
-				console.log(newMessages.length)
                 if (res.length > 0) {
                     if (this.conIndex != newMessages[res.length - 1].con_index) {
                         console.error("TODO:getByConversation");
@@ -201,6 +212,7 @@ export default {
                 } else if (res.length < 20) {
                     res = await getByConversation(this.conversation.con_short_id, this.conIndex, 20 - res.length);
                     if (res.length > 0) {
+						res.reverse();
 						newMessages = res.concat(newMessages);
 						this.conIndex = newMessages[0].con_index - 1;
                     }
@@ -218,7 +230,7 @@ export default {
             }
         },
         formatTime(timestamp) {
-            const date = new Date(timestamp * 1000);
+            const date = new Date(Number(timestamp) * 1000);
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1);
             const day = String(date.getDate());
@@ -227,13 +239,17 @@ export default {
             return `${year}年${month}月${day}日 ${hour}:${minute}`;
         },
         shouldShowTime(index) {
+			try{
             if (index === 0) {
                 return true;
             }
-            const currentTime = this.messages[index].create_time;
-            const prevTime = this.messages[index - 1].create_time;
+            const currentTime = Number(this.messages[index].create_time);
+            const prevTime = Number(this.messages[index - 1].create_time);
             const timeDiff = (currentTime - prevTime) / 60;
             return timeDiff > 5;
+			}catch(err){
+				console.log(err);
+			}
         }
     }
 };
