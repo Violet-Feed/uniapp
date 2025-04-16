@@ -2,6 +2,10 @@ adb -s 127.0.0.1:5555 reverse tcp:3000 tcp:3000
 
 adb -s 127.0.0.1:5555 reverse tcp:3001 tcp:3001
 
+adb -s emulator-5556 reverse tcp:3000 tcp:3000 
+
+adb -s emulator-5556 reverse tcp:3001 tcp:3001 
+
 adb -s 127.0.0.1:5555 shell
 
 npm install json-bigint

@@ -26,6 +26,13 @@
 			}
 		},
 		{
+			"path" : "pages/im/create",
+			"style" : 
+			{
+				"navigationBarTitleText" : "创建群聊"
+			}
+		},
+		{
 			"path": "pages/shop/shop",
 			"style": {
 				"navigationBarTitleText":"商城"

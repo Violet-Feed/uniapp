@@ -58,7 +58,9 @@ export default {
             scrollIntoViewId: '',
             hasMore: true,
             myAvatar: getApp().globalData.avatar,
-            isLoading: false // 新增加载状态
+            isLoading: false,
+			normalListener: null,
+			commandListener: null,
         };
     },
     async onLoad(options) {
@@ -89,12 +91,12 @@ export default {
                     this.hasMore = false;
                 }
             }
-			markRead(this.conversation.con_short_id,this.messages[this.messages.length-1].con_index,this.conversation.badge_count);
+			//markRead(this.conversation.con_short_id,this.messages[this.messages.length-1].con_index,this.conversation.badge_count);
         }
         setTimeout(() => {
             this.scrollToBottom();
         }, 100);
-        uni.$on('normal', (data) => {
+        this.normalListener=uni.$on('normal', (data) => {
             if (this.conversation.con_id == data.msg_body.con_id) {
                 //TODO:device_id
 				if (this.userId == data.msg_body.user_id) {
@@ -111,7 +113,7 @@ export default {
 				this.messages.push(data.msg_body);
             }
         });
-		uni.$on('command', (data) => {
+		this.commandListener=uni.$on('command', (data) => {
 			if (this.conversation.con_id == data.msg_body.con_id) {
 				const cmdMessage=JSONbig.parse(data.msg_body.msg_content);
 				if(data.msg_body.msg_type==101){
@@ -124,8 +126,8 @@ export default {
 		});
     },
     onUnload() {
-        uni.$off('normal');
-        uni.$off('command');
+        uni.$off('normal',this.normalListener);
+        uni.$off('command',this.commandListener);
     },
     methods: {
         async sendMessage() {

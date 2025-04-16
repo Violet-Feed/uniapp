@@ -24,6 +24,9 @@ export const init = async () => {
 			uni.setStorageSync("user_avatar_"+userId, res.user_info.avatar);
 			app.globalData.username = res.user_info.username;
 			app.globalData.avatar = res.user_info.avatar;
+			if (app.globalData.avatar === "") {
+				app.globalData.avatar = "/static/user_avatar.png";
+			}
 			app.globalData.followingCount = res.following_count;
 			app.globalData.followerCount = res.follower_count;
 			app.globalData.friendCount = res.friend_count;
