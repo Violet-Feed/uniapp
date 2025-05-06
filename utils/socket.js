@@ -7,6 +7,9 @@ import {
 	decodeNormalPacket,
 	decodeCommandPacket
 } from '@/proto_gen/packet.js';
+import {
+	getConversationInfo
+} from '@/request/im.js'
 
 class Socket {
 	socket = null;
@@ -172,32 +175,58 @@ class Socket {
 		}
 		uni.setStorageSync('user_con_index_'+this.userId, Number(data.user_con_index));
 		getApp().globalData.userConIndex = data.user_con_index;
-		uni.$emit('normal', data);
 		DB.selectConversation(data.msg_body.con_id).then((res) => {
 			if (res.length > 0) {
 				const map=new Map();
 				map.set("badge_count",data.badge_count);
 				map.set("user_con_index",data.user_con_index);
 				map.set("last_message",data.msg_body.msg_content);
-				DB.updateConversation(data.msg_body.con_short_id, map).catch((err) => {
+				DB.updateConversation(data.msg_body.con_short_id, map)
+				.then(()=>{
+					uni.$emit('normal', data);
+				})
+				.catch((err) => {
 					console.log('updateConversation err', err);
 				});
 			} else {
-				console.error("TODO:getConversation");
-				const {
-					con_short_id,
-					con_id,
-					con_type,
-					msg_content
-				} = data.msg_body;
-				const {
-					user_con_index,
-					badge_count
-				} = data;
-				const conValue =
-					`(${con_short_id}, '${con_id}', ${con_type}, '', '', '', '', 0, 0, 0, 0, 0, 0, ',', 0, ${badge_count}, 0, 0, ${user_con_index}, ${msg_content.replace(/'/g, "''")})`;
-				DB.insertConversation(value).catch((err) => {
-					console.log('insertConversation err', err);
+				getConversationInfo(data.msg_body.con_short_id)
+				.then((conInfo)=>{
+					const {
+						con_short_id,
+						con_id,
+						con_type,
+						user_con_index,
+						badge_count
+					} = conInfo;
+					const {
+						name,
+						avatar_uri,
+						description,
+						notice,
+						owner_id,
+						create_time,
+						status,
+						extra: coreExtra,
+						member_count
+					} = conInfo.con_core_info;
+					const {
+						min_index,
+						top_time_stamp,
+						push_status,
+						read_index_end,
+						read_badge_count,
+						extra: settingExtra
+					} = conInfo.con_setting_info;
+					const extra = `${coreExtra},${settingExtra}`;
+					const conValue =
+						`(${con_short_id}, '${con_id}', ${con_type}, '${name.replace(/'/g, "''")}', '${avatar_uri}', '${description.replace(/'/g, "''")}', '${notice.replace(/'/g, "''")}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra.replace(/'/g, "''")}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index}, '${data.msg_body.msg_content.replace(/'/g, "''")}')`;
+					DB.insertConversation(conValue)
+					.then(()=>{
+						uni.$emit('normal', data);
+					})
+					.catch((err) => {
+						console.log('insertConversation err', err);
+					})
 				})
 			}
 		})
@@ -219,14 +248,17 @@ class Socket {
 		DB.insertMessage(msgValue).catch((err) => {
 			console.log('insertMessage err', err);
 		});
+		if(data.msg_body.msg_type==5){
+			//TODO:插入成员表/修改会话表
+		}
 	}
 	
 	handleCommandPacket(data){
-		if (data.user_cmd_index != getApp().globalData.userCmdIndex + 1) {
+		if (data.user_cmd_index-1n != getApp().globalData.userCmdIndex) {
 			console.error("TODO:getByUser")
 		}
 		uni.setStorageSync('user_cmd_index_'+this.userId, Number(data.user_cmd_index));
-		getApp().userCmdIndex = data.user_cmd_index;
+		getApp().globalData.userCmdIndex = data.user_cmd_index;
 		uni.$emit('command', data);
 		const cmdMessage=JSONbig.parse(data.msg_body.msg_content);
 		if(data.msg_body.msg_type==101){

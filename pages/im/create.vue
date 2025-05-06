@@ -65,8 +65,10 @@ export default {
 				return;
 			}
             const {
-                token
+                token,
+				userId
             } = getApp().globalData.token;
+			selectedUserIds.push(userId);
             const data = {
                 con_type: 2,
                 members: selectedUserIds
@@ -93,14 +95,17 @@ export default {
                         create_time,
                         member_count
                     } = res.data.con_core_info;
-                    const user_con_index = 9999;
-                    const conValues = `(${con_short_id}, '${con_id}', ${con_type}, '群聊', '', '', '', ${owner_id}, ${create_time},0,0,0,0, ',', ${member_count},0,0,0, ${user_con_index}, '')`;
-                    DB.insertConversation(conValues).catch((err) => {
+                    const user_con_index = Number.MAX_SAFE_INTEGER;
+                    const conValues = `(${con_short_id}, '${con_id}', ${con_type}, '群聊', '/static/conv_avatar.png', '', '', ${owner_id}, ${create_time},0,0,0,0, ',', ${member_count},0,0,0, ${user_con_index}, '')`;
+                    DB.insertConversation(conValues)
+					.then(()=>{
+						uni.navigateTo({
+						    url: `/pages/im/conversation?conId=${con_id}&name=群聊&conType=${con_type}`
+						});
+					})
+					.catch((err) => {
                         console.error("insertConversation err", err);
                     })
-                    uni.navigateTo({
-                        url: `/pages/im/conversation?conId=${res.data.con_core_info.con_id}&name=群聊&conType=${res.data.con_core_info.con_type}`
-                    });
                 }
             }
         }

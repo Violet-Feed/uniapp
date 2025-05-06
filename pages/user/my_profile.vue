@@ -52,7 +52,11 @@
 				});
 			},
 			logout() {
-				getApp().globalData.socket.close();
+				try{
+					getApp().globalData.socket.close();
+				}catch(e){
+					console.error('退出登录错误:',e);
+				}
 				delete getApp().globalData.token;
 				uni.removeStorageSync('token');
 				uni.removeStorageSync('user_id');

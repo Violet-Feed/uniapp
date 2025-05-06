@@ -8,26 +8,28 @@
                     <view class="message-time" v-if="shouldShowTime(index)">
                         {{ formatTime(message.create_time) }}
                     </view>
-                    <view class="message"
-                          :class="{ 'message-left': message.user_id!=userId, 'message-right': message.user_id==userId }">
-                        <view class="loading-spinner" v-if="message.status == -1"></view>
-                        <template v-if="message.user_id!=userId">
-                            <view class="avatar" @click="goToUserProfile(message)">
-                                <image :src="conversation.avatar_uri"></image>
-                            </view>
-                            <view class="message-content">
-                                <view class="bubble">{{ message.msg_content }}</view>
-                            </view>
-                        </template>
-                        <template v-else>
-                            <view class="message-content">
-                                <view class="bubble">{{ message.msg_content }}</view>
-                            </view>
-                            <view class="avatar" @click="goToUserProfile(message)">
-                                <image :src="myAvatar"></image>
-                            </view>
-                        </template>
-                    </view>
+					<view class="message message-right" v-if="message.user_id==userId">
+						<view class="loading-spinner" v-if="message.status == -1"></view>
+						<view class="message-content">
+						    <view class="bubble">{{ transformContent(message) }}</view>
+						</view>
+						<view class="avatar" @click="goToUserProfile(message)">
+						    <image :src="myAvatar"></image>
+						</view>
+					</view>
+					<view class="message message-left" v-else-if="message.user_id>10">
+					    <view class="avatar" @click="goToUserProfile(message)">
+					        <image :src="conversation.avatar_uri"></image>
+					    </view>
+					    <view class="message-content">
+					        <view class="bubble">{{ transformContent(message) }}</view>
+					    </view>
+					</view>
+					<view class="message" v-else>
+					    <view class="message-content">
+					        <view class="bubble">{{ transformContent(message) }}</view>
+					    </view>
+					</view>
                 </view>
             </view>
         </scroll-view>
@@ -42,28 +44,28 @@
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js'
 import {
-    getByConversation
-} from '@/request/get_message_by_conversation.js';
-import {
-    markRead
-} from '@/request/mark_read.js';
+    getMessageByConversation,
+	markRead
+} from '@/request/im.js';
 export default {
     data() {
         return {
             userId: getApp().globalData.userId,
+			myAvatar: getApp().globalData.avatar,
+			members: new Map(),
             conversation: {},
             conIndex: Number.MAX_SAFE_INTEGER,
             messages: [],
             inputText: '',
             scrollIntoViewId: '',
             hasMore: true,
-            myAvatar: getApp().globalData.avatar,
             isLoading: false,
 			normalListener: null,
 			commandListener: null,
         };
     },
     async onLoad(options) {
+		//TODO:获取成员信息，需要成员表
         this.conversation.con_short_id = 0;
         this.conversation.con_id = options.conId;
         this.conversation.con_type = Number(options.conType);
@@ -98,7 +100,6 @@ export default {
         }, 100);
         this.normalListener=uni.$on('normal', (data) => {
             if (this.conversation.con_id == data.msg_body.con_id) {
-                //TODO:device_id
 				if (this.userId == data.msg_body.user_id) {
 					for (let i = this.messages.length - 1; i >= 0; i--) {
 						if (BigInt(this.messages[i].msg_id) == data.msg_body.msg_id) {
@@ -112,6 +113,7 @@ export default {
 				}
 				this.messages.push(data.msg_body);
             }
+			//TODO:获取成员信息
         });
 		this.commandListener=uni.$on('command', (data) => {
 			if (this.conversation.con_id == data.msg_body.con_id) {
@@ -231,6 +233,26 @@ export default {
 				
             }
         },
+		transformContent(message){
+			switch (message.msg_type) {
+			  case 1:
+			    return message.msg_content;
+			  case 5:
+				const conMessage = JSONbig.parse(message.msg_content);
+				const operator = conMessage.get("operator");
+				conMessage.forEach((value, key) => {
+				    if (key == "add_members") {
+						const operatorUsername = this.members.get(operator)?.username || '未知用户';
+						const addUsernames = value.map(member => {
+						    return this.members.get(member)?.username || '未知用户';
+						});
+						return `${operatorUsername} 邀请 ${addUsernames.join('、')} 加入了群聊`;  
+				    }
+				}); 
+			  default:
+			    return "暂不支持该消息类型";
+			}
+		},
         formatTime(timestamp) {
             const date = new Date(Number(timestamp) * 1000);
             const year = date.getFullYear();

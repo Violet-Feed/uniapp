@@ -1,6 +1,6 @@
 <template>
 	<view>
-		shop
+		{{itemId}}
 	</view>
 </template>
 
@@ -8,8 +8,11 @@
 	export default {
 		data() {
 			return {
-				
+				itemId:null,
 			}
+		},
+		onLoad(options){
+			this.itemId=options.id;
 		},
 		methods: {
 			

@@ -1,14 +1,12 @@
 import JSONbig from 'json-bigint';
 import Socket from '@/utils/socket.js';
 import {
+	getMessageByUser,
 	getCommandByUser
-} from '@/request/get_command_by_user.js';
-import {
-	getMessageByUser
-} from '@/request/get_message_by_user.js';
+} from '@/request/im.js';
 import {
 	getUserProfile
-} from '@/request/get_user_profile.js';
+} from '@/request/user.js';
 import file from '@/utils/file.js';
 export const init = async () => {
 	const app = getApp();

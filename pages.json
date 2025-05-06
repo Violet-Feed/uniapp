@@ -33,9 +33,21 @@
 			}
 		},
 		{
-			"path": "pages/shop/shop",
+			"path": "pages/market/home",
 			"style": {
 				"navigationBarTitleText":"商城"
+			}
+		},
+		{
+			"path": "pages/market/search",
+			"style": {
+				"navigationBarTitleText":"搜索"
+			}
+		},
+		{
+			"path": "pages/market/item",
+			"style": {
+				"navigationBarTitleText":"商品详情"
 			}
 		},
 		{
@@ -100,7 +112,7 @@
 			},
 			{
 				"text": "商城",
-				"pagePath": "pages/shop/shop"
+				"pagePath": "pages/market/home"
 			},
 			{
 				"text": "我的",

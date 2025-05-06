@@ -30,7 +30,7 @@
 
 <script>
 import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite.js'
+import DB from '@/utils/sqlite.js';
 
 export default {
     data() {
@@ -65,7 +65,12 @@ export default {
             if (index !== -1) {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
-            }
+            }else{
+				DB.selectConversation(data.msg_body.conId)
+				.then((res)=>{
+					this.conversationList=res.concat(this.conversationList);
+				})
+			}
         });
         this.commandListener=uni.$on('command', (data) => {
             for (let i = 0; i < this.conversationList.length; i++) {

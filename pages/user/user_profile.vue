@@ -22,7 +22,7 @@
 	import JSONbig from 'json-bigint';
 	import {
 		getUserProfile
-	} from '@/request/get_user_profile.js';
+	} from '@/request/user';
 	export default {
 		data() {
 			return {
