@@ -1,9 +1,9 @@
 {
 	"pages": [
 		{
-			"path": "pages/video/video",
+			"path": "pages/creation/home",
 			"style": {
-				"navigationBarTitleText":"视频"
+				"navigationBarTitleText":"首页"
 			}
 		},
 		{
@@ -91,6 +91,34 @@
 			"style": {
 				"navigationBarTitleText":"注册"
 			}
+		},
+		{
+			"path" : "pages/friend/friend",
+			"style" : 
+			{
+				"navigationBarTitleText" : "朋友"
+			}
+		},
+		{
+			"path" : "pages/workspace/workspace",
+			"style" : 
+			{
+				"navigationBarTitleText" : "工坊"
+			}
+		},
+		{
+			"path" : "pages/creation/creation",
+			"style" : 
+			{
+				"navigationBarTitleText" : "创作"
+			}
+		},
+		{
+			"path" : "pages/creation/search",
+			"style" : 
+			{
+				"navigationBarTitleText" : "搜索"
+			}
 		}
 	],
 	"globalStyle": {
@@ -103,16 +131,25 @@
 	"tabBar": {
 		"list": [
 			{
-				"text": "视频",
-				"pagePath": "pages/video/video"
+				"text": "首页",
+				"pagePath": "pages/creation/home"
+			},
+			{
+				"text": "朋友",
+				"pagePath": "pages/friend/friend"
+			},
+			{
+			  "text": "", // 文字占位（后续可通过样式隐藏或保留）
+			  "pagePath": "pages/workspace/workspace",
+			  "iconPath": "static/workspace1.png", // 必加：未选中状态的“+”图标本地路径
+			  "selectedIconPath": "static/workspace2.png", // 必加：选中状态图标（与默认态一致即可）
+			  "style": {
+				"iconSize": "24px" // 图标大小（比默认24px大，突出显示）
+			  }
 			},
 			{
 				"text": "消息",
 				"pagePath": "pages/im/home"
-			},
-			{
-				"text": "商城",
-				"pagePath": "pages/market/home"
 			},
 			{
 				"text": "我的",

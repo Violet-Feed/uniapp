@@ -1,6 +1,6 @@
 <template>
 	<view>
-		video
+		工作间
 	</view>
 </template>
 
@@ -10,6 +10,9 @@
 			return {
 				
 			}
+		},
+		methods: {
+			
 		}
 	}
 </script>
