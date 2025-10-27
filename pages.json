@@ -19,6 +19,12 @@
 			}
 		},
 		{
+			"path": "pages/im/setting",
+			"style": {
+				"navigationBarTitleText":"设置"
+			}
+		},
+		{
 			"path" : "pages/im/search",
 			"style" : 
 			{
@@ -122,6 +128,7 @@
 		}
 	],
 	"globalStyle": {
+		"navigationStyle": "custom",
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "Violet",
 		"navigationBarBackgroundColor": "#F8F8F8",
@@ -129,6 +136,14 @@
 		"enablePullDownRefresh": true
 	},
 	"tabBar": {
+		"color": "#585858",
+		"selectedColor": "#9932cc",
+		"backgroundColor": "#FFFFFF",
+		"borderStyle": "black",
+		"fontSize": "16px",
+		"fontWeight": "bold",
+		"iconWidth": "24px",
+		"height": "50px",
 		"list": [
 			{
 				"text": "首页",
@@ -139,13 +154,10 @@
 				"pagePath": "pages/friend/friend"
 			},
 			{
-			  "text": "", // 文字占位（后续可通过样式隐藏或保留）
-			  "pagePath": "pages/workspace/workspace",
-			  "iconPath": "static/workspace1.png", // 必加：未选中状态的“+”图标本地路径
-			  "selectedIconPath": "static/workspace2.png", // 必加：选中状态图标（与默认态一致即可）
-			  "style": {
-				"iconSize": "24px" // 图标大小（比默认24px大，突出显示）
-			  }
+				"text": "",
+				"pagePath": "pages/workspace/workspace",
+				"iconPath": "static/workspace1.png",
+				"selectedIconPath": "static/workspace2.png"
 			},
 			{
 				"text": "消息",

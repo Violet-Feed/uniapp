@@ -3,14 +3,24 @@
         <!-- 搜索区域 -->
         <view class="search-wrapper">
             <view class="fixed-search-bar">
-                <input 
-                    v-model="keyword" 
-                    type="text" 
-                    placeholder="搜索创作" 
-                    @confirm="searchCreations" 
-                    @focus="handleInputFocus"
-                />
-                <button @click="searchCreations">搜索</button>
+                <view class="back-button" @click="goBack">
+                    <text class="back-icon">←</text>
+                </view>
+                <view class="search-input-container">
+                    <text class="search-icon">🔍</text>
+                    <input 
+                        v-model="keyword" 
+                        type="text" 
+                        placeholder="搜索创作" 
+                        @confirm="searchCreations" 
+                        @focus="handleInputFocus"
+                        :focus="autoFocus"
+                    />
+                    <text v-if="keyword" class="clear-icon" @click.stop="clearKeyword">✕</text>
+                </view>
+                <view class="search-button" @click="searchCreations">
+                    <text>搜索</text>
+                </view>
             </view>
         </view>
 
@@ -21,35 +31,47 @@
                 :class="{ active: activeFilter === 'all' }" 
                 @click="changeFilter('all')"
             >
-                综合
+                <text class="filter-text">综合</text>
+                <view class="filter-indicator" v-if="activeFilter === 'all'"></view>
             </view>
             <view 
                 class="filter-item" 
                 :class="{ active: activeFilter === 'latest' }" 
                 @click="changeFilter('latest')"
             >
-                最新
+                <text class="filter-text">最新</text>
+                <view class="filter-indicator" v-if="activeFilter === 'latest'"></view>
             </view>
             <view 
                 class="filter-item" 
                 :class="{ active: activeFilter === 'user' }" 
                 @click="changeFilter('user')"
             >
-                用户
+                <text class="filter-text">用户</text>
+                <view class="filter-indicator" v-if="activeFilter === 'user'"></view>
             </view>
             <view 
                 class="filter-item" 
                 :class="{ active: activeFilter === 'group' }" 
                 @click="changeFilter('group')"
             >
-                群聊
+                <text class="filter-text">群聊</text>
+                <view class="filter-indicator" v-if="activeFilter === 'group'"></view>
             </view>
+        </view>
+
+        <!-- 搜索结果统计 -->
+        <view class="result-info" v-if="!loading || creations.length > 0">
+            <text class="result-text">找到 <text class="result-count">{{ creations.length }}</text> 个相关结果</text>
         </view>
 
         <!-- 双列创作列表 -->
         <view class="creation-grid-container">
             <!-- 初始加载状态 -->
-            <view v-if="loading && creations.length === 0" class="initial-loading">加载中...</view>
+            <view v-if="loading && creations.length === 0" class="initial-loading">
+                <view class="loading-spinner"></view>
+                <text class="loading-text">搜索中...</text>
+            </view>
 
             <!-- 双列网格列表 -->
             <view class="creation-grid" v-else-if="creations.length > 0">
@@ -59,43 +81,66 @@
                     :key="`creation-${creation.creation_id}-${index}`" 
                     @click="goToCreationDetail(creation.creation_id)"
                 >
-                    <image 
-                        class="card-image" 
-                        :src="creation.image" 
-                        mode="aspectFill"
-                        @error="handleImageError(creation)"
-                    ></image>
-                    <view class="card-title-container">
-                        <text class="card-title">{{ creation.title }}</text>
-                    </view>
-                    <view class="card-author">
+                    <!-- 图片容器 -->
+                    <view class="image-wrapper">
                         <image 
-                            class="author-avatar" 
-                            :src="creation.authorAvatar" 
+                            class="card-image" 
+                            :src="creation.image" 
                             mode="aspectFill"
+                            @error="handleImageError(creation)"
                             lazy-load
                         ></image>
-                        <text class="author-name">{{ creation.authorName }}</text>
+                        <!-- 渐变遮罩 -->
+                        <view class="image-gradient"></view>
+                        <!-- 类型标签 -->
+                        <view class="type-badge" v-if="creation.type">
+                            <text>{{ creation.type === 'group' ? '👥' : '👤' }}</text>
+                        </view>
+                    </view>
+                    
+                    <!-- 内容区域 -->
+                    <view class="card-content">
+                        <view class="card-title-container">
+                            <text class="card-title">{{ creation.title }}</text>
+                        </view>
+                        <view class="card-footer">
+                            <view class="card-author">
+                                <image 
+                                    class="author-avatar" 
+                                    :src="creation.authorAvatar" 
+                                    mode="aspectFill"
+                                    lazy-load
+                                ></image>
+                                <text class="author-name">{{ creation.authorName }}</text>
+                            </view>
+                        </view>
                     </view>
                 </view>
             </view>
 
             <!-- 空状态 -->
-            <view v-else class="empty-state">没有找到相关创作</view>
+            <view v-else class="empty-state">
+                <text class="empty-icon">🔍</text>
+                <text class="empty-text">没有找到相关创作</text>
+                <text class="empty-hint">试试其他关键词吧</text>
+            </view>
+            
             <!-- 加载更多提示 -->
-            <view v-if="loading && creations.length > 0" class="loading-icon">正在加载更多...</view>
+            <view v-if="loading && creations.length > 0" class="loading-more">
+                <view class="loading-spinner small"></view>
+                <text class="loading-more-text">正在加载更多...</text>
+            </view>
         </view>
     </view>
 </template>
 
 <script>
-// 模拟创作数据生成函数（确保输出数据结构安全）
+// 模拟创作数据生成函数
 const mockCreations = (page = 1, keyword = '', filter = 'all') => {
-    // 基础数据池（确保每个字段都有默认值）
     const baseData = [
         {
             creation_id: `cre-1-${page}`,
-            image: `https://picsum.photos/id/${237 + page}/400/300`,
+            image: `https://picsum.photos/id/${237 + page}/400/600`,
             title: "治愈系猫咪摄影集",
             author: { 
                 avatar: `https://picsum.photos/id/${64 + page}/100/100`, 
@@ -106,7 +151,7 @@ const mockCreations = (page = 1, keyword = '', filter = 'all') => {
         },
         {
             creation_id: `cre-2-${page}`,
-            image: `https://picsum.photos/id/${119 + page}/400/300`,
+            image: `https://picsum.photos/id/${119 + page}/400/600`,
             title: "手工皮具制作教程",
             author: { 
                 avatar: `https://picsum.photos/id/${91 + page}/100/100`, 
@@ -117,7 +162,7 @@ const mockCreations = (page = 1, keyword = '', filter = 'all') => {
         },
         {
             creation_id: `cre-3-${page}`,
-            image: `https://picsum.photos/id/${160 + page}/400/300`,
+            image: `https://picsum.photos/id/${160 + page}/400/600`,
             title: "城市夜景拍摄技巧",
             author: { 
                 avatar: `https://picsum.photos/id/${22 + page}/100/100`, 
@@ -128,7 +173,7 @@ const mockCreations = (page = 1, keyword = '', filter = 'all') => {
         },
         {
             creation_id: `cre-4-${page}`,
-            image: `https://picsum.photos/id/${292 + page}/400/300`,
+            image: `https://picsum.photos/id/${292 + page}/400/600`,
             title: "复古风手账排版",
             author: { 
                 avatar: `https://picsum.photos/id/${54 + page}/100/100`, 
@@ -139,7 +184,7 @@ const mockCreations = (page = 1, keyword = '', filter = 'all') => {
         },
         {
             creation_id: `cre-5-${page}`,
-            image: `https://picsum.photos/id/${325 + page}/400/300`,
+            image: `https://picsum.photos/id/${325 + page}/400/600`,
             title: "家常红烧肉教程",
             author: { 
                 avatar: `https://picsum.photos/id/${82 + page}/100/100`, 
@@ -150,7 +195,7 @@ const mockCreations = (page = 1, keyword = '', filter = 'all') => {
         },
         {
             creation_id: `cre-6-${page}`,
-            image: `https://picsum.photos/id/${366 + page}/400/300`,
+            image: `https://picsum.photos/id/${366 + page}/400/600`,
             title: "极简PPT设计",
             author: { 
                 avatar: `https://picsum.photos/id/${45 + page}/100/100`, 
@@ -163,7 +208,7 @@ const mockCreations = (page = 1, keyword = '', filter = 'all') => {
 
     // 关键词筛选
     let filtered = baseData.filter(item => 
-        item.title.includes(keyword) || item.author.name.includes(keyword)
+        !keyword || item.title.includes(keyword) || item.author.name.includes(keyword)
     );
 
     // 类型筛选
@@ -181,37 +226,38 @@ export default {
         return {
             keyword: '',
             page: 1,
-            creations: [], // 原始数据
+            creations: [],
             loading: true,
             activeFilter: 'all',
-            isPageAlive: true, // 页面存活标记
-            defaultImage: '/static/images/default.png', // 默认图片路径
-            defaultAvatar: '/static/images/avatar-default.png' // 默认头像路径
+            isPageAlive: true,
+            autoFocus: false,
+            defaultImage: '/static/images/default.png',
+            defaultAvatar: '/static/images/avatar-default.png'
         };
     },
     computed: {
-        // 安全处理后的创作数据（确保没有undefined/null）
         safeCreations() {
             return this.creations.map(item => ({
                 creation_id: item.creation_id || `default-${Date.now()}`,
                 image: item.image || this.defaultImage,
                 title: item.title || '未命名创作',
                 authorAvatar: item.author?.avatar || this.defaultAvatar,
-                authorName: item.author?.name || '未知作者'
+                authorName: item.author?.name || '未知作者',
+                type: item.type
             }));
         }
     },
     async onLoad(options) {
-        this.keyword = options?.keyword || '';
+        this.keyword = decodeURIComponent(options?.keyword || '');
+        this.autoFocus = !this.keyword; // 如果没有关键词，自动聚焦
         await this.searchCreations();
     },
     onReachBottom() {
-        if (!this.loading && this.isPageAlive) {
+        if (!this.loading && this.isPageAlive && this.creations.length > 0) {
             this.loadMore();
         }
     },
     onUnload() {
-        // 页面销毁时标记，阻止后续异步操作
         this.isPageAlive = false;
     },
     methods: {
@@ -224,7 +270,6 @@ export default {
             try {
                 await new Promise(resolve => setTimeout(resolve, 600));
                 const newData = mockCreations(this.page, this.keyword, this.activeFilter);
-                // 确保页面存活再更新数据
                 if (this.isPageAlive) {
                     this.creations = newData;
                 }
@@ -239,6 +284,7 @@ export default {
                 }
             }
         },
+        
         async loadMore() {
             if (!this.isPageAlive || this.loading) return;
             
@@ -253,7 +299,7 @@ export default {
                 }
             } catch (err) {
                 console.error("加载更多失败：", err);
-                this.page--; // 回退页码
+                this.page--;
                 if (this.isPageAlive) {
                     uni.showToast({ title: "加载更多失败", icon: "none" });
                 }
@@ -263,25 +309,36 @@ export default {
                 }
             }
         },
+        
         changeFilter(filterType) {
             if (this.activeFilter === filterType || !this.isPageAlive) return;
             this.activeFilter = filterType;
             this.searchCreations();
         },
+        
         goToCreationDetail(creationId) {
             if (!this.isPageAlive) return;
             uni.navigateTo({ 
                 url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}` 
             });
         },
+        
         handleImageError(creation) {
-            // 确保对象存在再修改
             if (creation && this.isPageAlive) {
                 creation.image = this.defaultImage;
             }
         },
+        
         handleInputFocus() {
-            // 预留热搜功能触发点
+            // 预留功能
+        },
+        
+        clearKeyword() {
+            this.keyword = '';
+        },
+        
+        goBack() {
+            uni.navigateBack();
         }
     }
 };
@@ -292,125 +349,274 @@ export default {
     padding: 0;
     margin: 0;
     box-sizing: border-box;
-    background-color: #f5f5f7;
+    background: linear-gradient(to bottom, #f8f9fa 0%, #f5f5f7 100%);
     min-height: 100vh;
 }
 
+/* ==================== 搜索区域 ==================== */
 .search-wrapper {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    z-index: 99;
-    background-color: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    z-index: 999;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .fixed-search-bar {
     display: flex;
     align-items: center;
-    padding: 4px 8px;
+    gap: 8px;
+    padding: 10px 12px;
     box-sizing: border-box;
 }
 
-.fixed-search-bar input {
-    flex: 1;
-    height: 28px;
-    border: 1px solid #eee;
-    border-radius: 14px;
-    padding: 0 8px;
-    margin-right: 4px;
-    font-size: 11px;
-    outline: none;
-    box-sizing: border-box;
-}
-
-.fixed-search-bar button {
-    height: 28px;
-    padding: 0 12px;
-    background-color: #007aff;
-    color: #fff;
-    border: none;
-    border-radius: 14px;
-    font-size: 11px;
-    cursor: pointer;
-    box-sizing: border-box;
-}
-
-.filter-bar {
+.back-button {
+    width: 36px;
+    height: 36px;
     display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.back-icon {
+    font-size: 24px;
+    color: #333;
+}
+
+.search-input-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    height: 36px;
+    background: #f5f7fa;
+    border-radius: 18px;
+    padding: 0 14px;
+    gap: 8px;
+}
+
+.search-icon {
+    font-size: 16px;
+    opacity: 0.6;
+}
+
+.search-input-container input {
+    flex: 1;
+    height: 100%;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    outline: none;
+}
+
+.clear-icon {
+    width: 18px;
+    height: 18px;
+    background: #ddd;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #fff;
+}
+
+.search-button {
+    height: 36px;
+    padding: 0 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    flex-shrink: 0;
+}
+
+/* ==================== 筛选栏 ==================== */
+.filter-bar {
     position: fixed;
-    top: 36px;
+    top: 56px;
     left: 0;
     right: 0;
-    background-color: #fff;
-    z-index: 98;
-    border-bottom: 1px solid #f5f5f5;
+    display: flex;
+    background: #fff;
+    z-index: 998;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .filter-item {
     flex: 1;
-    text-align: center;
-    padding: 8px 0;
-    font-size: 11px;
-    color: #333;
     position: relative;
+    text-align: center;
+    padding: 12px 0;
+    transition: all 0.3s;
 }
 
-.filter-item.active {
-    color: #007aff;
-    font-weight: 500;
+.filter-text {
+    font-size: 14px;
+    color: #666;
+    font-weight: 400;
+    transition: all 0.3s;
 }
 
-.filter-item.active::after {
-    content: '';
+.filter-item.active .filter-text {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.filter-indicator {
     position: absolute;
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 20px;
-    height: 2px;
-    background-color: #007aff;
-    border-radius: 1px;
+    width: 24px;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 2px 2px 0 0;
+    animation: slideIn 0.3s ease;
 }
 
+@keyframes slideIn {
+    from {
+        width: 0;
+        opacity: 0;
+    }
+    to {
+        width: 24px;
+        opacity: 1;
+    }
+}
+
+/* ==================== 搜索结果统计 ==================== */
+.result-info {
+    position: fixed;
+    top: 100px;
+    left: 0;
+    right: 0;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #f0f0f0;
+    z-index: 997;
+}
+
+.result-text {
+    font-size: 13px;
+    color: #666;
+}
+
+.result-count {
+    color: #667eea;
+    font-weight: 600;
+}
+
+/* ==================== 创作列表 ==================== */
 .creation-grid-container {
-    padding: 78px 6px 12px;
+    padding: 136px 8px 12px;
     box-sizing: border-box;
 }
 
-.initial-loading, .empty-state, .loading-icon {
-    padding: 20px 0;
-    font-size: 13px;
-    text-align: center;
+.initial-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 0;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #f3f3f3;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin-top: 16px;
+    font-size: 14px;
     color: #999;
 }
 
 .creation-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    gap: 8px;
 }
 
 .creation-card {
-    border-radius: 8px;
+    background: #fff;
+    border-radius: 12px;
     overflow: hidden;
-    background-color: #fff;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s;
+}
+
+.creation-card:active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 240px;
+    overflow: hidden;
 }
 
 .card-image {
     width: 100%;
-    height: 240px;
+    height: 100%;
     object-fit: cover;
 }
 
+.image-gradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
+}
+
+.type-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.card-content {
+    padding: 10px;
+}
+
 .card-title-container {
-    padding: 8px 8px 4px;
+    margin-bottom: 8px;
 }
 
 .card-title {
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
     line-height: 1.4;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -418,26 +624,77 @@ export default {
     overflow: hidden;
 }
 
+.card-footer {
+    display: flex;
+    align-items: center;
+}
+
 .card-author {
     display: flex;
     align-items: center;
-    padding: 0 8px 8px;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
 }
 
 .author-avatar {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
-    border: 1px solid #f5f5f5;
-    margin-right: 5px;
+    border: 1px solid #f0f0f0;
     object-fit: cover;
+    flex-shrink: 0;
 }
 
 .author-name {
-    font-size: 12px;
-    color: #555;
+    font-size: 11px;
+    color: #666;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* 空状态 */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 100px 0;
+}
+
+.empty-icon {
+    font-size: 80px;
+    margin-bottom: 16px;
+}
+
+.empty-text {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.empty-hint {
+    font-size: 13px;
+    color: #999;
+}
+
+/* 加载更多 */
+.loading-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 0;
+}
+
+.loading-spinner.small {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+}
+
+.loading-more-text {
+    font-size: 13px;
+    color: #999;
 }
 </style>

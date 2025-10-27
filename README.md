@@ -21,3 +21,6 @@ const low = part0 | (part1 << 28n);
 const high = (part1 >> 4n) | (part2 << 24n);
 return (high << 32n) | low;
 ```
+
+TODO:
+- 新私聊未在消息tab显示

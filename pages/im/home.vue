@@ -1,30 +1,73 @@
 <template>
     <view class="conversation-container">
-        <view class="expand-button" @click="showDropdown = !showDropdown">
-            <view class="dot"></view>
-            <view class="dot"></view>
-            <view class="dot"></view>
-        </view>
-        <view class="dropdown" v-if="showDropdown">
-            <view class="dropdown-item" @click="goToSearchPage">搜索用户</view>
-            <view class="dropdown-item" @click="goToCreateConversationPage">创建群聊</view>
-            <view class="dropdown-item" @click="goToAIPage">AI问答</view>
-        </view>
-        <view class="conversation-list">
-            <view class="conversation-item" v-for="(conversation, index) in conversationList" :key="index"
-                  @click="openChat(conversation)">
-                <view class="avatar">
-                    <image :src="conversation.avatar_uri"></image>
-                </view>
-                <view class="conversation-info">
-                    <view class="name">{{ conversation.name }}</view>
-                    <view class="last-message">{{ conversation.last_message }}</view>
-                </view>
-                <view class="unread-count" v-if="conversation.badge_count - conversation.read_badge_count > 0">
-                    {{ conversation.badge_count - conversation.read_badge_count }}
+        <!-- 顶部标题栏 -->
+        <view class="header-bar">
+            <text class="header-title">消息</text>
+            <view class="header-actions">
+                <view class="action-btn" @click="showDropdown = !showDropdown">
+                    <text class="action-icon">➕</text>
                 </view>
             </view>
         </view>
+        
+        <!-- 下拉菜单 -->
+        <view class="dropdown-overlay" v-if="showDropdown" @click="showDropdown = false">
+            <view class="dropdown-menu" @click.stop>
+                <view class="dropdown-item" @click="goToSearchPage">
+                    <text class="item-icon">🔍</text>
+                    <text class="item-text">搜索用户</text>
+                </view>
+                <view class="dropdown-item" @click="goToCreateConversationPage">
+                    <text class="item-icon">👥</text>
+                    <text class="item-text">创建群聊</text>
+                </view>
+                <view class="dropdown-item" @click="goToAIPage">
+                    <text class="item-icon">🤖</text>
+                    <text class="item-text">AI问答</text>
+                </view>
+            </view>
+        </view>
+        
+        <!-- 会话列表 -->
+        <scroll-view class="conversation-scroll" scroll-y>
+            <view class="conversation-list">
+                <view 
+                    class="conversation-item" 
+                    v-for="(conversation, index) in conversationList" 
+                    :key="index"
+                    @click="openChat(conversation)"
+                >
+                    <!-- 头像 -->
+                    <view class="avatar-wrapper">
+                        <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
+                        <view 
+                            class="unread-badge" 
+                            v-if="conversation.badge_count - conversation.read_badge_count > 0"
+                        >
+                            {{ conversation.badge_count - conversation.read_badge_count > 99 ? '99+' : conversation.badge_count - conversation.read_badge_count }}
+                        </view>
+                    </view>
+                    
+                    <!-- 会话信息 -->
+                    <view class="conversation-content">
+                        <view class="conversation-header">
+                            <text class="conversation-name">{{ conversation.name }}</text>
+                            <text class="conversation-time">{{ formatTime(conversation.create_time) }}</text>
+                        </view>
+                        <view class="conversation-message">
+                            <text class="last-message">{{ conversation.last_message || '暂无消息' }}</text>
+                        </view>
+                    </view>
+                </view>
+                
+                <!-- 空状态 -->
+                <view v-if="conversationList.length === 0" class="empty-state">
+                    <text class="empty-icon">💬</text>
+                    <text class="empty-text">暂无消息</text>
+                    <text class="empty-hint">开始你的第一次对话吧！</text>
+                </view>
+            </view>
+        </scroll-view>
     </view>
 </template>
 
@@ -38,8 +81,8 @@ export default {
             userConIndex: getApp().globalData.userConIndex,
             conversationList: [],
             showDropdown: false,
-			normalListener: null,
-			commandListener: null,
+            normalListener: null,
+            commandListener: null,
         };
     },
     onLoad() {
@@ -66,11 +109,11 @@ export default {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             }else{
-				DB.selectConversation(data.msg_body.conId)
-				.then((res)=>{
-					this.conversationList=res.concat(this.conversationList);
-				})
-			}
+                DB.selectConversation(data.msg_body.conId)
+                .then((res)=>{
+                    this.conversationList=res.concat(this.conversationList);
+                })
+            }
         });
         this.commandListener=uni.$on('command', (data) => {
             for (let i = 0; i < this.conversationList.length; i++) {
@@ -106,8 +149,8 @@ export default {
         },
         goToAIPage() {
             this.showDropdown = false;
-			const userId = getApp().globalData.userId;
-			const conId=`4:${userId}`
+            const userId = getApp().globalData.userId;
+            const conId=`4:${userId}`
             uni.navigateTo({
                 url: `/pages/im/conversation?conId=${conId}&name=AI&conType=4`
             });
@@ -116,6 +159,18 @@ export default {
             uni.navigateTo({
                 url: `/pages/im/conversation?conId=${conversation.con_id}&name=${conversation.name}&conType=${conversation.con_type}`
             });
+        },
+        formatTime(timestamp) {
+            const now = Date.now() / 1000;
+            const diff = now - timestamp;
+            
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+            if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+            
+            const date = new Date(timestamp * 1000);
+            return `${date.getMonth() + 1}/${date.getDate()}`;
         }
     }
 };
@@ -123,93 +178,239 @@ export default {
 
 <style scoped>
 .conversation-container {
-    padding: 10px;
-    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #f8f9fa;
 }
 
-.expand-button {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 20px;
-    cursor: pointer;
+/* ==================== 头部栏 ==================== */
+.header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
-.dot {
-    width: 4px;
-    height: 4px;
-    background-color: #000;
+.header-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
     border-radius: 50%;
-    margin: 3px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
 }
 
-.dropdown {
+.action-btn:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.action-icon {
+    font-size: 18px;
+    color: #fff;
+}
+
+/* ==================== 下拉菜单 ==================== */
+.dropdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 999;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.dropdown-menu {
     position: absolute;
-    top: 30px;
-    right: 10px;
-    background-color: #fff;
-    border: 1px solid #eee;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    z-index: 1;
+    top: 60px;
+    right: 16px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .dropdown-item {
-    padding: 8px 16px;
-    cursor: pointer;
-    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    gap: 12px;
+    transition: background 0.2s;
+    border-bottom: 1px solid #f0f0f0;
 }
 
 .dropdown-item:last-child {
     border-bottom: none;
 }
 
+.dropdown-item:active {
+    background: #f5f5f5;
+}
+
+.item-icon {
+    font-size: 20px;
+}
+
+.item-text {
+    font-size: 15px;
+    color: #333;
+    white-space: nowrap;
+}
+
+/* ==================== 会话列表 ==================== */
+.conversation-scroll {
+    flex: 1;
+    overflow: hidden;
+}
+
 .conversation-list {
-    display: flex;
-    flex-direction: column;
-    margin-top: 30px;
+    padding: 8px 0;
 }
 
 .conversation-item {
     display: flex;
     align-items: center;
-    padding: 10px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
+    padding: 12px 16px;
+    background: #fff;
+    margin-bottom: 1px;
+    transition: background 0.2s;
+}
+
+.conversation-item:active {
+    background: #f5f5f5;
+}
+
+/* 头像 */
+.avatar-wrapper {
+    position: relative;
+    flex-shrink: 0;
+    margin-right: 12px;
 }
 
 .avatar {
-    width: 50px;
-    height: 50px;
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
-    overflow: hidden;
-    margin-right: 10px;
+    border: 2px solid #f0f0f0;
 }
 
-.avatar image {
-    width: 100%;
-    height: 100%;
+.unread-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
 }
 
-.conversation-info {
+/* 会话内容 */
+.conversation-content {
     flex: 1;
+    overflow: hidden;
 }
 
-.name {
-    font-weight: bold;
-    margin-bottom: 5px;
+.conversation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.conversation-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.conversation-time {
+    font-size: 12px;
+    color: #999;
+    margin-left: 8px;
+}
+
+.conversation-message {
+    display: flex;
+    align-items: center;
 }
 
 .last-message {
-    color: #666;
     font-size: 14px;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.unread-count {
-    background-color: #ff0000;
-    color: white;
-    font-size: 12px;
-    padding: 2px 6px;
-    border-radius: 50%;
+/* ==================== 空状态 ==================== */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 100px 20px;
 }
-</style>    
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.empty-text {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.empty-hint {
+    font-size: 14px;
+    color: #999;
+}
+</style>
