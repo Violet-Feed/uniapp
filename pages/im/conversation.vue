@@ -129,7 +129,7 @@ export default {
             if (this.conIndex <= this.conversation.min_index) {
                 this.hasMore = false;
             } else if (this.messages.length < 20) {
-                res = await getByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
+                res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
                 if (res.length > 0) {
                     res.reverse();
                     this.messages = res.concat(this.messages);
@@ -259,7 +259,7 @@ export default {
                 if (this.conIndex <= this.conversation.min_index) {
                     this.hasMore = false;
                 } else if (res.length < 20) {
-                    res = await getByConversation(this.conversation.con_short_id, this.conIndex, 20 - res.length);
+                    res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - res.length);
                     if (res.length > 0) {
                         res.reverse();
                         newMessages = res.concat(newMessages);
@@ -278,6 +278,41 @@ export default {
             }
         },
         transformContent(message) {
+    if (message.msg_type == 5) {
+        try {
+            const data = JSON.parse(message.msg_content);
+            const operator = data.operator || '未知用户';
+            switch (data.type) {
+                case 1: // Add_Member - 添加成员
+                    if (Array.isArray(data.content) && data.content.length > 0) {
+                        // 提取成员昵称
+                        const memberNames = data.content.join('、');
+                        return `${operator} 邀请 ${memberNames} 加入了群聊`;
+                    }
+                    // 如果没有content，说明是操作者自己加入
+                    return `${operator} 加入了群聊`;
+                case 2: // Remove_Member - 移除成员
+                    if (Array.isArray(data.content) && data.content.length > 0) {
+                        const memberNames = data.content.join('、');
+                        return `${operator} 将 ${memberNames} 移出了群聊`;
+                    }
+                    // 如果没有content，说明是操作者自己退出
+                    return `${operator} 退出了群聊`;
+                case 3: // Modify_Name - 修改群名
+                    return `${operator} 修改群名为 "${data.content}"`;
+                case 4: // Modify_Description - 修改群资料
+                    return `${operator} 修改群资料为 "${data.content}"`;    
+                default:
+                    // 未知类型，返回原始内容
+                    console.warn('未知的群聊消息类型:', data.type);
+                    return message.msg_content;
+            }
+        } catch (e) {
+            // JSON解析失败，返回原始内容
+            console.error('解析群聊消息失败:', e, message.msg_content);
+            return message.msg_content;
+        }
+    }
             return message.msg_content;
         },
         formatTime(timestamp) {

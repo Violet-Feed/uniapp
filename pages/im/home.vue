@@ -109,8 +109,9 @@ export default {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             }else{
-                DB.selectConversation(data.msg_body.conId)
+                DB.selectConversation(data.msg_body.con_id)
                 .then((res)=>{
+					console.log(res);
                     this.conversationList=res.concat(this.conversationList);
                 })
             }

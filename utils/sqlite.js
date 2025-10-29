@@ -175,10 +175,11 @@ function pullConversation(index) {
 		userId
 	} = getApp().globalData;
 	const dbTable = "conversation_" + userId;
-	if(index==undefined){
-		index=Number.MAX_VALUE;
-	}
-	const sql = `SELECT * FROM ${dbTable} WHERE user_con_index <= ${index} ORDER BY user_con_index DESC LIMIT 50`;
+	// if(index==undefined){
+	// 	index=Number.MAX_VALUE;
+	// }
+	// const sql = `SELECT * FROM ${dbTable} WHERE user_con_index <= ${index} ORDER BY user_con_index DESC LIMIT 50`;
+	const sql = `SELECT * FROM ${dbTable} ORDER BY user_con_index DESC LIMIT 50`;
 	return new Promise((resolve, reject) => {
 		plus.sqlite.selectSql({
 			name: dbName,

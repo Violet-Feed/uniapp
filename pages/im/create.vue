@@ -179,10 +179,10 @@ export default {
                             icon: 'success'
                         });
                         setTimeout(() => {
-                            uni.navigateTo({
+                            uni.redirectTo({
                                 url: `/pages/im/conversation?conId=${con_id}&name=群聊&conType=${con_type}`
                             });
-                        }, 500);
+                        }, 200);
                     })
                     .catch((err) => {
                         console.error("insertConversation err", err);
