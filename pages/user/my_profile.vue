@@ -87,7 +87,7 @@
 				</view>
 				
 				<!-- 空状态 -->
-				<view v-if="worksList.length === 0" class="empty-state">
+				<view v-if="worksList.length === 0 && !loading" class="empty-state">
 					<text class="empty-icon">🎨</text>
 					<text class="empty-text">还没有发布作品</text>
 					<text class="empty-hint">快去创作第一个作品吧！</text>
@@ -115,7 +115,7 @@
 				</view>
 				
 				<!-- 空状态 -->
-				<view v-if="likesList.length === 0" class="empty-state">
+				<view v-if="likesList.length === 0 && !loading" class="empty-state">
 					<text class="empty-icon">💔</text>
 					<text class="empty-text">还没有点赞内容</text>
 					<text class="empty-hint">去发现更多精彩作品吧！</text>
@@ -162,6 +162,9 @@
 </template>
 
 <script>
+import { getCreationsByUser } from '@/request/creation.js'
+// ↑ 点赞列表接口名字你可以按自己的实际情况改，这里先假定有这么一个
+
 export default {
 	data() {
 		return {
@@ -173,9 +176,19 @@ export default {
 			followerCount: 0,
 			totalLikes: 0,
 			activeTab: 'works',
+
+			// 作品 & 点赞列表
 			worksList: [],
 			likesList: [],
+
+			// 加载状态 & 分页
 			loading: false,
+			worksPage: 1,
+			worksHasMore: true,
+			likesPage: 1,
+			likesHasMore: true,
+			likesLoaded: false, // 是否已经加载过点赞列表
+
 			showSetting: false
 		};
 	},
@@ -183,7 +196,8 @@ export default {
 		this.userId = getApp().globalData.userId;
 		this.username = getApp().globalData.username;
 		this.avatar = getApp().globalData.avatar;
-		this.loadUserWorks();
+		// 初始化加载作品列表第一页
+		this.loadUserWorks(true);
 	},
 	onShow() {
 		this.friendCount = getApp().globalData.friendCount || 0;
@@ -191,58 +205,128 @@ export default {
 		this.followerCount = getApp().globalData.followerCount || 0;
 		this.totalLikes = getApp().globalData.totalLikes || 0;
 	},
+	// 下拉到底部加载更多
+	onReachBottom() {
+		if (this.activeTab === 'works') {
+			this.loadUserWorks(false);
+		} else if (this.activeTab === 'likes') {
+			this.loadUserLikes(false);
+		}
+	},
 	methods: {
-		async loadUserWorks() {
+		// 加载当前用户发布的作品列表
+		async loadUserWorks(reset = false) {
+			if (this.loading) return;
+			if (!reset && !this.worksHasMore) return;
+
 			this.loading = true;
-			setTimeout(() => {
-				this.worksList = [
-					{
-						id: 1,
-						cover: 'https://picsum.photos/id/237/400/600',
-						likes: 1234,
-						type: 'image'
-					},
-					{
-						id: 2,
-						cover: 'https://picsum.photos/id/238/400/600',
-						likes: 856,
-						type: 'video'
-					},
-					{
-						id: 3,
-						cover: 'https://picsum.photos/id/239/400/600',
-						likes: 2341,
-						type: 'image'
-					},
-					{
-						id: 4,
-						cover: 'https://picsum.photos/id/240/400/600',
-						likes: 678,
-						type: 'video'
+
+			try {
+				const pageToLoad = reset ? 1 : this.worksPage + 1;
+				const res = await getCreationsByUser(this.userId, pageToLoad);
+
+				// 兼容返回：可能是数组，也可能是 { creations: [...] }
+				const list = Array.isArray(res)
+					? res
+					: (res && Array.isArray(res.creations) ? res.creations : []);
+
+				if (!list || list.length === 0) {
+					if (reset) {
+						this.worksList = [];
 					}
-				];
-				
-				this.likesList = [
-					{
-						id: 5,
-						cover: 'https://picsum.photos/id/241/400/600',
-						likes: 1987,
-						type: 'image'
-					},
-					{
-						id: 6,
-						cover: 'https://picsum.photos/id/242/400/600',
-						likes: 543,
-						type: 'video'
-					}
-				];
-				
+					this.worksHasMore = false;
+					return;
+				}
+
+				const mapped = list.map((item) => ({
+					// 模板里用到的字段：id / cover / likes / type
+					id: item.creation_id,
+					cover: item.cover_url || item.material_url || '',
+					likes: item.likes || 0, // 点赞数你后端给上 likes 就能直接显示
+					type: item.material_type === 2 ? 'video' : 'image',
+					raw: item
+				}));
+
+				if (reset) {
+					this.worksList = mapped;
+				} else {
+					this.worksList = this.worksList.concat(mapped);
+				}
+
+				this.worksPage = pageToLoad;
+				// 如果这一页有数据，先认为还有下一页，直到后面请求到空
+				this.worksHasMore = true;
+			} catch (e) {
+				console.error('加载作品列表失败：', e);
+				uni.showToast({
+					title: '加载作品失败',
+					icon: 'none'
+				});
+			} finally {
 				this.loading = false;
-			}, 500);
+			}
 		},
-		
+
+		// 加载点赞过的作品列表（只在点击点赞 tab 时加载）
+		async loadUserLikes(reset = false) {
+			if (this.loading) return;
+			if (!reset && !this.likesHasMore) return;
+
+			this.loading = true;
+
+			try {
+				const pageToLoad = reset ? 1 : this.likesPage + 1;
+				// 这里用你自己的点赞列表接口
+				const res = await getLikedCreationsByUser(this.userId, pageToLoad);
+
+				const list = Array.isArray(res)
+					? res
+					: (res && Array.isArray(res.creations) ? res.creations : []);
+
+				if (!list || list.length === 0) {
+					if (reset) {
+						this.likesList = [];
+					}
+					this.likesHasMore = false;
+					this.likesLoaded = true;
+					return;
+				}
+
+				const mapped = list.map((item) => ({
+					id: item.creation_id,
+					cover: item.cover_url || item.material_url || '',
+					likes: item.likes || 0,
+					type: item.material_type === 2 ? 'video' : 'image',
+					raw: item
+				}));
+
+				if (reset) {
+					this.likesList = mapped;
+				} else {
+					this.likesList = this.likesList.concat(mapped);
+				}
+
+				this.likesPage = pageToLoad;
+				this.likesHasMore = true;
+				this.likesLoaded = true;
+			} catch (e) {
+				console.error('加载点赞列表失败：', e);
+				uni.showToast({
+					title: '加载点赞失败',
+					icon: 'none'
+				});
+			} finally {
+				this.loading = false;
+			}
+		},
+
 		switchTab(tab) {
 			this.activeTab = tab;
+
+			// 点赞 tab 第一次点击时再请求
+			if (tab === 'likes' && !this.likesLoaded) {
+				this.loadUserLikes(true);
+			}
 		},
 		
 		showSettingMenu() {
@@ -278,19 +362,19 @@ export default {
 				itemList: ['编辑', '删除', '分享'],
 				success: (res) => {
 					if (res.tapIndex === 0) {
-						console.log('编辑作品');
+						console.log('编辑作品', work.id);
 					} else if (res.tapIndex === 1) {
 						uni.showModal({
 							title: '提示',
 							content: '确定要删除这个作品吗？',
-							success: (res) => {
-								if (res.confirm) {
-									console.log('删除作品');
+							success: (res2) => {
+								if (res2.confirm) {
+									console.log('删除作品', work.id);
 								}
 							}
 						});
 					} else if (res.tapIndex === 2) {
-						console.log('分享作品');
+						console.log('分享作品', work.id);
 					}
 				}
 			});
@@ -347,6 +431,7 @@ export default {
 </script>
 
 <style scoped>
+/* 原样保留你的样式，这里不动 */
 .user-profile-container {
 	min-height: 100vh;
 	background: #f8f9fa;

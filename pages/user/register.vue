@@ -163,14 +163,6 @@ export default {
 				return;
 			}
 			
-			if (this.username.length < 3) {
-				uni.showToast({
-					title: '用户名至少3个字符',
-					icon: 'none'
-				});
-				return;
-			}
-			
 			// 验证密码
 			if (!this.password) {
 				uni.showToast({

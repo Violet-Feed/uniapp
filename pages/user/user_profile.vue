@@ -98,7 +98,7 @@
 				</view>
 				
 				<!-- 空状态 -->
-				<view v-if="worksList.length === 0" class="empty-state">
+				<view v-if="worksList.length === 0 && !loading" class="empty-state">
 					<text class="empty-icon">📦</text>
 					<text class="empty-text">还没有发布作品</text>
 				</view>
@@ -125,7 +125,7 @@
 				</view>
 				
 				<!-- 空状态 -->
-				<view v-if="likesList.length === 0" class="empty-state">
+				<view v-if="likesList.length === 0 && !loading" class="empty-state">
 					<text class="empty-icon">💔</text>
 					<text class="empty-text">还没有点赞内容</text>
 				</view>
@@ -143,6 +143,8 @@
 <script>
 import JSONbig from 'json-bigint';
 import { getUserProfile } from '@/request/user';
+import { getCreationsByUser } from '@/request/creation'; 
+// ↑ 点赞列表接口名字按你实际的来改
 
 export default {
 	data() {
@@ -154,16 +156,32 @@ export default {
 			followingCount: 0,
 			totalLikes: 0,
 			isFollowing: false,
+
 			activeTab: 'works',
 			worksList: [],
 			likesList: [],
-			loading: false
+
+			loading: false,
+
+			// 分页相关
+			worksPage: 1,
+			worksHasMore: true,
+			likesPage: 1,
+			likesHasMore: true,
+			likesLoaded: false // 是否已经请求过点赞列表
 		};
 	},
 	onLoad(options) {
 		this.userId = BigInt(options.userId);
 		this.loadUserProfile();
-		this.loadUserWorks();
+		this.loadUserWorks(true); // 首次加载作品第一页
+	},
+	onReachBottom() {
+		if (this.activeTab === 'works') {
+			this.loadUserWorks(false);
+		} else if (this.activeTab === 'likes') {
+			this.loadUserLikes(false);
+		}
 	},
 	methods: {
 		async loadUserProfile() {
@@ -179,52 +197,116 @@ export default {
 				console.error('加载用户信息失败:', err);
 			}
 		},
-		
-		async loadUserWorks() {
+
+		// 加载作品列表
+		async loadUserWorks(reset = false) {
+			if (this.loading) return;
+			if (!reset && !this.worksHasMore) return;
+
 			this.loading = true;
-			setTimeout(() => {
-				this.worksList = [
-					{
-						id: 1,
-						cover: 'https://picsum.photos/id/237/400/600',
-						likes: 1234,
-						type: 'image'
-					},
-					{
-						id: 2,
-						cover: 'https://picsum.photos/id/238/400/600',
-						likes: 856,
-						type: 'video'
-					},
-					{
-						id: 3,
-						cover: 'https://picsum.photos/id/239/400/600',
-						likes: 2341,
-						type: 'image'
+			try {
+				const pageToLoad = reset ? 1 : this.worksPage + 1;
+				// 注意：userId 这里转成字符串给后端，避免 BigInt 直接传
+				const res = await getCreationsByUser(String(this.userId), pageToLoad);
+
+				// 兼容：数组 或 { creations: [...] }
+				const list = Array.isArray(res)
+					? res
+					: (res && Array.isArray(res.creations) ? res.creations : []);
+
+				if (!list || list.length === 0) {
+					if (reset) {
+						this.worksList = [];
 					}
-				];
-				
-				this.likesList = [
-					{
-						id: 4,
-						cover: 'https://picsum.photos/id/240/400/600',
-						likes: 678,
-						type: 'image'
-					},
-					{
-						id: 5,
-						cover: 'https://picsum.photos/id/241/400/600',
-						likes: 1987,
-						type: 'video'
-					}
-				];
-				
+					this.worksHasMore = false;
+					return;
+				}
+
+				const mapped = list.map(item => ({
+					// 布局里用到的字段
+					id: item.creation_id,
+					cover: item.cover_url || item.material_url || '',
+					likes: item.likes || 0, // 点赞数从后端带，如果没有就 0
+					type: item.material_type === 2 ? 'video' : 'image',
+					raw: item
+				}));
+
+				if (reset) {
+					this.worksList = mapped;
+				} else {
+					this.worksList = this.worksList.concat(mapped);
+				}
+
+				this.worksPage = pageToLoad;
+				this.worksHasMore = true;
+			} catch (err) {
+				console.error('加载用户作品失败:', err);
+				uni.showToast({
+					title: '加载作品失败',
+					icon: 'none'
+				});
+			} finally {
 				this.loading = false;
-			}, 500);
+			}
+		},
+
+		// 加载点赞列表（只在点击点赞 tab 时触发）
+		async loadUserLikes(reset = false) {
+			if (this.loading) return;
+			if (!reset && !this.likesHasMore) return;
+
+			this.loading = true;
+			try {
+				const pageToLoad = reset ? 1 : this.likesPage + 1;
+				const res = await getLikedCreationsByUser(String(this.userId), pageToLoad);
+
+				const list = Array.isArray(res)
+					? res
+					: (res && Array.isArray(res.creations) ? res.creations : []);
+
+				if (!list || list.length === 0) {
+					if (reset) {
+						this.likesList = [];
+					}
+					this.likesHasMore = false;
+					this.likesLoaded = true;
+					return;
+				}
+
+				const mapped = list.map(item => ({
+					id: item.creation_id,
+					cover: item.cover_url || item.material_url || '',
+					likes: item.likes || 0,
+					type: item.material_type === 2 ? 'video' : 'image',
+					raw: item
+				}));
+
+				if (reset) {
+					this.likesList = mapped;
+				} else {
+					this.likesList = this.likesList.concat(mapped);
+				}
+
+				this.likesPage = pageToLoad;
+				this.likesHasMore = true;
+				this.likesLoaded = true;
+			} catch (err) {
+				console.error('加载点赞作品失败:', err);
+				uni.showToast({
+					title: '加载点赞失败',
+					icon: 'none'
+				});
+			} finally {
+				this.loading = false;
+			}
 		},
 		
 		switchTab(tab) {
 			this.activeTab = tab;
+			// 点赞 tab 第一次点击时再请求
+			if (tab === 'likes' && !this.likesLoaded) {
+				this.loadUserLikes(true);
+			}
 		},
 		
 		goBack() {

@@ -7,6 +7,41 @@
 			}
 		},
 		{
+			"path" : "pages/creation/search",
+			"style" : 
+			{
+				"navigationBarTitleText" : "搜索"
+			}
+		},
+		{
+			"path" : "pages/creation/creation",
+			"style" : 
+			{
+				"navigationBarTitleText" : "创作"
+			}
+		},
+		{
+			"path" : "pages/friend/friend",
+			"style" : 
+			{
+				"navigationBarTitleText" : "朋友"
+			}
+		},
+		{
+			"path" : "pages/workspace/workspace",
+			"style" : 
+			{
+				"navigationBarTitleText" : "工坊"
+			}
+		},
+		{
+			"path" : "pages/workspace/publish",
+			"style" : 
+			{
+				"navigationBarTitleText" : "发布"
+			}
+		},
+		{
 			"path": "pages/im/home",
 			"style": {
 				"navigationBarTitleText":"消息"
@@ -36,24 +71,6 @@
 			"style" : 
 			{
 				"navigationBarTitleText" : "创建群聊"
-			}
-		},
-		{
-			"path": "pages/market/home",
-			"style": {
-				"navigationBarTitleText":"商城"
-			}
-		},
-		{
-			"path": "pages/market/search",
-			"style": {
-				"navigationBarTitleText":"搜索"
-			}
-		},
-		{
-			"path": "pages/market/item",
-			"style": {
-				"navigationBarTitleText":"商品详情"
 			}
 		},
 		{
@@ -96,34 +113,6 @@
 			"path": "pages/user/register",
 			"style": {
 				"navigationBarTitleText":"注册"
-			}
-		},
-		{
-			"path" : "pages/friend/friend",
-			"style" : 
-			{
-				"navigationBarTitleText" : "朋友"
-			}
-		},
-		{
-			"path" : "pages/workspace/workspace",
-			"style" : 
-			{
-				"navigationBarTitleText" : "工坊"
-			}
-		},
-		{
-			"path" : "pages/creation/creation",
-			"style" : 
-			{
-				"navigationBarTitleText" : "创作"
-			}
-		},
-		{
-			"path" : "pages/creation/search",
-			"style" : 
-			{
-				"navigationBarTitleText" : "搜索"
 			}
 		}
 	],
