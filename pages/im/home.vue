@@ -13,10 +13,6 @@
         <!-- 下拉菜单 -->
         <view class="dropdown-overlay" v-if="showDropdown" @click="showDropdown = false">
             <view class="dropdown-menu" @click.stop>
-                <view class="dropdown-item" @click="goToSearchPage">
-                    <text class="item-icon">🔍</text>
-                    <text class="item-text">搜索用户</text>
-                </view>
                 <view class="dropdown-item" @click="goToCreateConversationPage">
                     <text class="item-icon">👥</text>
                     <text class="item-text">创建群聊</text>
@@ -136,12 +132,6 @@ export default {
         uni.$off('command',this.commandListener);
     },
     methods: {
-        goToSearchPage() {
-            this.showDropdown = false;
-            uni.navigateTo({
-                url: '/pages/im/search'
-            });
-        },
         goToCreateConversationPage() {
             this.showDropdown = false;
             uni.navigateTo({

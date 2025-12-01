@@ -12,13 +12,12 @@
 				<image class="avatar" :src="avatar || '/static/user_avatar.png'" mode="aspectFill"></image>
 			</view>
 			
-			<!-- 用户名和ID -->
+			<!-- 用户名（已去掉抖音号展示） -->
 			<view class="user-info">
 				<text class="username">{{ username }}</text>
-				<text class="user-id">抖音号：{{ userId }}</text>
 			</view>
 			
-			<!-- 统计数据 -->
+			<!-- 统计数据：关注 / 粉丝（已去掉获赞） -->
 			<view class="stats-section">
 				<view class="stat-item" @click="goToFollowingList">
 					<text class="stat-number">{{ formatNumber(followingCount) }}</text>
@@ -28,13 +27,9 @@
 					<text class="stat-number">{{ formatNumber(followerCount) }}</text>
 					<text class="stat-label">粉丝</text>
 				</view>
-				<view class="stat-item">
-					<text class="stat-number">{{ formatNumber(totalLikes) }}</text>
-					<text class="stat-label">获赞</text>
-				</view>
 			</view>
 			
-			<!-- 操作按钮 -->
+			<!-- 操作按钮：关注 / 私信 -->
 			<view class="action-buttons">
 				<view 
 					class="follow-btn" 
@@ -68,7 +63,7 @@
 				:class="{ active: activeTab === 'likes' }"
 				@click="switchTab('likes')"
 			>
-				<text class="tab-icon">❤️</text>
+				<text class="tab-icon">♥️</text>
 				<text class="tab-text">点赞</text>
 				<text class="tab-count">{{ likesList.length }}</text>
 				<view class="tab-indicator" v-if="activeTab === 'likes'"></view>
@@ -77,26 +72,55 @@
 		
 		<!-- 内容列表 -->
 		<view class="content-container">
-			<!-- 作品列表 -->
-			<view v-if="activeTab === 'works'" class="works-grid">
-				<view 
-					class="work-item" 
-					v-for="(work, index) in worksList" 
-					:key="index"
-					@click="goToWorkDetail(work)"
-				>
-					<image class="work-cover" :src="work.cover" mode="aspectFill"></image>
-					<view class="work-overlay">
-						<view class="work-stats">
-							<text class="stat-icon">❤️</text>
-							<text class="stat-value">{{ formatNumber(work.likes) }}</text>
+			<!-- 作品列表：3 列卡片 -->
+			<view v-if="activeTab === 'works'">
+				<view class="creation-grid">
+					<view 
+						class="creation-card" 
+						v-for="(item, index) in worksList" 
+						:key="item.creation_id || index"
+						@click="goToWorkDetail(item)"
+					>
+						<view class="image-wrapper">
+							<image 
+								class="card-image" 
+								:src="item.cover" 
+								mode="aspectFill"
+								@error="onCoverError(item)"
+							/>
+							<view class="image-gradient"></view>
+						</view>
+
+						<view class="card-content">
+							<view class="card-title-container">
+								<text class="card-title">{{ item.title }}</text>
+							</view>
+							<view class="card-footer">
+								<view class="card-author">
+									<image 
+										class="author-avatar" 
+										:src="item.avatar || defaultAvatar" 
+										mode="aspectFill"
+									/>
+									<text class="author-name">{{ item.username }}</text>
+								</view>
+								<view 
+									class="card-likes"
+									@click.stop="toggleDigg('works', index)"
+								>
+									<text 
+										class="like-icon"
+										:class="{ active: item.is_digg }"
+									>
+										{{ item.is_digg ? '♥️' : '♡' }}
+									</text>
+									<text class="like-count">{{ formatNumber(item.digg_count) }}</text>
+								</view>
+							</view>
 						</view>
 					</view>
-					<view class="work-type-badge" v-if="work.type === 'video'">
-						<text>📹</text>
-					</view>
 				</view>
-				
+
 				<!-- 空状态 -->
 				<view v-if="worksList.length === 0 && !loading" class="empty-state">
 					<text class="empty-icon">📦</text>
@@ -104,26 +128,55 @@
 				</view>
 			</view>
 			
-			<!-- 点赞列表 -->
-			<view v-if="activeTab === 'likes'" class="works-grid">
-				<view 
-					class="work-item" 
-					v-for="(work, index) in likesList" 
-					:key="index"
-					@click="goToWorkDetail(work)"
-				>
-					<image class="work-cover" :src="work.cover" mode="aspectFill"></image>
-					<view class="work-overlay">
-						<view class="work-stats">
-							<text class="stat-icon">❤️</text>
-							<text class="stat-value">{{ formatNumber(work.likes) }}</text>
+			<!-- 点赞列表：3 列卡片 -->
+			<view v-if="activeTab === 'likes'">
+				<view class="creation-grid">
+					<view 
+						class="creation-card" 
+						v-for="(item, index) in likesList" 
+						:key="item.creation_id || index"
+						@click="goToWorkDetail(item)"
+					>
+						<view class="image-wrapper">
+							<image 
+								class="card-image" 
+								:src="item.cover" 
+								mode="aspectFill"
+								@error="onCoverError(item)"
+							/>
+							<view class="image-gradient"></view>
+						</view>
+
+						<view class="card-content">
+							<view class="card-title-container">
+								<text class="card-title">{{ item.title }}</text>
+							</view>
+							<view class="card-footer">
+								<view class="card-author">
+									<image 
+										class="author-avatar" 
+										:src="item.avatar || defaultAvatar" 
+										mode="aspectFill"
+									/>
+									<text class="author-name">{{ item.username }}</text>
+								</view>
+								<view 
+									class="card-likes"
+									@click.stop="toggleDigg('likes', index)"
+								>
+									<text 
+										class="like-icon"
+										:class="{ active: item.is_digg }"
+									>
+										{{ item.is_digg ? '♥️' : '♡' }}
+									</text>
+									<text class="like-count">{{ formatNumber(item.digg_count) }}</text>
+								</view>
+							</view>
 						</view>
 					</view>
-					<view class="work-type-badge" v-if="work.type === 'video'">
-						<text>📹</text>
-					</view>
 				</view>
-				
+
 				<!-- 空状态 -->
 				<view v-if="likesList.length === 0 && !loading" class="empty-state">
 					<text class="empty-icon">💔</text>
@@ -143,8 +196,8 @@
 <script>
 import JSONbig from 'json-bigint';
 import { getUserProfile } from '@/request/user';
-import { getCreationsByUser } from '@/request/creation'; 
-// ↑ 点赞列表接口名字按你实际的来改
+import { getCreationsByUser, getCreationsByDigg } from '@/request/creation';
+import { digg, cancelDigg } from '@/request/action';
 
 export default {
 	data() {
@@ -154,21 +207,25 @@ export default {
 			avatar: '',
 			followerCount: 0,
 			followingCount: 0,
-			totalLikes: 0,
+			totalLikes: 0, // 不展示，但保留字段无伤大雅
 			isFollowing: false,
 
 			activeTab: 'works',
+
 			worksList: [],
 			likesList: [],
 
 			loading: false,
 
-			// 分页相关
+			// 分页
 			worksPage: 1,
 			worksHasMore: true,
 			likesPage: 1,
 			likesHasMore: true,
-			likesLoaded: false // 是否已经请求过点赞列表
+			likesLoaded: false, // 点赞列表是否加载过
+
+			defaultImage: '/static/images/default.png',
+			defaultAvatar: '/static/user_avatar.png'
 		};
 	},
 	onLoad(options) {
@@ -182,6 +239,17 @@ export default {
 		} else if (this.activeTab === 'likes') {
 			this.loadUserLikes(false);
 		}
+	},
+	// 下拉刷新：刷新用户信息 + 当前 tab 列表
+	onPullDownRefresh() {
+		const p1 = this.loadUserProfile();
+		const p2 = this.activeTab === 'works'
+			? this.loadUserWorks(true)
+			: this.loadUserLikes(true);
+		
+		Promise.all([p1, p2]).finally(() => {
+			uni.stopPullDownRefresh();
+		});
 	},
 	methods: {
 		async loadUserProfile() {
@@ -198,7 +266,7 @@ export default {
 			}
 		},
 
-		// 加载作品列表
+		/* ===== 作品列表 ===== */
 		async loadUserWorks(reset = false) {
 			if (this.loading) return;
 			if (!reset && !this.worksHasMore) return;
@@ -206,10 +274,8 @@ export default {
 			this.loading = true;
 			try {
 				const pageToLoad = reset ? 1 : this.worksPage + 1;
-				// 注意：userId 这里转成字符串给后端，避免 BigInt 直接传
 				const res = await getCreationsByUser(String(this.userId), pageToLoad);
 
-				// 兼容：数组 或 { creations: [...] }
 				const list = Array.isArray(res)
 					? res
 					: (res && Array.isArray(res.creations) ? res.creations : []);
@@ -217,28 +283,35 @@ export default {
 				if (!list || list.length === 0) {
 					if (reset) {
 						this.worksList = [];
+						this.worksPage = 1;
 					}
 					this.worksHasMore = false;
 					return;
 				}
 
 				const mapped = list.map(item => ({
-					// 布局里用到的字段
-					id: item.creation_id,
-					cover: item.cover_url || item.material_url || '',
-					likes: item.likes || 0, // 点赞数从后端带，如果没有就 0
-					type: item.material_type === 2 ? 'video' : 'image',
+					creation_id: item.creation_id,
+					cover: item.cover_url || item.material_url || this.defaultImage,
+					title: item.title || '未命名作品',
+					user_id: item.user_id,
+					username: this.username || item.username || '未知作者',
+					avatar: this.avatar || item.avatar || this.defaultAvatar,
+					digg_count: item.digg_count || 0,
+					is_digg: !!item.is_digg,
+					material_type: item.material_type,
 					raw: item
 				}));
 
 				if (reset) {
 					this.worksList = mapped;
+					this.worksPage = 1;
 				} else {
 					this.worksList = this.worksList.concat(mapped);
+					this.worksPage = pageToLoad;
 				}
 
-				this.worksPage = pageToLoad;
-				this.worksHasMore = true;
+				const pageSize = 20;
+				this.worksHasMore = list.length >= pageSize;
 			} catch (err) {
 				console.error('加载用户作品失败:', err);
 				uni.showToast({
@@ -250,7 +323,7 @@ export default {
 			}
 		},
 
-		// 加载点赞列表（只在点击点赞 tab 时触发）
+		/* ===== 点赞列表 ===== */
 		async loadUserLikes(reset = false) {
 			if (this.loading) return;
 			if (!reset && !this.likesHasMore) return;
@@ -258,7 +331,7 @@ export default {
 			this.loading = true;
 			try {
 				const pageToLoad = reset ? 1 : this.likesPage + 1;
-				const res = await getLikedCreationsByUser(String(this.userId), pageToLoad);
+				const res = await getCreationsByDigg(String(this.userId), pageToLoad);
 
 				const list = Array.isArray(res)
 					? res
@@ -267,6 +340,7 @@ export default {
 				if (!list || list.length === 0) {
 					if (reset) {
 						this.likesList = [];
+						this.likesPage = 1;
 					}
 					this.likesHasMore = false;
 					this.likesLoaded = true;
@@ -274,21 +348,28 @@ export default {
 				}
 
 				const mapped = list.map(item => ({
-					id: item.creation_id,
-					cover: item.cover_url || item.material_url || '',
-					likes: item.likes || 0,
-					type: item.material_type === 2 ? 'video' : 'image',
+					creation_id: item.creation_id,
+					cover: item.cover_url || item.material_url || this.defaultImage,
+					title: item.title || '未命名作品',
+					user_id: item.user_id,
+					username: item.username || '未知作者',
+					avatar: item.avatar || this.defaultAvatar,
+					digg_count: item.digg_count || 0,
+					is_digg: !!item.is_digg,
+					material_type: item.material_type,
 					raw: item
 				}));
 
 				if (reset) {
 					this.likesList = mapped;
+					this.likesPage = 1;
 				} else {
 					this.likesList = this.likesList.concat(mapped);
+					this.likesPage = pageToLoad;
 				}
 
-				this.likesPage = pageToLoad;
-				this.likesHasMore = true;
+				const pageSize = 20;
+				this.likesHasMore = list.length >= pageSize;
 				this.likesLoaded = true;
 			} catch (err) {
 				console.error('加载点赞作品失败:', err);
@@ -302,8 +383,8 @@ export default {
 		},
 		
 		switchTab(tab) {
+			if (this.activeTab === tab) return;
 			this.activeTab = tab;
-			// 点赞 tab 第一次点击时再请求
 			if (tab === 'likes' && !this.likesLoaded) {
 				this.loadUserLikes(true);
 			}
@@ -338,10 +419,38 @@ export default {
 			});
 		},
 		
-		goToWorkDetail(work) {
+		goToWorkDetail(item) {
 			uni.navigateTo({
-				url: `/pages/creation/creation?id=${work.id}`
+				url: `/pages/creation/creation?id=${item.creation_id}`
 			});
+		},
+
+		onCoverError(item) {
+			if (item) item.cover = this.defaultImage;
+		},
+
+		/* ===== 点赞 / 取消点赞（♥️ / ♡ 切换） ===== */
+		async toggleDigg(listType, index) {
+			const list = listType === 'works' ? this.worksList : this.likesList;
+			const item = list[index];
+			if (!item || item._digging) return;
+
+			item._digging = true;
+			try {
+				if (item.is_digg) {
+					await cancelDigg('creation', item.creation_id);
+					item.is_digg = false;
+					if (item.digg_count > 0) item.digg_count -= 1;
+				} else {
+					await digg('creation', item.creation_id);
+					item.is_digg = true;
+					item.digg_count += 1;
+				}
+			} catch (err) {
+				console.error('点赞操作失败:', err);
+			} finally {
+				item._digging = false;
+			}
 		},
 		
 		async toggleFollow() {
@@ -401,6 +510,7 @@ export default {
 		},
 		
 		formatNumber(num) {
+			if (!num && num !== 0) return '0';
 			if (num >= 10000) {
 				return (num / 10000).toFixed(1) + 'w';
 			}
@@ -477,12 +587,7 @@ export default {
 	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.user-id {
-	font-size: 13px;
-	color: rgba(255, 255, 255, 0.8);
-}
-
-/* 统计数据 */
+/* 统计数据（关注 / 粉丝） */
 .stats-section {
 	display: flex;
 	align-items: center;
@@ -627,69 +732,122 @@ export default {
 	padding: 12px 8px;
 }
 
-.works-grid {
+/* 3列宫格，和搜索布局统一 */
+.creation-grid {
 	display: grid;
-	grid-template-columns: 1fr 1fr 1fr;
-	gap: 4px;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 6px;
 }
 
-.work-item {
+.creation-card {
+	background: #fff;
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.creation-card:active {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.image-wrapper {
 	position: relative;
-	aspect-ratio: 3/4;
-	background: #f0f0f0;
-	border-radius: 4px;
+	width: 100%;
+	aspect-ratio: 3 / 4;
 	overflow: hidden;
 }
 
-.work-cover {
+.card-image {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
 }
 
-.work-overlay {
+.image-gradient {
 	position: absolute;
 	bottom: 0;
 	left: 0;
 	right: 0;
-	padding: 8px;
-	background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+	height: 40px;
+	background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
 }
 
-.work-stats {
+.card-content {
+	padding: 6px;
+}
+
+.card-title-container {
+	margin-bottom: 4px;
+}
+
+.card-title {
+	font-size: 12px;
+	font-weight: 500;
+	color: #333;
+	line-height: 1.3;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
+}
+
+.card-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* 作者信息 */
+.card-author {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	flex: 1;
+	min-width: 0;
 }
 
-.stat-icon {
-	font-size: 12px;
+.author-avatar {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	border: 1px solid #f0f0f0;
+	object-fit: cover;
+	flex-shrink: 0;
 }
 
-.stat-value {
-	font-size: 11px;
-	color: #fff;
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+.author-name {
+	font-size: 10px;
+	color: #555;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.work-type-badge {
-	position: absolute;
-	top: 6px;
-	right: 6px;
-	width: 24px;
-	height: 24px;
-	background: rgba(0, 0, 0, 0.5);
-	backdrop-filter: blur(10px);
-	border-radius: 12px;
+/* 点赞区域 */
+.card-likes {
 	display: flex;
 	align-items: center;
-	justify-content: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+.like-icon {
 	font-size: 14px;
+	transition: transform 0.15s ease;
+}
+
+.like-icon.active {
+	transform: scale(1.1);
+}
+
+.like-count {
+	font-size: 10px;
+	color: #999;
 }
 
 /* 空状态 */
 .empty-state {
-	grid-column: 1 / -1;
 	display: flex;
 	flex-direction: column;
 	align-items: center;

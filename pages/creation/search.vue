@@ -11,36 +11,27 @@
                     <input 
                         v-model="keyword" 
                         type="text" 
-                        placeholder="搜索创作" 
-                        @confirm="searchCreations" 
-                        @focus="handleInputFocus"
+                        placeholder="搜索创作或用户" 
+                        @confirm="onSearchConfirm" 
                         :focus="autoFocus"
                     />
                     <text v-if="keyword" class="clear-icon" @click.stop="clearKeyword">✕</text>
                 </view>
-                <view class="search-button" @click="searchCreations">
+                <view class="search-button" @click="onSearchConfirm">
                     <text>搜索</text>
                 </view>
             </view>
         </view>
 
-        <!-- 筛选栏 -->
+        <!-- 筛选栏：创作 / 用户 / 群聊（群聊先不做） -->
         <view class="filter-bar">
             <view 
                 class="filter-item" 
-                :class="{ active: activeFilter === 'all' }" 
-                @click="changeFilter('all')"
+                :class="{ active: activeFilter === 'creation' }" 
+                @click="changeFilter('creation')"
             >
-                <text class="filter-text">综合</text>
-                <view class="filter-indicator" v-if="activeFilter === 'all'"></view>
-            </view>
-            <view 
-                class="filter-item" 
-                :class="{ active: activeFilter === 'latest' }" 
-                @click="changeFilter('latest')"
-            >
-                <text class="filter-text">最新</text>
-                <view class="filter-indicator" v-if="activeFilter === 'latest'"></view>
+                <text class="filter-text">创作</text>
+                <view class="filter-indicator" v-if="activeFilter === 'creation'"></view>
             </view>
             <view 
                 class="filter-item" 
@@ -50,83 +41,176 @@
                 <text class="filter-text">用户</text>
                 <view class="filter-indicator" v-if="activeFilter === 'user'"></view>
             </view>
-            <view 
-                class="filter-item" 
-                :class="{ active: activeFilter === 'group' }" 
-                @click="changeFilter('group')"
-            >
+            <view class="filter-item disabled">
                 <text class="filter-text">群聊</text>
-                <view class="filter-indicator" v-if="activeFilter === 'group'"></view>
             </view>
         </view>
 
         <!-- 搜索结果统计 -->
-        <view class="result-info" v-if="!loading || creations.length > 0">
-            <text class="result-text">找到 <text class="result-count">{{ creations.length }}</text> 个相关结果</text>
+        <view 
+            class="result-info" 
+            v-if="creationList.length > 0 || userList.length > 0"
+        >
+            <text class="result-text">
+                找到 
+                <text class="result-count">
+                    {{ activeFilter === 'creation' ? creationList.length : userList.length }}
+                </text> 
+                个相关结果
+            </text>
         </view>
 
-        <!-- 双列创作列表 -->
+        <!-- 内容区域 -->
         <view class="creation-grid-container">
-            <!-- 初始加载状态 -->
-            <view v-if="loading && creations.length === 0" class="initial-loading">
+            <!-- 初始加载状态（创作） -->
+            <view 
+                v-if="activeFilter === 'creation' && creationLoading && creationList.length === 0" 
+                class="initial-loading"
+            >
                 <view class="loading-spinner"></view>
                 <text class="loading-text">搜索中...</text>
             </view>
 
-            <!-- 双列网格列表 -->
-            <view class="creation-grid" v-else-if="creations.length > 0">
-                <view 
-                    class="creation-card" 
-                    v-for="(creation, index) in safeCreations" 
-                    :key="`creation-${creation.creation_id}-${index}`" 
-                    @click="goToCreationDetail(creation.creation_id)"
-                >
-                    <!-- 图片容器 -->
-                    <view class="image-wrapper">
-                        <image 
-                            class="card-image" 
-                            :src="creation.image" 
-                            mode="aspectFill"
-                            @error="handleImageError(creation)"
-                            lazy-load
-                        ></image>
-                        <!-- 渐变遮罩 -->
-                        <view class="image-gradient"></view>
-                        <!-- 类型标签 -->
-                        <view class="type-badge" v-if="creation.type">
-                            <text>{{ creation.type === 'group' ? '👥' : '👤' }}</text>
+            <!-- 创作结果：双列宫格 -->
+            <view v-if="activeFilter === 'creation'">
+                <view class="creation-grid" v-if="creationList.length > 0">
+                    <view 
+                        class="creation-card" 
+                        v-for="(creation, index) in creationList" 
+                        :key="`creation-${creation.creation_id}-${index}`" 
+                        @click="goToCreationDetail(creation.creation_id)"
+                    >
+                        <!-- 图片容器 -->
+                        <view class="image-wrapper">
+                            <image 
+                                class="card-image" 
+                                :src="creation.cover" 
+                                mode="aspectFill"
+                                @error="handleCreationImageError(creation)"
+                                lazy-load
+                            ></image>
+                            <!-- 渐变遮罩 -->
+                            <view class="image-gradient"></view>
                         </view>
-                    </view>
-                    
-                    <!-- 内容区域 -->
-                    <view class="card-content">
-                        <view class="card-title-container">
-                            <text class="card-title">{{ creation.title }}</text>
-                        </view>
-                        <view class="card-footer">
-                            <view class="card-author">
-                                <image 
-                                    class="author-avatar" 
-                                    :src="creation.authorAvatar" 
-                                    mode="aspectFill"
-                                    lazy-load
-                                ></image>
-                                <text class="author-name">{{ creation.authorName }}</text>
+                        
+                        <!-- 内容区域 -->
+                        <view class="card-content">
+                            <view class="card-title-container">
+                                <text class="card-title">{{ creation.title }}</text>
+                            </view>
+
+                            <!-- 作者 + 时间 + 点赞 -->
+                            <view class="card-footer">
+                                <view class="card-author">
+                                    <image 
+                                        class="author-avatar" 
+                                        :src="creation.avatar" 
+                                        mode="aspectFill"
+                                        lazy-load
+                                    ></image>
+                                    <view class="author-info">
+                                        <text class="author-name">{{ creation.username }}</text>
+                                        <text class="card-time">{{ creation.displayTime }}</text>
+                                    </view>
+                                </view>
+                                <view 
+                                    class="card-likes"
+                                    @click.stop="toggleDigg(creation, index)"
+                                >
+                                    <text 
+                                        class="like-icon"
+                                        :class="{ active: creation.is_digg }"
+                                    >
+                                        {{ creation.is_digg ? '♥️' : '♡' }}
+                                    </text>
+                                    <text class="like-count">
+                                        {{ formatNumber(creation.digg_count) }}
+                                    </text>
+                                </view>
                             </view>
                         </view>
                     </view>
                 </view>
+
+                <!-- 创作空状态 -->
+                <view v-else-if="!creationLoading" class="empty-state">
+                    <text class="empty-icon">🔍</text>
+                    <text class="empty-text">没有找到相关创作</text>
+                    <text class="empty-hint">试试其他关键词吧</text>
+                </view>
             </view>
 
-            <!-- 空状态 -->
-            <view v-else class="empty-state">
-                <text class="empty-icon">🔍</text>
-                <text class="empty-text">没有找到相关创作</text>
-                <text class="empty-hint">试试其他关键词吧</text>
+            <!-- 用户结果：列表，参考粉丝列表设计 -->
+            <view v-else-if="activeFilter === 'user'">
+                <scroll-view 
+                    class="user-list-scroll" 
+                    scroll-y 
+                    @scrolltolower="loadMoreUsers"
+                    refresher-enabled
+                    :refresher-triggered="userRefreshing"
+                    @refresherrefresh="onUserRefresh"
+                >
+                    <view class="user-list" v-if="userList.length > 0">
+                        <view 
+                            class="user-item" 
+                            v-for="(user, index) in userList" 
+                            :key="`user-${user.user_id || index}`"
+                        >
+                            <view class="user-left" @click="goToUserPage(user)">
+                                <view class="avatar-wrapper">
+                                    <image class="avatar" :src="user.avatar" mode="aspectFill"></image>
+                                </view>
+                                <view class="user-info">
+                                    <view class="user-name-row">
+                                        <text class="user-name">{{ user.username }}</text>
+                                    </view>
+                                    <text class="user-bio" v-if="user.bio">{{ user.bio }}</text>
+                                    <text class="user-bio placeholder" v-else>
+                                        这个人很懒，什么都没写~
+                                    </text>
+                                </view>
+                            </view>
+                            <view class="user-right">
+                                <!-- 已关注 -->
+                                <view 
+                                    v-if="user.is_following"
+                                    class="following-btn"
+                                    @click.stop="confirmUnfollow(user)"
+                                >
+                                    <text class="btn-text">✓ 已关注</text>
+                                </view>
+                                <!-- 未关注 -->
+                                <view 
+                                    v-else
+                                    class="follow-btn" 
+                                    @click.stop="followUser(user)"
+                                >
+                                    <text class="btn-text">+ 关注</text>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+
+                    <!-- 用户空状态 -->
+                    <view v-if="!userLoading && userList.length === 0" class="empty-state">
+                        <text class="empty-icon">👤</text>
+                        <text class="empty-text">没有找到相关用户</text>
+                        <text class="empty-hint">试试换个昵称或关键词</text>
+                    </view>
+
+                    <!-- 用户加载更多 -->
+                    <view v-if="userLoadingMore" class="loading-state">
+                        <view class="loading-spinner small"></view>
+                        <text class="loading-text">加载中...</text>
+                    </view>
+                </scroll-view>
             </view>
             
-            <!-- 加载更多提示 -->
-            <view v-if="loading && creations.length > 0" class="loading-more">
+            <!-- 加载更多提示（创作） -->
+            <view 
+                v-if="creationLoadingMore && activeFilter === 'creation' && creationList.length > 0" 
+                class="loading-more"
+            >
                 <view class="loading-spinner small"></view>
                 <text class="loading-more-text">正在加载更多...</text>
             </view>
@@ -135,210 +219,401 @@
 </template>
 
 <script>
-// 模拟创作数据生成函数
-const mockCreations = (page = 1, keyword = '', filter = 'all') => {
-    const baseData = [
-        {
-            creation_id: `cre-1-${page}`,
-            image: `https://picsum.photos/id/${237 + page}/400/600`,
-            title: "治愈系猫咪摄影集",
-            author: { 
-                avatar: `https://picsum.photos/id/${64 + page}/100/100`, 
-                name: "猫系摄影师" 
-            },
-            type: "user",
-            createTime: new Date(2025, 9, 20 - page).getTime()
-        },
-        {
-            creation_id: `cre-2-${page}`,
-            image: `https://picsum.photos/id/${119 + page}/400/600`,
-            title: "手工皮具制作教程",
-            author: { 
-                avatar: `https://picsum.photos/id/${91 + page}/100/100`, 
-                name: "手工匠人阿木" 
-            },
-            type: "user",
-            createTime: new Date(2025, 9, 22 - page).getTime()
-        },
-        {
-            creation_id: `cre-3-${page}`,
-            image: `https://picsum.photos/id/${160 + page}/400/600`,
-            title: "城市夜景拍摄技巧",
-            author: { 
-                avatar: `https://picsum.photos/id/${22 + page}/100/100`, 
-                name: "光影捕手" 
-            },
-            type: "user",
-            createTime: new Date(2025, 9, 18 - page).getTime()
-        },
-        {
-            creation_id: `cre-4-${page}`,
-            image: `https://picsum.photos/id/${292 + page}/400/600`,
-            title: "复古风手账排版",
-            author: { 
-                avatar: `https://picsum.photos/id/${54 + page}/100/100`, 
-                name: "手账爱好者社群" 
-            },
-            type: "group",
-            createTime: new Date(2025, 9, 25 - page).getTime()
-        },
-        {
-            creation_id: `cre-5-${page}`,
-            image: `https://picsum.photos/id/${325 + page}/400/600`,
-            title: "家常红烧肉教程",
-            author: { 
-                avatar: `https://picsum.photos/id/${82 + page}/100/100`, 
-                name: "美食分享群" 
-            },
-            type: "group",
-            createTime: new Date(2025, 9, 15 - page).getTime()
-        },
-        {
-            creation_id: `cre-6-${page}`,
-            image: `https://picsum.photos/id/${366 + page}/400/600`,
-            title: "极简PPT设计",
-            author: { 
-                avatar: `https://picsum.photos/id/${45 + page}/100/100`, 
-                name: "设计狮Leo" 
-            },
-            type: "user",
-            createTime: new Date(2025, 9, 21 - page).getTime()
-        }
-    ];
-
-    // 关键词筛选
-    let filtered = baseData.filter(item => 
-        !keyword || item.title.includes(keyword) || item.author.name.includes(keyword)
-    );
-
-    // 类型筛选
-    if (filter === 'user') filtered = filtered.filter(item => item.type === 'user');
-    else if (filter === 'group') filtered = filtered.filter(item => item.type === 'group');
-
-    // 最新排序
-    if (filter === 'latest') filtered.sort((a, b) => b.createTime - a.createTime);
-
-    return filtered;
-};
+import { getCreationsBySearch } from '@/request/creation.js';
+import { searchUsers } from '@/request/user.js';
+import { digg, cancelDigg } from '@/request/action.js';
+import JSONbig from 'json-bigint';
 
 export default {
     data() {
         return {
             keyword: '',
-            page: 1,
-            creations: [],
-            loading: true,
-            activeFilter: 'all',
+
+            // 创作搜索
+            creationList: [],
+            creationPage: 1,
+            creationPageSize: 20,
+            creationHasMore: true,
+            creationLoading: false,
+            creationLoadingMore: false,
+
+            // 用户搜索
+            userList: [],
+            userPage: 1,
+            userHasMore: true,
+            userLoading: false,
+            userLoadingMore: false,
+            userRefreshing: false,
+
+            activeFilter: 'creation',   // 'creation' | 'user'
             isPageAlive: true,
+
             autoFocus: false,
+
             defaultImage: '/static/images/default.png',
-            defaultAvatar: '/static/images/avatar-default.png'
+            defaultAvatar: '/static/user_avatar.png'
         };
-    },
-    computed: {
-        safeCreations() {
-            return this.creations.map(item => ({
-                creation_id: item.creation_id || `default-${Date.now()}`,
-                image: item.image || this.defaultImage,
-                title: item.title || '未命名创作',
-                authorAvatar: item.author?.avatar || this.defaultAvatar,
-                authorName: item.author?.name || '未知作者',
-                type: item.type
-            }));
-        }
     },
     async onLoad(options) {
         this.keyword = decodeURIComponent(options?.keyword || '');
-        this.autoFocus = !this.keyword; // 如果没有关键词，自动聚焦
-        await this.searchCreations();
+        this.autoFocus = !this.keyword;
+
+        if (this.keyword) {
+            await this.searchCreations(true);
+        }
     },
     onReachBottom() {
-        if (!this.loading && this.isPageAlive && this.creations.length > 0) {
-            this.loadMore();
+        if (!this.isPageAlive) return;
+        if (this.activeFilter === 'creation') {
+            this.loadMoreCreations();
+        } else if (this.activeFilter === 'user') {
+            this.loadMoreUsers();
         }
+    },
+    onPullDownRefresh() {
+        if (!this.isPageAlive) return;
+        let p;
+        if (this.activeFilter === 'creation') {
+            p = this.searchCreations(true);
+        } else if (this.activeFilter === 'user') {
+            p = this.searchUsers(true);
+        }
+        Promise.resolve(p).finally(() => {
+            uni.stopPullDownRefresh();
+        });
     },
     onUnload() {
         this.isPageAlive = false;
     },
     methods: {
-        async searchCreations() {
-            if (!this.isPageAlive) return;
-            
-            this.loading = true;
-            this.page = 1;
-            
-            try {
-                await new Promise(resolve => setTimeout(resolve, 600));
-                const newData = mockCreations(this.page, this.keyword, this.activeFilter);
-                if (this.isPageAlive) {
-                    this.creations = newData;
-                }
-            } catch (err) {
-                console.error("搜索失败：", err);
-                if (this.isPageAlive) {
-                    uni.showToast({ title: "加载失败", icon: "none" });
-                }
-            } finally {
-                if (this.isPageAlive) {
-                    this.loading = false;
-                }
-            }
-        },
-        
-        async loadMore() {
-            if (!this.isPageAlive || this.loading) return;
-            
-            this.loading = true;
-            
-            try {
-                this.page++;
-                await new Promise(resolve => setTimeout(resolve, 800));
-                const newData = mockCreations(this.page, this.keyword, this.activeFilter);
-                if (this.isPageAlive) {
-                    this.creations = [...this.creations, ...newData];
-                }
-            } catch (err) {
-                console.error("加载更多失败：", err);
-                this.page--;
-                if (this.isPageAlive) {
-                    uni.showToast({ title: "加载更多失败", icon: "none" });
-                }
-            } finally {
-                if (this.isPageAlive) {
-                    this.loading = false;
-                }
-            }
-        },
-        
-        changeFilter(filterType) {
-            if (this.activeFilter === filterType || !this.isPageAlive) return;
-            this.activeFilter = filterType;
-            this.searchCreations();
-        },
-        
-        goToCreationDetail(creationId) {
-            if (!this.isPageAlive) return;
-            uni.navigateTo({ 
-                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}` 
-            });
-        },
-        
-        handleImageError(creation) {
-            if (creation && this.isPageAlive) {
-                creation.image = this.defaultImage;
-            }
-        },
-        
-        handleInputFocus() {
-            // 预留功能
-        },
-        
-        clearKeyword() {
-            this.keyword = '';
-        },
-        
+        /* ========= 顶部交互 ========= */
         goBack() {
             uni.navigateBack();
+        },
+        clearKeyword() {
+            this.keyword = '';
+            this.creationList = [];
+            this.userList = [];
+        },
+        onSearchConfirm() {
+            const kw = this.keyword.trim();
+            if (!kw) {
+                uni.showToast({ title: '请输入搜索词', icon: 'none' });
+                return;
+            }
+            if (this.activeFilter === 'creation') {
+                this.searchCreations(true);
+            } else if (this.activeFilter === 'user') {
+                this.searchUsers(true);
+            }
+        },
+        changeFilter(type) {
+            if (this.activeFilter === type) return;
+            this.activeFilter = type;
+            const kw = this.keyword.trim();
+            if (!kw) return;
+            if (type === 'creation') {
+                this.searchCreations(true);
+            } else if (type === 'user') {
+                this.searchUsers(true);
+            }
+        },
+
+        /* ========= 创作搜索 ========= */
+        async searchCreations(reset = false) {
+            const kw = this.keyword.trim();
+            if (!kw) {
+                this.creationList = [];
+                this.creationHasMore = false;
+                return;
+            }
+
+            if (reset) {
+                this.creationPage = 1;
+                this.creationHasMore = true;
+                this.creationList = [];
+            }
+
+            if (reset) {
+                this.creationLoading = true;
+            } else {
+                this.creationLoadingMore = true;
+            }
+
+            const res = await getCreationsBySearch(kw, this.creationPage);
+            const list = (res && res.creations) || [];
+            const mapped = list.map(item => this.normalizeCreation(item));
+
+            if (reset) {
+                this.creationList = mapped;
+            } else {
+                this.creationList = this.creationList.concat(mapped);
+            }
+
+            // 简单判断是否还有更多
+            if (!list.length || list.length < this.creationPageSize) {
+                this.creationHasMore = false;
+            }
+
+            if (reset) {
+                this.creationLoading = false;
+            } else {
+                this.creationLoadingMore = false;
+            }
+        },
+
+        async loadMoreCreations() {
+            if (!this.creationHasMore || this.creationLoading || this.creationLoadingMore) return;
+            this.creationPage += 1;
+            await this.searchCreations(false);
+        },
+
+        normalizeCreation(item) {
+            const cover = item.cover_url || this.defaultImage;
+            const avatar = item.avatar || this.defaultAvatar;
+            return {
+                creation_id: item.creation_id,
+                cover,
+                title: item.title || '未命名创作',
+                username: item.username || '未知作者',
+                avatar,
+                digg_count: item.digg_count || 0,
+                is_digg: !!item.is_digg,
+                displayTime: this.formatCreationTime(item.create_time)
+            };
+        },
+
+        goToCreationDetail(creationId) {
+            uni.navigateTo({
+                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}`
+            });
+        },
+
+        handleCreationImageError(creation) {
+            if (creation) creation.cover = this.defaultImage;
+        },
+
+        /* ========= 点赞 / 取消点赞 ========= */
+        async toggleDigg(creation, index) {
+            if (!creation || creation._digging) return;
+            creation._digging = true;
+
+            try {
+                if (creation.is_digg) {
+                    // 取消点赞
+                    await cancelDigg("creation",creation.creation_id);
+                    this.creationList[index].is_digg = false;
+                    if (this.creationList[index].digg_count > 0) {
+                        this.creationList[index].digg_count -= 1;
+                    }
+                } else {
+                    // 点赞
+                    await digg("creation",creation.creation_id);
+                    this.creationList[index].is_digg = true;
+                    this.creationList[index].digg_count += 1;
+                }
+            } catch (err) {
+                // 这里你也可以根据需要加 toast
+                console.error('点赞操作失败:', err);
+            } finally {
+                creation._digging = false;
+            }
+        },
+
+        /* ========= 用户搜索 ========= */
+        async searchUsers(reset = false) {
+            const kw = this.keyword.trim();
+            if (!kw) {
+                this.userList = [];
+                this.userHasMore = false;
+                return;
+            }
+
+            if (reset) {
+                this.userPage = 1;
+                this.userHasMore = true;
+                this.userList = [];
+            }
+
+            if (reset) {
+                this.userLoading = true;
+            } else {
+                this.userLoadingMore = true;
+            }
+
+            const data = await searchUsers(kw, this.userPage);
+            const list = (data && data.user_infos) || [];
+
+            const mapped = list.map(u => ({
+                user_id: u.user_id,
+                username: u.username,
+                avatar: u.avatar && u.avatar !== '' ? u.avatar : this.defaultAvatar,
+                bio: u.bio || '',
+                is_following: !!u.is_following
+            }));
+
+            if (reset) {
+                this.userList = mapped;
+            } else {
+                this.userList = this.userList.concat(mapped);
+            }
+
+            if (!list.length) {
+                this.userHasMore = false;
+            }
+
+            if (reset) {
+                this.userLoading = false;
+            } else {
+                this.userLoadingMore = false;
+            }
+        },
+
+        async loadMoreUsers() {
+            if (!this.userHasMore || this.userLoading || this.userLoadingMore) return;
+            this.userPage += 1;
+            await this.searchUsers(false);
+        },
+
+        async onUserRefresh() {
+            this.userRefreshing = true;
+            await this.searchUsers(true);
+            this.userRefreshing = false;
+        },
+
+        goToUserPage(user) {
+            uni.navigateTo({
+                url: `/pages/user/user_profile?userId=${user.user_id}`
+            });
+        },
+
+        /* ========= 关注 / 取关 ========= */
+        async followUser(user) {
+            const token = getApp().globalData.token;
+            const data = {
+                from_user_id: getApp().globalData.userId,
+                to_user_id: user.user_id
+            };
+            const dataJson = JSONbig.stringify(data);
+
+            try {
+                let res = await uni.request({
+                    url: 'http://127.0.0.1:3000/api/relation/follow',
+                    method: 'POST',
+                    header: {
+                        'content-type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    data: dataJson,
+                    dataType: 'string',
+                });
+
+                if (res.statusCode === 200) {
+                    res = JSONbig.parse(res.data);
+                    if (res.code === 1000) {
+                        user.is_following = true;
+                        uni.showToast({ title: '关注成功', icon: 'success' });
+                    }
+                }
+            } catch (err) {
+                console.error('关注失败:', err);
+                uni.showToast({ title: '操作失败', icon: 'none' });
+            }
+        },
+
+        confirmUnfollow(user) {
+            uni.showModal({
+                title: '提示',
+                content: `确定取消关注 ${user.username} 吗？`,
+                success: (res) => {
+                    if (res.confirm) {
+                        this.unfollowUser(user);
+                    }
+                }
+            });
+        },
+
+        async unfollowUser(user) {
+            const token = getApp().globalData.token;
+            const data = {
+                from_user_id: getApp().globalData.userId,
+                to_user_id: user.user_id
+            };
+            const dataJson = JSONbig.stringify(data);
+
+            try {
+                let res = await uni.request({
+                    url: 'http://127.0.0.1:3000/api/relation/unfollow',
+                    method: 'POST',
+                    header: {
+                        'content-type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    data: dataJson,
+                    dataType: 'string',
+                });
+
+                if (res.statusCode === 200) {
+                    res = JSONbig.parse(res.data);
+                    if (res.code === 1000) {
+                        user.is_following = false;
+                        uni.showToast({ title: '已取消关注', icon: 'success' });
+                    }
+                }
+            } catch (err) {
+                console.error('取消关注失败:', err);
+                uni.showToast({ title: '操作失败', icon: 'none' });
+            }
+        },
+
+        /* ========= 工具 ========= */
+        formatCreationTime(msTimestamp) {
+            if (!msTimestamp) return '';
+            // 防御：后端如果给的是秒级时间戳，转成毫秒
+            if (msTimestamp < 1e12) {
+                msTimestamp = msTimestamp * 1000;
+            }
+
+            const now = new Date();
+            const target = new Date(msTimestamp);
+            const nowMs = now.getTime();
+            const diffMs = nowMs - msTimestamp;
+            const diffSec = Math.floor(diffMs / 1000);
+
+            if (diffSec < 60) return '刚刚';
+            if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分钟前`;
+
+            const oneDayMs = 24 * 60 * 60 * 1000;
+            const todayStart = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate()
+            ).getTime();
+
+            const pad2 = n => (n < 10 ? '0' + n : '' + n);
+            const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`;
+
+            if (msTimestamp >= todayStart) return `今天 ${hhmm}`;
+            if (msTimestamp >= todayStart - oneDayMs) return `昨天 ${hhmm}`;
+
+            const diffDay = Math.floor(diffMs / oneDayMs);
+            if (diffDay < 7) return `${diffDay}天前`;
+
+            const year = target.getFullYear();
+            const month = target.getMonth() + 1;
+            const day = target.getDate();
+
+            if (year !== now.getFullYear()) {
+                return `${year}年${month}月${day}日`;
+            }
+            return `${month}月${day}日`;
+        },
+
+        formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 10000) return (num / 10000).toFixed(1) + 'w';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toString();
         }
     }
 };
@@ -458,6 +733,10 @@ export default {
     transition: all 0.3s;
 }
 
+.filter-item.disabled .filter-text {
+    color: #ccc;
+}
+
 .filter-text {
     font-size: 14px;
     color: #666;
@@ -539,6 +818,12 @@ export default {
     animation: spin 1s linear infinite;
 }
 
+.loading-spinner.small {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+}
+
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
@@ -590,21 +875,6 @@ export default {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
 }
 
-.type-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-}
-
 .card-content {
     padding: 10px;
 }
@@ -627,6 +897,7 @@ export default {
 .card-footer {
     display: flex;
     align-items: center;
+    justify-content: space-between;
 }
 
 .card-author {
@@ -638,23 +909,169 @@ export default {
 }
 
 .author-avatar {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: 1px solid #f0f0f0;
     object-fit: cover;
     flex-shrink: 0;
 }
 
+.author-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
 .author-name {
     font-size: 11px;
-    color: #666;
+    color: #333;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* 空状态 */
+.card-time {
+    font-size: 10px;
+    color: #999;
+}
+
+/* 点赞区域 */
+.card-likes {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.like-icon {
+    font-size: 14px;
+    transition: transform 0.15s ease;
+}
+
+.like-icon.active {
+    transform: scale(1.15);
+}
+
+.like-count {
+    font-size: 11px;
+    color: #999;
+}
+
+/* ==================== 用户列表（参考粉丝列表） ==================== */
+.user-list-scroll {
+    height: calc(100vh - 136px);
+}
+
+.user-list {
+    padding: 8px 0;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #fff;
+    margin-bottom: 1px;
+}
+
+.user-left {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.avatar-wrapper {
+    flex-shrink: 0;
+}
+
+.avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: 2px solid #f0f0f0;
+}
+
+.user-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+}
+
+.user-bio {
+    font-size: 13px;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-bio.placeholder {
+    color: #999;
+}
+
+.user-right {
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.follow-btn,
+.following-btn {
+    padding: 6px 16px;
+    border-radius: 16px;
+    transition: all 0.3s;
+}
+
+.follow-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.follow-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 1px 4px rgba(102, 126, 234, 0.3);
+}
+
+.follow-btn .btn-text {
+    color: #fff;
+}
+
+.following-btn {
+    background: #f0f0f0;
+}
+
+.following-btn:active {
+    background: #e0e0e0;
+    transform: scale(0.95);
+}
+
+.following-btn .btn-text {
+    color: #666;
+}
+
+.btn-text {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* 空状态 & 加载更多共用 */
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -676,9 +1093,9 @@ export default {
 .empty-hint {
     font-size: 13px;
     color: #999;
+    text-align: center;
 }
 
-/* 加载更多 */
 .loading-more {
     display: flex;
     align-items: center;
@@ -687,14 +1104,15 @@ export default {
     padding: 20px 0;
 }
 
-.loading-spinner.small {
-    width: 20px;
-    height: 20px;
-    border-width: 2px;
-}
-
 .loading-more-text {
     font-size: 13px;
     color: #999;
+}
+
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
 }
 </style>

@@ -31,11 +31,6 @@
                         <view class="type-badge" v-if="creation.type">
                             <text>{{ creation.type === 'video' ? '📹' : '🖼️' }}</text>
                         </view>
-                        <!-- 统计信息悬浮层 -->
-                        <view class="stats-overlay" v-if="creation.likes">
-                            <text class="stat-item">❤️ {{ formatNumber(creation.likes) }}</text>
-                            <text class="stat-item" v-if="creation.views">👁️ {{ formatNumber(creation.views) }}</text>
-                        </view>
                     </view>
                     
                     <!-- 内容区域 -->
@@ -43,18 +38,37 @@
                         <view class="card-title-container">
                             <text class="card-title">{{ creation.title }}</text>
                         </view>
+
+                        <!-- 作者信息 + 点赞 -->
                         <view class="card-footer">
                             <view class="card-author">
                                 <image 
                                     class="author-avatar" 
-                                    :src="creation.author?.avatar || '/static/images/avatar-default.png'" 
+                                    :src="creation.author?.avatar || '/static/user_avatar.png'" 
                                     mode="aspectFill"
                                     lazy-load
                                 ></image>
-                                <text class="author-name">{{ creation.author?.name || '未知作者' }}</text>
+                                <view class="author-info">
+                                    <text class="author-name">
+                                        {{ creation.author?.name || '未知作者' }}
+                                    </text>
+                                    <text class="card-time">
+                                        {{ creation.time }}
+                                    </text>
+                                </view>
                             </view>
-                            <!-- 时间标签 -->
-                            <text class="time-label" v-if="creation.time">{{ creation.time }}</text>
+                            <view 
+                                class="card-likes" 
+                                @click.stop="toggleDigg(creation, index)"
+                            >
+                                <text 
+                                    class="like-icon" 
+                                    :class="{ liked: creation.is_digg }"
+                                >
+                                    {{ creation.is_digg ? '♥' : '♡' }}
+                                </text>
+                                <text class="like-count">{{ formatNumber(creation.likes) }}</text>
+                            </view>
                         </view>
                     </view>
                 </view>
@@ -77,91 +91,39 @@
 </template>
 
 <script>
-const mockGetCreations = (page = 1) => {
-    return [
-        {
-            creation_id: `cre-${page}-01`,
-            image: `https://picsum.photos/id/${237 + page}/400/600`,
-            title: "治愈系猫咪摄影集",
-            author: { avatar: `https://picsum.photos/id/${64 + page}/100/100`, name: "猫系摄影师" },
-            type: "image",
-            likes: 1234 + page * 10,
-            views: 5678 + page * 50,
-            time: "2小时前"
-        },
-        {
-            creation_id: `cre-${page}-02`,
-            image: `https://picsum.photos/id/${119 + page}/400/600`,
-            title: "手工皮具制作教程",
-            author: { avatar: `https://picsum.photos/id/${91 + page}/100/100`, name: "手工匠人阿木" },
-            type: "video",
-            likes: 856 + page * 15,
-            views: 3421 + page * 40,
-            time: "5小时前"
-        },
-        {
-            creation_id: `cre-${page}-03`,
-            image: `https://picsum.photos/id/${160 + page}/400/600`,
-            title: "城市夜景拍摄技巧",
-            author: { avatar: `https://picsum.photos/id/${22 + page}/100/100`, name: "光影捕手" },
-            type: "image",
-            likes: 2341 + page * 20,
-            views: 8765 + page * 60,
-            time: "1天前"
-        },
-        {
-            creation_id: `cre-${page}-04`,
-            image: `https://picsum.photos/id/${292 + page}/400/600`,
-            title: "复古风手账排版",
-            author: { avatar: `https://picsum.photos/id/${54 + page}/100/100`, name: "手账小能手" },
-            type: "image",
-            likes: 678 + page * 8,
-            views: 2134 + page * 30,
-            time: "3天前"
-        },
-        {
-            creation_id: `cre-${page}-05`,
-            image: `https://picsum.photos/id/${325 + page}/400/600`,
-            title: "家常红烧肉教程",
-            author: { avatar: `https://picsum.photos/id/${82 + page}/100/100`, name: "家常菜大厨" },
-            type: "video",
-            likes: 1987 + page * 12,
-            views: 6543 + page * 55,
-            time: "1周前"
-        },
-        {
-            creation_id: `cre-${page}-06`,
-            image: `https://picsum.photos/id/${366 + page}/400/600`,
-            title: "极简PPT设计",
-            author: { avatar: `https://picsum.photos/id/${45 + page}/100/100`, name: "设计狮Leo" },
-            type: "image",
-            likes: 543 + page * 5,
-            views: 1876 + page * 25,
-            time: "2周前"
-        }
-    ];
-};
+import { getCreationsByFriend } from '@/request/creation.js'; 
+import { digg, cancelDigg } from '@/request/action.js'; 
 
 export default {
     data() {
         return {
             creations: [],
             loading: false,
-            currentPage: 1
+            currentPage: 1,
+            hasMore: true
         };
     },
     onLoad() {
-        setTimeout(() => this.loadInitialData(), 100);
+        this.loadInitialData();
     },
     onReachBottom() {
-        if (!this.loading) this.loadMore();
+        if (!this.loading && this.hasMore) this.loadMore();
+    },
+    onPullDownRefresh() {
+        this.loadInitialData().finally(() => {
+            uni.stopPullDownRefresh();
+        });
     },
     methods: {
+        /* ====== 列表加载 ====== */
         async loadInitialData() {
             this.loading = true;
+            this.currentPage = 1;
+            this.hasMore = true;
             try {
-                await new Promise(resolve => setTimeout(resolve, 600));
-                this.creations = mockGetCreations(this.currentPage);
+                const list = await this.fetchPage(this.currentPage);
+                this.creations = list;
+                if (!list.length) this.hasMore = false;
             } catch (err) {
                 console.error("初始数据加载失败：", err);
                 uni.showToast({ title: "加载失败，请重试", icon: "none" });
@@ -171,18 +133,45 @@ export default {
         },
         
         async loadMore() {
+            if (!this.hasMore) return;
             this.loading = true;
+            const nextPage = this.currentPage + 1;
             try {
-                this.currentPage++;
-                await new Promise(resolve => setTimeout(resolve, 800));
-                const newData = mockGetCreations(this.currentPage);
-                this.creations = [...this.creations, ...newData];
+                const list = await this.fetchPage(nextPage);
+                if (!list.length) {
+                    this.hasMore = false;
+                } else {
+                    this.creations = this.creations.concat(list);
+                    this.currentPage = nextPage;
+                }
             } catch (err) {
-                this.currentPage--;
+                console.error("加载更多失败：", err);
                 uni.showToast({ title: "加载更多失败", icon: "none" });
             } finally {
                 this.loading = false;
             }
+        },
+
+        async fetchPage(page) {
+            const res = await getCreationsByFriend(page);
+
+            const rawList = res && Array.isArray(res.creations) ? res.creations : [];
+            if (!rawList.length) return [];
+
+            return rawList.map(item => ({
+                creation_id: item.creation_id,
+                image: item.cover_url || '',
+                title: item.title || '',
+                type: item.material_type === 2 ? 'video' : 'image',
+                likes: item.digg_count || 0,
+                is_digg: !!item.is_digg,
+                time: this.formatCreationTime(item.create_time),
+                author: {
+                    avatar: item.avatar || '',
+                    name: item.username || ''
+                },
+                raw: item
+            }));
         },
         
         handleImageError(creation) {
@@ -193,11 +182,96 @@ export default {
         
         goToCreationDetail(creationId) {
             uni.navigateTo({ 
-                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}` 
+                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}`
             });
+        },
+
+        /* ====== 点赞 / 取消点赞 ====== */
+        async toggleDigg(creation, index) {
+            if (!creation || creation._digging) return;
+            creation._digging = true;
+
+            try {
+                if (creation.is_digg) {
+                    // 取消点赞
+                    await cancelDigg("creation",creation.creation_id);
+                    this.creations[index].is_digg = false;
+                    if (this.creations[index].likes > 0) {
+                        this.creations[index].likes -= 1;
+                    }
+                } else {
+                    // 点赞
+                    await digg("creation",creation.creation_id);
+                    this.creations[index].is_digg = true;
+                    this.creations[index].likes += 1;
+                }
+            } catch (err) {
+                console.error('点赞操作失败:', err);
+                uni.showToast({
+                    title: '操作失败，请稍后重试',
+                    icon: 'none'
+                });
+            } finally {
+                creation._digging = false;
+            }
+        },
+
+        /* ====== 时间 / 数字格式化 ====== */
+        formatCreationTime(msTimestamp) {
+            if (!msTimestamp) return '';
+            // 防御：如果是秒级时间戳，转成毫秒
+            if (msTimestamp < 1e12) {
+                msTimestamp = msTimestamp * 1000;
+            }
+
+            const now = new Date();
+            const target = new Date(msTimestamp);
+            const nowMs = now.getTime();
+            const diffMs = nowMs - msTimestamp;
+            const diffSec = Math.floor(diffMs / 1000);
+
+            if (diffSec < 60) {
+                return '刚刚';
+            }
+            if (diffSec < 3600) {
+                const m = Math.floor(diffSec / 60);
+                return `${m}分钟前`;
+            }
+
+            const oneDayMs = 24 * 60 * 60 * 1000;
+            const todayStart = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate()
+            ).getTime();
+
+            const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
+            const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`;
+
+            if (msTimestamp >= todayStart) {
+                return `今天 ${hhmm}`;
+            }
+            if (msTimestamp >= todayStart - oneDayMs) {
+                return `昨天 ${hhmm}`;
+            }
+
+            const diffDay = Math.floor(diffMs / oneDayMs);
+            if (diffDay < 7) {
+                return `${diffDay}天前`;
+            }
+
+            const year = target.getFullYear();
+            const month = target.getMonth() + 1;
+            const day = target.getDate();
+
+            if (year !== now.getFullYear()) {
+                return `${year}年${month}月${day}日`;
+            }
+            return `${month}月${day}日`;
         },
         
         formatNumber(num) {
+            if (!num) return '0';
             if (num >= 10000) {
                 return (num / 10000).toFixed(1) + 'w';
             }
@@ -264,7 +338,6 @@ export default {
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     transition: all 0.3s;
-    position: relative;
 }
 
 .creation-card:active {
@@ -283,11 +356,6 @@ export default {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.5s;
-}
-
-.creation-card:active .card-image {
-    transform: scale(1.05);
 }
 
 .image-gradient {
@@ -295,8 +363,8 @@ export default {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 80px;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.4), transparent);
+    height: 60px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
     pointer-events: none;
 }
 
@@ -313,30 +381,6 @@ export default {
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.stats-overlay {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    right: 8px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    pointer-events: none;
-}
-
-.stat-item {
-    display: flex;
-    align-items: center;
-    font-size: 11px;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    padding: 4px 8px;
-    border-radius: 10px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .card-content {
@@ -364,6 +408,7 @@ export default {
     justify-content: space-between;
 }
 
+/* 作者信息：头像 + 右侧用户名 + 时间 */
 .card-author {
     display: flex;
     align-items: center;
@@ -373,26 +418,54 @@ export default {
 }
 
 .author-avatar {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: 1px solid #f0f0f0;
     object-fit: cover;
     flex-shrink: 0;
 }
 
+.author-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
 .author-name {
     font-size: 11px;
-    color: #666;
+    color: #333;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.time-label {
+.card-time {
     font-size: 10px;
     color: #999;
+}
+
+/* 点赞区域 */
+.card-likes {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     flex-shrink: 0;
+}
+
+.like-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.like-icon.liked {
+    color: #e74c3c;
+}
+
+.like-count {
+    font-size: 11px;
+    color: #999;
 }
 
 /* 空状态 */
@@ -406,16 +479,6 @@ export default {
 .empty-icon {
     font-size: 80px;
     margin-bottom: 16px;
-    animation: float 3s ease-in-out infinite;
-}
-
-@keyframes float {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-10px);
-    }
 }
 
 .empty-text {

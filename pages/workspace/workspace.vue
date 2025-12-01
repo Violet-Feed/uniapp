@@ -151,9 +151,16 @@ export default {
         // 首次加载第一页数据
         this.loadMaterials(true)
     },
-    // uni-app 触底加载更多
+    // 触底加载更多
     onReachBottom() {
         this.loadMaterials(false)
+    },
+    // ★★★ 下拉刷新：重置列表并重新拉取第一页 ★★★
+    onPullDownRefresh() {
+        const p = this.loadMaterials(true)
+        Promise.resolve(p).finally(() => {
+            uni.stopPullDownRefresh()
+        })
     },
     methods: {
         /**
@@ -335,26 +342,25 @@ export default {
             }
         },
 
-		// 跳转到发布页
-		goToMaterialDetail(material) {
-			// 生成中不允许进入发布
-			if (material.uiStatus === 'generating' || material.status === 1) {
-				uni.showToast({
-					title: '生成中，请稍候',
-					icon: 'none'
-				})
-				return
-			}
+        // 跳转到发布页
+        goToMaterialDetail(material) {
+            // 生成中不允许进入发布
+            if (material.uiStatus === 'generating' || material.status === 1) {
+                uni.showToast({
+                    title: '生成中，请稍候',
+                    icon: 'none'
+                })
+                return
+            }
 
-			const materialId = material.material_id || ''
-			const materialType = material.material_type || 1
-			const materialUrl = encodeURIComponent(material.material_url || '')
+            const materialId = material.material_id || ''
+            const materialType = material.material_type || 1
+            const materialUrl = encodeURIComponent(material.material_url || '')
 
-			uni.navigateTo({
-				url: `/pages/workspace/publish?material_id=${materialId}&material_type=${materialType}&material_url=${materialUrl}`
-			})
-		}
-		
+            uni.navigateTo({
+                url: `/pages/workspace/publish?material_id=${materialId}&material_type=${materialType}&material_url=${materialUrl}`
+            })
+        }
     }
 }
 </script>

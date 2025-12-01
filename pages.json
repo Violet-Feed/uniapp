@@ -21,7 +21,7 @@
 			}
 		},
 		{
-			"path" : "pages/friend/friend",
+			"path" : "pages/creation/friend",
 			"style" : 
 			{
 				"navigationBarTitleText" : "朋友"
@@ -57,13 +57,6 @@
 			"path": "pages/im/setting",
 			"style": {
 				"navigationBarTitleText":"设置"
-			}
-		},
-		{
-			"path" : "pages/im/search",
-			"style" : 
-			{
-				"navigationBarTitleText" : "搜索"
 			}
 		},
 		{
@@ -140,7 +133,7 @@
 			},
 			{
 				"text": "朋友",
-				"pagePath": "pages/friend/friend"
+				"pagePath": "pages/creation/friend"
 			},
 			{
 				"text": "",
