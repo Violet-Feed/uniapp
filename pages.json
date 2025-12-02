@@ -14,10 +14,27 @@
 			}
 		},
 		{
-			"path" : "pages/creation/creation",
+			"path" : "pages/creation/creation_image",
 			"style" : 
 			{
-				"navigationBarTitleText" : "创作"
+				"navigationBarTitleText" : "创作",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path" : "pages/creation/creation_video",
+			"style" : 
+			{
+				"navigationBarTitleText" : "创作",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path" : "pages/creation/creation_video_native",
+			"style" : 
+			{
+				"navigationBarTitleText" : "创作",
+				"enablePullDownRefresh": false
 			}
 		},
 		{

@@ -77,6 +77,7 @@ import JSONbig from 'json-bigint';
 import file from '@/utils/file.js';
 import DB from '@/utils/sqlite.js';
 import { init } from '@/utils/init.js';
+import { login } from '@/request/user.js';
 
 export default {
 	data() {
@@ -106,66 +107,31 @@ export default {
 			}
 			
 			this.isLoading = true;
-			
-			try {
-				let res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/user/login',
-					method: 'POST',
-					header: {
-						'content-type': 'application/json'
-					},
-					data: {
-						username: this.username,
-						password: this.password
-					},
-					dataType: 'string',
+			let res = await login(this.username,this.password);
+			if(res){
+				uni.setStorageSync('token', res.token);
+				uni.setStorageSync('user_id', res.user_id);
+	
+				try {
+					await DB.createTable(res.user_id);
+				} catch (err) {
+					console.error("createTable err", err);
+				}
+				
+				init();
+				
+				uni.showToast({
+					title: '登录成功',
+					icon: 'success'
 				});
 				
-				if (res.statusCode === 200) {
-					res = JSONbig.parse(res.data);
-					if (res.code === 1000) {
-						uni.setStorageSync('token', res.data.token);
-						uni.setStorageSync('user_id', res.data.user_id);
-						
-						try {
-							await DB.createTable(res.data.user_id);
-						} catch (err) {
-							console.error("createTable err", err);
-						}
-						
-						init();
-						
-						uni.showToast({
-							title: '登录成功',
-							icon: 'success'
-						});
-						
-						setTimeout(() => {
-							uni.reLaunch({
-								url: '/pages/creation/home'
-							});
-						}, 500);
-					} else {
-						uni.showToast({
-							title: res.message || '登录失败',
-							icon: 'none'
-						});
-					}
-				} else {
-					uni.showToast({
-						title: '网络错误',
-						icon: 'none'
+				setTimeout(() => {
+					uni.reLaunch({
+						url: '/pages/creation/home'
 					});
-				}
-			} catch (err) {
-				console.error('登录错误:', err);
-				uni.showToast({
-					title: '登录失败，请稍后重试',
-					icon: 'none'
-				});
-			} finally {
-				this.isLoading = false;
+				}, 500);
 			}
+			this.isLoading = false;
 		},
 		
 		goToRegister() {

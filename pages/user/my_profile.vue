@@ -103,7 +103,7 @@
 										class="like-icon"
 										:class="{ active: work.is_digg }"
 									>
-										{{ work.is_digg ? '❤️' : '🤍' }}
+										{{ work.is_digg ? '♥️' : '♡' }}
 									</text>
 									<text class="like-count">{{ formatNumber(work.digg_count) }}</text>
 								</view>
@@ -264,13 +264,35 @@ export default {
 		this.followerCount = getApp().globalData.followerCount || 0;
 		this.totalLikes = getApp().globalData.totalLikes || 0;
 	},
-	// 下拉到底部加载更多
+	// 上拉到底部加载更多
 	onReachBottom() {
 		if (this.activeTab === 'works') {
 			this.loadUserWorks(false);
 		} else if (this.activeTab === 'likes') {
 			this.loadUserLikes(false);
 		}
+	},
+	// ✅ 下拉刷新
+	onPullDownRefresh() {
+		// 统一做一个“刷新当前页”的逻辑
+		const tasks = [];
+
+		// 作品列表一定刷新
+		tasks.push(this.loadUserWorks(true));
+
+		// 如果当前在点赞 tab，并且之前加载过，就一起刷新
+		if (this.activeTab === 'likes' && this.likesLoaded) {
+			tasks.push(this.loadUserLikes(true));
+		}
+
+		Promise.all(tasks)
+			.catch(err => {
+				console.error('下拉刷新失败：', err);
+				uni.showToast({ title: '刷新失败', icon: 'none' });
+			})
+			.finally(() => {
+				uni.stopPullDownRefresh();
+			});
 	},
 	methods: {
 		/* ====== 加载作品列表 ====== */
@@ -292,6 +314,7 @@ export default {
 				if (!list || list.length === 0) {
 					if (reset) {
 						this.worksList = [];
+						this.worksPage = 1;
 					}
 					this.worksHasMore = false;
 					return;
@@ -351,6 +374,7 @@ export default {
 				if (!list || list.length === 0) {
 					if (reset) {
 						this.likesList = [];
+						this.likesPage = 1;
 					}
 					this.likesHasMore = false;
 					this.likesLoaded = true;
@@ -416,6 +440,8 @@ export default {
 
 			try {
 				if (item.is_digg) {
+					// 注意：这里你的 digg/cancelDigg 后端签名是啥？
+					// 前面其他页面是 cancelDigg('creation', id)，如果这里也要统一，就改成那种
 					await cancelDigg(item.creation_id);
 					item.is_digg = false;
 					if (item.digg_count > 0) item.digg_count -= 1;
@@ -454,8 +480,21 @@ export default {
 		},
 		
 		goToWorkDetail(work) {
+			if (!work || !work.creation_id) return;
+
+			// creationId / userId 都做一下 encode，保险一点
+			const creationId = encodeURIComponent(work.creation_id);
+			const userId = encodeURIComponent(work.user_id || this.userId || '');
+
+			// material_type：1 = 图片，2 = 视频（和你后端 Creation 里保持一致）
+			const isVideo = Number(work.material_type) === 2;
+
+			const basePath = isVideo
+				? '/pages/creation/creation_video_native'
+				: '/pages/creation/creation_image';
+
 			uni.navigateTo({
-				url: `/pages/creation/creation?id=${work.creation_id}`
+				url: `${basePath}?creationId=${creationId}&userId=${userId}`
 			});
 		},
 		

@@ -17,11 +17,11 @@ export const follow = async (fromUserId,toUserId) => {
 		data: dataJson,
 		dataType: 'string',
 	});
-	console.log(res);
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
+			return true;
 		}else {
 			uni.showToast({
 				title: '服务器错误',
@@ -42,6 +42,7 @@ export const follow = async (fromUserId,toUserId) => {
 			icon: 'none'
 		});
 	}
+	return false;
 }
 
 export const unfollow = async (fromUserId,toUserId) => {
@@ -62,11 +63,11 @@ export const unfollow = async (fromUserId,toUserId) => {
 		data: dataJson,
 		dataType: 'string',
 	});
-	console.log(res);
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
+			return true;
 		}else {
 			uni.showToast({
 				title: '服务器错误',
@@ -87,6 +88,142 @@ export const unfollow = async (fromUserId,toUserId) => {
 			icon: 'none'
 		});
 	}
+	return false;
+}
+
+export const getFriendList = async (userId) => {
+	const token = getApp().globalData.token;
+	const data = {
+		user_id: userId
+	};
+	const dataJson = JSONbig.stringify(data);
+	console.log(dataJson);
+	let res = await uni.request({
+		url: 'http://127.0.0.1:3000/api/relation/get_friend_list',
+		method: 'POST',
+		header: {
+			'content-type': 'application/json',
+			'Authorization': `Bearer ${token}`
+		},
+		data: dataJson,
+		dataType: 'string',
+	});
+	if (res.statusCode === 200) {
+		res = JSONbig.parse(res.data);
+		console.log(res);
+		if (res.code === 1000) {
+			return res.data;
+		}else {
+			uni.showToast({
+				title: '服务器错误',
+				icon: 'none'
+			});
+		}
+	} else if (res.statusCode === 403) {
+		uni.showToast({
+			title: '登录过期',
+			icon: 'none'
+		});
+		uni.reLaunch({
+			url: '/pages/user/login'
+		});
+	} else {
+		uni.showToast({
+			title: '网络错误',
+			icon: 'none'
+		});
+	}
+	return {};
+}
+
+export const getFollowingList = async (userId) => {
+	const token = getApp().globalData.token;
+	const data = {
+		user_id: userId
+	};
+	const dataJson = JSONbig.stringify(data);
+	console.log(dataJson);
+	let res = await uni.request({
+		url: 'http://127.0.0.1:3000/api/relation/get_following_list',
+		method: 'POST',
+		header: {
+			'content-type': 'application/json',
+			'Authorization': `Bearer ${token}`
+		},
+		data: dataJson,
+		dataType: 'string',
+	});
+	if (res.statusCode === 200) {
+		res = JSONbig.parse(res.data);
+		console.log(res);
+		if (res.code === 1000) {
+			return res.data;
+		}else {
+			uni.showToast({
+				title: '服务器错误',
+				icon: 'none'
+			});
+		}
+	} else if (res.statusCode === 403) {
+		uni.showToast({
+			title: '登录过期',
+			icon: 'none'
+		});
+		uni.reLaunch({
+			url: '/pages/user/login'
+		});
+	} else {
+		uni.showToast({
+			title: '网络错误',
+			icon: 'none'
+		});
+	}
+	return {};
+}
+
+export const getFollowerList = async (userId) => {
+	const token = getApp().globalData.token;
+	const data = {
+		user_id: userId
+	};
+	const dataJson = JSONbig.stringify(data);
+	console.log(dataJson);
+	let res = await uni.request({
+		url: 'http://127.0.0.1:3000/api/relation/get_follower_list',
+		method: 'POST',
+		header: {
+			'content-type': 'application/json',
+			'Authorization': `Bearer ${token}`
+		},
+		data: dataJson,
+		dataType: 'string',
+	});
+	if (res.statusCode === 200) {
+		res = JSONbig.parse(res.data);
+		console.log(res);
+		if (res.code === 1000) {
+			return res.data;
+		}else {
+			uni.showToast({
+				title: '服务器错误',
+				icon: 'none'
+			});
+		}
+	} else if (res.statusCode === 403) {
+		uni.showToast({
+			title: '登录过期',
+			icon: 'none'
+		});
+		uni.reLaunch({
+			url: '/pages/user/login'
+		});
+	} else {
+		uni.showToast({
+			title: '网络错误',
+			icon: 'none'
+		});
+	}
+	return {};
 }
 
 export const digg = async (entityType,entityId) => {
@@ -107,11 +244,11 @@ export const digg = async (entityType,entityId) => {
 		data: dataJson,
 		dataType: 'string',
 	});
-	console.log(res);
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
+			return true;
 		}else {
 			uni.showToast({
 				title: '服务器错误',
@@ -132,6 +269,7 @@ export const digg = async (entityType,entityId) => {
 			icon: 'none'
 		});
 	}
+	return false;
 }
 
 export const cancelDigg = async (entityType,entityId) => {
@@ -152,11 +290,11 @@ export const cancelDigg = async (entityType,entityId) => {
 		data: dataJson,
 		dataType: 'string',
 	});
-	console.log(res);
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
+			return true;
 		}else {
 			uni.showToast({
 				title: '服务器错误',
@@ -177,4 +315,5 @@ export const cancelDigg = async (entityType,entityId) => {
 			icon: 'none'
 		});
 	}
+	return false;
 }

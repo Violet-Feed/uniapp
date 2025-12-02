@@ -10,12 +10,12 @@
 
             <!-- 双列网格 -->
             <view class="creation-grid" v-else-if="creations.length > 0">
-                <view 
-                    class="creation-card" 
-                    v-for="(creation, index) in creations" 
-                    :key="`creation-${creation.creation_id}-${index}`" 
-                    @click="goToCreationDetail(creation.creation_id)"
-                >
+				<view 
+					class="creation-card" 
+					v-for="(creation, index) in creations" 
+					:key="`creation-${creation.creation_id}-${index}`" 
+					@click="goToCreationDetail(creation)"
+				>
                     <!-- 图片容器 -->
                     <view class="image-wrapper">
                         <image 
@@ -152,27 +152,32 @@ export default {
             }
         },
 
-        async fetchPage(page) {
-            const res = await getCreationsByFriend(page);
+		async fetchPage(page) {
+			const res = await getCreationsByFriend(page);
 
-            const rawList = res && Array.isArray(res.creations) ? res.creations : [];
-            if (!rawList.length) return [];
+			const rawList = res && Array.isArray(res.creations) ? res.creations : [];
+			if (!rawList.length) return [];
 
-            return rawList.map(item => ({
-                creation_id: item.creation_id,
-                image: item.cover_url || '',
-                title: item.title || '',
-                type: item.material_type === 2 ? 'video' : 'image',
-                likes: item.digg_count || 0,
-                is_digg: !!item.is_digg,
-                time: this.formatCreationTime(item.create_time),
-                author: {
-                    avatar: item.avatar || '',
-                    name: item.username || ''
-                },
-                raw: item
-            }));
-        },
+			return rawList.map(item => ({
+				creation_id: item.creation_id,
+				// 新增：作者 ID（给详情页用）
+				user_id: item.user_id || item.userId || '',
+				// 新增：素材类型（1 图片 / 2 视频）
+				material_type: item.material_type || item.materialType || 1,
+
+				image: item.cover_url || item.material_url || '',
+				title: item.title || '',
+				type: (item.material_type || item.materialType) === 2 ? 'video' : 'image',
+				likes: item.digg_count || 0,
+				is_digg: !!item.is_digg,
+				time: this.formatCreationTime(item.create_time),
+				author: {
+					avatar: item.avatar || '',
+					name: item.username || ''
+				},
+				raw: item
+			}));
+		},
         
         handleImageError(creation) {
             if (creation) {
@@ -180,12 +185,25 @@ export default {
             }
         },
         
-        goToCreationDetail(creationId) {
-            uni.navigateTo({ 
-                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}`
-            });
-        },
+		goToCreationDetail(creation) {
+			if (!creation || !creation.creation_id) return;
 
+			const creationId = encodeURIComponent(creation.creation_id);
+			const userId = encodeURIComponent(creation.user_id || '');
+
+			// 两种判断都兼容：string 类型字段 或 数字类型 material_type
+			const isVideo =
+				creation.type === 'video' ||
+				Number(creation.material_type) === 2;
+
+			const basePath = isVideo
+				? '/pages/creation/creation_video'
+				: '/pages/creation/creation_image';
+
+			uni.navigateTo({
+				url: `${basePath}?creationId=${creationId}&userId=${userId}`
+			});
+		},
         /* ====== 点赞 / 取消点赞 ====== */
         async toggleDigg(creation, index) {
             if (!creation || creation._digging) return;

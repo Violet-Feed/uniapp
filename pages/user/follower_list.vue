@@ -84,7 +84,7 @@
 
 <script>
 import JSONbig from 'json-bigint';
-
+import { follow, unfollow, getFollowerList } from '@/request/action.js';
 export default {
 	data() {
 		return {
@@ -102,44 +102,17 @@ export default {
 	methods: {
 		async loadUserList() {
 			this.loading = true;
-			const token = getApp().globalData.token;
-			const data = {
-				user_id: this.userId
-			};
-			const dataJson = JSONbig.stringify(data);
-			
-			try {
-				let res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/relation/get_follower_list',
-					method: 'POST',
-					header: {
-						'content-type': 'application/json',
-						'Authorization': `Bearer ${token}`
-					},
-					data: dataJson,
-					dataType: 'string',
-				});
-				
-				if (res.statusCode === 200) {
-					res = JSONbig.parse(res.data);
-					if (res.code === 1000) {
-						this.userList = res.data.user_infos || [];
-						for (const user of this.userList) {
-							if (user.avatar == "") {
-								user.avatar = "/static/user_avatar.png";
-							}
-							// 模拟是否已关注（实际应从API获取）
-							user.is_following = Math.random() > 0.5;
-						}
-					}
+			let res = await getFollowerList(this.userId);
+			this.userList = res.user_infos || [];
+			for (const user of this.userList) {
+				if (user.avatar == "") {
+					user.avatar = "/static/user_avatar.png";
 				}
-			} catch (err) {
-				console.error('加载失败:', err);
-				uni.showToast({ title: '加载失败', icon: 'none' });
-			} finally {
-				this.loading = false;
-				this.refreshing = false;
+				// 模拟互关状态（实际应从API获取）
+				user.is_following = Math.random() > 0.5;
 			}
+			this.loading = false;
+			this.refreshing = false;
 		},
 		
 		async onRefresh() {
@@ -154,35 +127,10 @@ export default {
 		},
 		
 		async followUser(user) {
-			const token = getApp().globalData.token;
-			const data = {
-				from_user_id: getApp().globalData.userId,
-				to_user_id: user.user_id
-			};
-			const dataJson = JSONbig.stringify(data);
-			
-			try {
-				let res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/relation/follow',
-					method: 'POST',
-					header: {
-						'content-type': 'application/json',
-						'Authorization': `Bearer ${token}`
-					},
-					data: dataJson,
-					dataType: 'string',
-				});
-				
-				if (res.statusCode === 200) {
-					res = JSONbig.parse(res.data);
-					if (res.code === 1000) {
-						user.is_following = true;
-						uni.showToast({ title: '关注成功', icon: 'success' });
-					}
-				}
-			} catch (err) {
-				console.error('关注失败:', err);
-				uni.showToast({ title: '操作失败', icon: 'none' });
+			let res = await follow(getApp().globalData.userId,user.user_id);
+			if(res){
+				user.is_following = true;
+				uni.showToast({ title: '关注成功', icon: 'success' });
 			}
 		},
 		
@@ -199,35 +147,10 @@ export default {
 		},
 		
 		async unfollowUser(user) {
-			const token = getApp().globalData.token;
-			const data = {
-				from_user_id: getApp().globalData.userId,
-				to_user_id: user.user_id
-			};
-			const dataJson = JSONbig.stringify(data);
-			
-			try {
-				let res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/relation/unfollow',
-					method: 'POST',
-					header: {
-						'content-type': 'application/json',
-						'Authorization': `Bearer ${token}`
-					},
-					data: dataJson,
-					dataType: 'string',
-				});
-				
-				if (res.statusCode === 200) {
-					res = JSONbig.parse(res.data);
-					if (res.code === 1000) {
-						user.is_following = false;
-						uni.showToast({ title: '已取消关注', icon: 'success' });
-					}
-				}
-			} catch (err) {
-				console.error('取消关注失败:', err);
-				uni.showToast({ title: '操作失败', icon: 'none' });
+			let res = await unfollow(getApp().globalData.userId,user.user_id);
+			if(res){
+				user.is_following = false;
+				uni.showToast({ title: '已取消关注', icon: 'success' });
 			}
 		},
 		

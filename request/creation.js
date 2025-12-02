@@ -92,14 +92,14 @@ export const createCreation = async (payload) => {
 	}
 }
 
-export const getCreationsById = async (creationId) => {
+export const getCreationById = async (creationId) => {
 	const token = getApp().globalData.token;
 	const data = {
 		creation_id: creationId
 	};
 	const dataJson = JSONbig.stringify(data);
 	let res = await uni.request({
-		url: 'http://127.0.0.1:3000/api/aigc/get_creations_by_id',
+		url: 'http://127.0.0.1:3000/api/aigc/get_creation_by_id',
 		method: 'POST',
 		header: {
 			'content-type': 'application/json',

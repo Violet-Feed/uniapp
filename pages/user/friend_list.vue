@@ -70,7 +70,7 @@
 
 <script>
 import JSONbig from 'json-bigint';
-
+import { getFriendList } from '@/request/action.js';
 export default {
 	data() {
 		return {
@@ -88,42 +88,15 @@ export default {
 	methods: {
 		async loadUserList() {
 			this.loading = true;
-			const token = getApp().globalData.token;
-			const data = {
-				user_id: this.userId
-			};
-			const dataJson = JSONbig.stringify(data);
-			
-			try {
-				let res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/relation/get_friend_list',
-					method: 'POST',
-					header: {
-						'content-type': 'application/json',
-						'Authorization': `Bearer ${token}`
-					},
-					data: dataJson,
-					dataType: 'string',
-				});
-				
-				if (res.statusCode === 200) {
-					res = JSONbig.parse(res.data);
-					if (res.code === 1000) {
-						this.userList = res.data.user_infos || [];
-						for (const user of this.userList) {
-							if (user.avatar == "") {
-								user.avatar = "/static/user_avatar.png";
-							}
-						}
-					}
+			let res = await getFriendList(this.userId);
+			this.userList = res.user_infos || [];
+			for (const user of this.userList) {
+				if (user.avatar == "") {
+					user.avatar = "/static/user_avatar.png";
 				}
-			} catch (err) {
-				console.error('加载失败:', err);
-				uni.showToast({ title: '加载失败', icon: 'none' });
-			} finally {
-				this.loading = false;
-				this.refreshing = false;
 			}
+			this.loading = false;
+			this.refreshing = false;
 		},
 		
 		async onRefresh() {

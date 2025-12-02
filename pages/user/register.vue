@@ -102,6 +102,7 @@
 </template>
 
 <script>
+import { register } from '@/request/user.js';
 export default {
 	data() {
 		return {
@@ -190,55 +191,20 @@ export default {
 			}
 			
 			this.isLoading = true;
-			
-			try {
-				const res = await uni.request({
-					url: 'http://127.0.0.1:3000/api/user/register',
-					method: 'POST',
-					header: {
-						'content-type': 'application/json'
-					},
-					data: {
-						username: this.username,
-						password: this.password,
-						confirm_password: this.confirmPassword,
-					}
+			let res = await register(this.username,this.password,this.confirmPassword);
+			if(res){
+				uni.showToast({
+					title: '注册成功',
+					icon: 'success'
 				});
 				
-				if (res.statusCode === 200) {
-					const data = res.data;
-					if (data.code === 1000) {
-						uni.showToast({
-							title: '注册成功',
-							icon: 'success'
-						});
-						
-						setTimeout(() => {
-							uni.reLaunch({
-								url: '/pages/user/login'
-							});
-						}, 500);
-					} else {
-						uni.showToast({
-							title: data.message || '注册失败',
-							icon: 'none'
-						});
-					}
-				} else {
-					uni.showToast({
-						title: '网络错误，请稍后重试',
-						icon: 'none'
+				setTimeout(() => {
+					uni.reLaunch({
+						url: '/pages/user/login'
 					});
-				}
-			} catch (err) {
-				console.error('注册错误:', err);
-				uni.showToast({
-					title: '注册失败，请稍后重试',
-					icon: 'none'
-				});
-			} finally {
-				this.isLoading = false;
+				}, 500);
 			}
+			this.isLoading = false;
 		},
 		
 		goToLogin() {

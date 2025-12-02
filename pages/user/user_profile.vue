@@ -197,7 +197,7 @@
 import JSONbig from 'json-bigint';
 import { getUserProfile } from '@/request/user';
 import { getCreationsByUser, getCreationsByDigg } from '@/request/creation';
-import { digg, cancelDigg } from '@/request/action';
+import { follow, unfollow, digg, cancelDigg } from '@/request/action';
 
 export default {
 	data() {
@@ -419,9 +419,22 @@ export default {
 			});
 		},
 		
-		goToWorkDetail(item) {
+		goToWorkDetail(work) {
+			if (!work || !work.creation_id) return;
+
+			// creationId / userId 都做一下 encode，保险一点
+			const creationId = encodeURIComponent(work.creation_id);
+			const userId = encodeURIComponent(work.user_id || this.userId || '');
+
+			// material_type：1 = 图片，2 = 视频（和你后端 Creation 里保持一致）
+			const isVideo = Number(work.material_type) === 2;
+
+			const basePath = isVideo
+				? '/pages/creation/creation_video'
+				: '/pages/creation/creation_image';
+
 			uni.navigateTo({
-				url: `/pages/creation/creation?id=${item.creation_id}`
+				url: `${basePath}?creationId=${creationId}&userId=${userId}`
 			});
 		},
 
@@ -454,58 +467,22 @@ export default {
 		},
 		
 		async toggleFollow() {
-			const token = getApp().globalData.token;
-			const data = {
-				from_user_id: getApp().globalData.userId,
-				to_user_id: this.userId
-			};
-			const dataJson = JSONbig.stringify(data);
-			
-			try {
-				if (this.isFollowing) {
-					let res = await uni.request({
-						url: 'http://127.0.0.1:3000/api/relation/unfollow',
-						method: 'POST',
-						header: {
-							'content-type': 'application/json',
-							'Authorization': `Bearer ${token}`
-						},
-						data: dataJson,
-						dataType: 'string',
-					});
-					if (res.statusCode === 200) {
-						res = JSONbig.parse(res.data);
-						if (res.code === 1000) {
-							this.isFollowing = false;
-							this.followerCount--;
-							getApp().globalData.followingCount--;
-							uni.showToast({ title: '已取消关注', icon: 'success' });
-						}
-					}
-				} else {
-					let res = await uni.request({
-						url: 'http://127.0.0.1:3000/api/relation/follow',
-						method: 'POST',
-						header: {
-							'content-type': 'application/json',
-							'Authorization': `Bearer ${token}`
-						},
-						data: dataJson,
-						dataType: 'string',
-					});
-					if (res.statusCode === 200) {
-						res = JSONbig.parse(res.data);
-						if (res.code === 1000) {
-							this.isFollowing = true;
-							this.followerCount++;
-							getApp().globalData.followingCount++;
-							uni.showToast({ title: '关注成功', icon: 'success' });
-						}
-					}
+			if (this.isFollowing) {
+				let res = await unfollow(getApp().globalData.userId,this.userId);
+				if(res){
+					this.isFollowing = false;
+					this.followerCount--;
+					getApp().globalData.followingCount--;
+					uni.showToast({ title: '已取消关注', icon: 'success' });
 				}
-			} catch (err) {
-				console.error('操作失败:', err);
-				uni.showToast({ title: '操作失败', icon: 'none' });
+			} else {
+				let res = await follow(getApp().globalData.userId,this.userId);
+				if(res){
+					this.isFollowing = true;
+					this.followerCount++;
+					getApp().globalData.followingCount++;
+					uni.showToast({ title: '关注成功', icon: 'success' });
+				}
 			}
 		},
 		

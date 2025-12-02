@@ -74,12 +74,12 @@
             <!-- 创作结果：双列宫格 -->
             <view v-if="activeFilter === 'creation'">
                 <view class="creation-grid" v-if="creationList.length > 0">
-                    <view 
-                        class="creation-card" 
-                        v-for="(creation, index) in creationList" 
-                        :key="`creation-${creation.creation_id}-${index}`" 
-                        @click="goToCreationDetail(creation.creation_id)"
-                    >
+					<view 
+						class="creation-card" 
+						v-for="(creation, index) in creationList" 
+						:key="`creation-${creation.creation_id}-${index}`" 
+						@click="goToCreationDetail(creation)"
+					>
                         <!-- 图片容器 -->
                         <view class="image-wrapper">
                             <image 
@@ -221,7 +221,7 @@
 <script>
 import { getCreationsBySearch } from '@/request/creation.js';
 import { searchUsers } from '@/request/user.js';
-import { digg, cancelDigg } from '@/request/action.js';
+import { follow, unfollow, digg, cancelDigg } from '@/request/action.js';
 import JSONbig from 'json-bigint';
 
 export default {
@@ -368,26 +368,41 @@ export default {
             await this.searchCreations(false);
         },
 
-        normalizeCreation(item) {
-            const cover = item.cover_url || this.defaultImage;
-            const avatar = item.avatar || this.defaultAvatar;
-            return {
-                creation_id: item.creation_id,
-                cover,
-                title: item.title || '未命名创作',
-                username: item.username || '未知作者',
-                avatar,
-                digg_count: item.digg_count || 0,
-                is_digg: !!item.is_digg,
-                displayTime: this.formatCreationTime(item.create_time)
-            };
-        },
+		normalizeCreation(item) {
+			const cover = item.cover_url || this.defaultImage;
+			const avatar = item.avatar || this.defaultAvatar;
+			return {
+				creation_id: item.creation_id,
+				// 新增：作者 ID（供跳转详情）
+				user_id: item.user_id || item.userId || '',
+				// 新增：素材类型（1-图片 / 2-视频）
+				material_type: item.material_type || item.materialType || 1,
+				cover,
+				title: item.title || '未命名创作',
+				username: item.username || '未知作者',
+				avatar,
+				digg_count: item.digg_count || 0,
+				is_digg: !!item.is_digg,
+				displayTime: this.formatCreationTime(item.create_time)
+			};
+		},
+		goToCreationDetail(creation) {
+			if (!creation || !creation.creation_id) return;
 
-        goToCreationDetail(creationId) {
-            uni.navigateTo({
-                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}`
-            });
-        },
+			const creationId = encodeURIComponent(creation.creation_id);
+			const userId = encodeURIComponent(creation.user_id || '');
+
+			// 1 = 图片，2 = 视频（你后端 Creation 里 materialType 也是这么约定的）
+			const isVideo = Number(creation.material_type) === 2;
+
+			const basePath = isVideo
+				? '/pages/creation/creation_video'
+				: '/pages/creation/creation_image';
+
+			uni.navigateTo({
+				url: `${basePath}?creationId=${creationId}&userId=${userId}`
+			});
+		},
 
         handleCreationImageError(creation) {
             if (creation) creation.cover = this.defaultImage;
@@ -489,36 +504,11 @@ export default {
 
         /* ========= 关注 / 取关 ========= */
         async followUser(user) {
-            const token = getApp().globalData.token;
-            const data = {
-                from_user_id: getApp().globalData.userId,
-                to_user_id: user.user_id
-            };
-            const dataJson = JSONbig.stringify(data);
-
-            try {
-                let res = await uni.request({
-                    url: 'http://127.0.0.1:3000/api/relation/follow',
-                    method: 'POST',
-                    header: {
-                        'content-type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    data: dataJson,
-                    dataType: 'string',
-                });
-
-                if (res.statusCode === 200) {
-                    res = JSONbig.parse(res.data);
-                    if (res.code === 1000) {
-                        user.is_following = true;
-                        uni.showToast({ title: '关注成功', icon: 'success' });
-                    }
-                }
-            } catch (err) {
-                console.error('关注失败:', err);
-                uni.showToast({ title: '操作失败', icon: 'none' });
-            }
+			let res = await follow(getApp().globalData.userId,user.user_id);
+			if(res){
+				user.is_following = true;
+				uni.showToast({ title: '关注成功', icon: 'success' });
+			}
         },
 
         confirmUnfollow(user) {
@@ -534,35 +524,10 @@ export default {
         },
 
         async unfollowUser(user) {
-            const token = getApp().globalData.token;
-            const data = {
-                from_user_id: getApp().globalData.userId,
-                to_user_id: user.user_id
-            };
-            const dataJson = JSONbig.stringify(data);
-
-            try {
-                let res = await uni.request({
-                    url: 'http://127.0.0.1:3000/api/relation/unfollow',
-                    method: 'POST',
-                    header: {
-                        'content-type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    data: dataJson,
-                    dataType: 'string',
-                });
-
-                if (res.statusCode === 200) {
-                    res = JSONbig.parse(res.data);
-                    if (res.code === 1000) {
-                        user.is_following = false;
-                        uni.showToast({ title: '已取消关注', icon: 'success' });
-                    }
-                }
-            } catch (err) {
-                console.error('取消关注失败:', err);
-                uni.showToast({ title: '操作失败', icon: 'none' });
+            let res = await unfollow(getApp().globalData.userId,user.user_id);
+            if(res){
+				user.is_following = false;
+				uni.showToast({ title: '已取消关注', icon: 'success' });
             }
         },
 

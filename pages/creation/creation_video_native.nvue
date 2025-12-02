@@ -1,0 +1,1142 @@
+<template>
+  <view class="page">
+    <!-- 视频本体 -->
+    <video
+      id="creationVideo"
+      class="video"
+      :src="creation.videoUrl"
+      :poster="creation.coverImage"
+      :autoplay="true"
+      :loop="true"
+      :controls="false"
+      object-fit="contain"
+      @click="handleVideoTap"
+    ></video>
+
+    <!-- 顶部：只有返回 -->
+    <view class="top-bar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+    </view>
+
+    <!-- 右侧头像 + 点赞 / 评论 / 转发 -->
+    <view class="right-actions">
+      <!-- 头像 + 关注 -->
+      <view class="action-item avatar-item" @click="goToUserPage">
+        <view class="avatar-touch">
+          <view class="avatar-wrapper">
+            <image
+              class="avatar-img"
+              :src="creation.author.avatar || defaultAvatar"
+            />
+          </view>
+        </view>
+        <view
+          v-if="!isFollowed"
+          class="follow-plus"
+          @click.stop="handleFollowClick"
+        >
+          <text class="follow-plus-text">+</text>
+        </view>
+      </view>
+
+      <!-- 点赞 -->
+      <view class="action-item" @click="toggleLike">
+        <view class="action-hit">
+          <text class="action-icon" :class="{ liked: isLiked }">
+            {{ isLiked ? '♥️' : '♡' }}
+          </text>
+          <text class="action-count">
+            {{ formatNumber(creation.likes) }}
+          </text>
+        </view>
+      </view>
+
+      <!-- 评论 -->
+      <view class="action-item" @click="openCommentsPanel">
+        <view class="action-hit">
+          <text class="action-icon">💬</text>
+          <text class="action-count">
+            {{ formatNumber(creation.comments) }}
+          </text>
+        </view>
+      </view>
+
+      <!-- 转发 -->
+      <view class="action-item" @click="handleShare">
+        <view class="action-hit">
+          <text class="action-icon">↗</text>
+          <text class="action-count">
+            {{ formatNumber(creation.shares) }}
+          </text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 中间暂停 / 播放 图标 -->
+    <view v-if="showCenterIcon && !showCommentsPanel" class="center-icon">
+      <text class="center-icon-text">
+        {{ isPlaying ? '⏸' : '▶️' }}
+      </text>
+    </view>
+
+    <!-- 底部信息 -->
+    <view class="bottom-info">
+      <view class="author-row" @click="goToUserPage">
+        <text class="author-name">
+          @{{ creation.author.username || '匿名用户' }}
+        </text>
+      </view>
+
+      <view class="title-row">
+        <text class="title-text">
+          {{ creation.title || '无标题作品' }}
+        </text>
+      </view>
+
+      <view class="detail-row">
+        <text
+          class="detail-text"
+          :lines="isDetailExpanded ? 10 : 2"
+        >
+          {{ creation.detail }}
+        </text>
+        <text
+          v-if="creation.detail && creation.detail.length > 50"
+          class="detail-expand"
+          @click="toggleDetail"
+        >
+          {{ isDetailExpanded ? '收起' : '...展开' }}
+        </text>
+      </view>
+
+      <view class="tags-row" v-if="creation.tags && creation.tags.length">
+        <text
+          class="tag-text"
+          v-for="(tag, index) in creation.tags"
+          :key="index"
+        >
+          # {{ tag }}
+        </text>
+      </view>
+    </view>
+
+    <!-- 评论抽屉 -->
+    <view
+      v-if="showCommentsPanel"
+      class="comments-mask"
+      @click="closeCommentsPanelByMask"
+    >
+      <view class="comments-panel" @click.stop>
+        <view class="comments-header">
+          <text class="comments-title">
+            评论 {{ formatNumber(creation.comments) }}
+          </text>
+          <text class="comments-close" @click="closeCommentsPanel">✕</text>
+        </view>
+
+        <scroll-view
+          scroll-y="true"
+          class="comments-scroll"
+        >
+          <view
+            class="comment-item"
+            v-for="comment in commentList"
+            :key="comment.id"
+          >
+            <image
+              class="comment-avatar"
+              :src="comment.user.avatar || defaultAvatar"
+              @click="goToUserPage(comment.user.user_id)"
+            />
+            <view class="comment-main">
+              <view class="comment-header">
+                <text
+                  class="comment-username"
+                  @click="goToUserPage(comment.user.user_id)"
+                >
+                  {{ comment.user.name }}
+                </text>
+                <view
+                  class="comment-like"
+                  :class="{ liked: comment.isLiked }"
+                  @click="toggleCommentLike(comment)"
+                >
+                  <text class="comment-like-icon">
+                    {{ comment.isLiked ? '♥️' : '♡' }}
+                  </text>
+                  <text
+                    v-if="comment.likes > 0"
+                    class="comment-like-count"
+                  >
+                    {{ formatNumber(comment.likes) }}
+                  </text>
+                </view>
+              </view>
+
+              <text class="comment-text">
+                {{ comment.text }}
+              </text>
+
+              <view class="comment-meta">
+                <text class="comment-time">{{ comment.time }}</text>
+                <text
+                  class="comment-reply"
+                  @click="replyToComment(comment)"
+                >
+                  回复
+                </text>
+              </view>
+
+              <!-- 二级回复 -->
+              <view
+                class="reply-list"
+                v-if="comment.replies && comment.replies.length"
+              >
+                <view
+                  class="reply-item"
+                  v-for="reply in comment.replies.slice(0, 3)"
+                  :key="reply.id"
+                >
+                  <image
+                    class="reply-avatar"
+                    :src="reply.user.avatar || defaultAvatar"
+                    @click="goToUserPage(reply.user.user_id)"
+                  />
+                  <view class="reply-main">
+                    <view class="reply-header">
+                      <text
+                        class="reply-username"
+                        @click="goToUserPage(reply.user.user_id)"
+                      >
+                        {{ reply.user.name }}
+                      </text>
+                      <text
+                        v-if="reply.replyToUser"
+                        class="reply-to"
+                      >
+                        回复 @{{ reply.replyToUser }}
+                      </text>
+                      <view class="flex-spacer"></view>
+                      <view
+                        class="reply-like"
+                        :class="{ liked: reply.isLiked }"
+                        @click="toggleReplyLike(reply)"
+                      >
+                        <text class="reply-like-icon">
+                          {{ reply.isLiked ? '♥️' : '♡' }}
+                        </text>
+                        <text
+                          v-if="reply.likes > 0"
+                          class="reply-like-count"
+                        >
+                          {{ formatNumber(reply.likes) }}
+                        </text>
+                      </view>
+                    </view>
+
+                    <text class="reply-text">
+                      {{ reply.text }}
+                    </text>
+
+                    <view class="reply-meta">
+                      <text class="reply-time">{{ reply.time }}</text>
+                      <text
+                        class="reply-reply"
+                        @click="replyToComment(comment, reply)"
+                      >
+                        回复
+                      </text>
+                    </view>
+                  </view>
+                </view>
+
+                <text
+                  v-if="comment.totalReplies > 3"
+                  class="more-replies"
+                  @click="loadMoreReplies(comment)"
+                >
+                  查看全部 {{ comment.totalReplies }} 条回复 &gt;
+                </text>
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-if="!commentList.length && !commentLoading"
+            class="empty-comments"
+          >
+            <text class="empty-comments-text">还没有评论，快来抢沙发吧~</text>
+          </view>
+
+          <view
+            v-if="commentLoading"
+            class="empty-comments"
+          >
+            <text class="empty-comments-text">评论加载中...</text>
+          </view>
+        </scroll-view>
+
+        <!-- 底部输入 -->
+        <view class="comment-input-bar">
+          <input
+            class="comment-input"
+            v-model="commentText"
+            :placeholder="commentPlaceholder"
+            :focus="commentInputFocus"
+            confirm-type="send"
+            @blur="handleInputBlurInPanel"
+            @confirm="sendComment"
+          />
+          <view
+            class="send-btn"
+            :class="{ active: commentText.trim() }"
+            @click="sendComment"
+          >
+            <text
+              :class="[
+                'send-btn-text',
+                commentText.trim() ? 'send-btn-text-active' : ''
+              ]"
+            >
+              发送
+            </text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getCreationById } from '@/request/creation.js'
+import { getUserProfile } from '@/request/user.js'
+import { digg, cancelDigg } from '@/request/action.js'
+// import { getCommentsByCreation } from '@/request/comment.js'
+// import { follow, unfollow } from '@/request/follow.js'
+
+export default {
+  data() {
+    return {
+      creationId: '',
+      authorId: '',
+      videoContext: null,
+
+      defaultAvatar: '/static/user_avatar.png',
+
+      creation: {
+        creationId: '',
+        userId: '',
+        type: 'video',
+        title: '',
+        detail: '',
+        videoUrl: '',
+        coverImage: '',
+        tags: [],
+        time: '',
+        location: '',
+        category: '',
+        author: {
+          user_id: '',
+          username: '',
+          avatar: '',
+          followerCount: 0
+        },
+        likes: 0,
+        comments: 0,
+        shares: 0
+      },
+
+      isLiked: false,
+      isFollowed: false,
+      isDetailExpanded: false,
+
+      isPlaying: true,
+      showCenterIcon: false,
+      centerIconTimer: null,
+
+      showCommentsPanel: false,
+      commentList: [],
+      commentLoading: false,
+
+      commentText: '',
+      commentPlaceholder: '说点什么...',
+      commentInputFocus: false,
+      replyingTo: null,
+
+      likeLoading: false
+    }
+  },
+
+  onLoad(options) {
+    this.creationId = options.creationId
+    this.authorId = options.userId
+    this.initPage()
+  },
+
+  onReady() {
+    this.videoContext = uni.createVideoContext('creationVideo', this)
+  },
+
+  onUnload() {
+    if (this.centerIconTimer) {
+      clearTimeout(this.centerIconTimer)
+      this.centerIconTimer = null
+    }
+  },
+
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async initPage() {
+      uni.showLoading({ title: '加载中...' })
+      try {
+        await Promise.all([
+          this.fetchCreationDetail(),
+          this.fetchAuthorInfo(),
+          this.fetchCommentsAndStats()
+        ])
+      } catch (e) {
+        console.error(e)
+        uni.showToast({ title: '加载失败', icon: 'none' })
+      } finally {
+        uni.hideLoading()
+      }
+    },
+
+    async fetchCreationDetail() {
+      const res = await getCreationById(this.creationId)
+      const c = res.creation || res
+
+      const materialType = c.material_type
+      const isVideo = Number(materialType) === 2
+
+      this.creation.creationId = c.creation_id || this.creationId
+      this.creation.userId = c.user_id || this.authorId
+      this.creation.type = isVideo ? 'video' : 'image'
+      this.creation.title = c.title || ''
+      this.creation.detail = c.content || ''
+      this.creation.category = c.category || ''
+      this.creation.time = c.create_time || ''
+
+      const cover = c.cover_url || c.material_url || ''
+      this.creation.coverImage = cover
+      this.creation.videoUrl = isVideo ? (c.material_url || '') : ''
+    },
+
+    async fetchAuthorInfo() {
+      if (!this.authorId) return
+      const res = await getUserProfile(this.authorId, true, false)
+      const info = res.user_info || {}
+
+      this.creation.author = {
+        user_id: info.user_id || this.authorId,
+        username: info.username || info.nickname || '',
+        avatar: info.avatar || this.defaultAvatar,
+        followerCount: res.follower_count || 0
+      }
+      this.isFollowed = !!res.is_following
+    },
+
+    async fetchCommentsAndStats() {
+      this.commentLoading = true
+      try {
+        // const res = await getCommentsByCreation(this.creationId)
+        const res = { comments: [] }
+
+        const list = res.comments || res.comment_list || []
+
+        this.commentList = list.map((c) => {
+          const replies = (c.replies || []).map((r) => ({
+            id: r.comment_id,
+            user: {
+              user_id: r.user_id,
+              name: r.username,
+              avatar: r.avatar
+            },
+            text: r.content,
+            time: r.create_time,
+            likes: r.digg_count || 0,
+            isLiked: !!r.is_digg,
+            replyToUser: r.reply_to_username || ''
+          }))
+
+          return {
+            id: c.comment_id,
+            user: {
+              user_id: c.user_id,
+              name: c.username,
+              avatar: c.avatar
+            },
+            text: c.content,
+            time: c.create_time,
+            likes: c.digg_count || 0,
+            isLiked: !!c.is_digg,
+            totalReplies: c.reply_count || replies.length,
+            replies
+          }
+        })
+
+        if (typeof res.comment_count === 'number') {
+          this.creation.comments = res.comment_count
+        } else {
+          this.creation.comments = this.commentList.length
+        }
+        if (typeof res.digg_count === 'number') {
+          this.creation.likes = res.digg_count
+        }
+        if (typeof res.share_count === 'number') {
+          this.creation.shares = res.share_count
+        }
+        if (typeof res.is_digg === 'boolean') {
+          this.isLiked = res.is_digg
+        }
+      } catch (e) {
+        console.error('加载评论失败', e)
+        uni.showToast({ title: '评论加载失败', icon: 'none' })
+      } finally {
+        this.commentLoading = false
+      }
+    },
+
+    handleVideoTap() {
+      if (!this.videoContext) return
+
+      if (this.isPlaying) {
+        this.videoContext.pause()
+        this.isPlaying = false
+        if (this.centerIconTimer) {
+          clearTimeout(this.centerIconTimer)
+          this.centerIconTimer = null
+        }
+        this.showCenterIcon = true
+      } else {
+        this.videoContext.play()
+        this.isPlaying = true
+        this.showCenterIcon = true
+        if (this.centerIconTimer) clearTimeout(this.centerIconTimer)
+        this.centerIconTimer = setTimeout(() => {
+          this.showCenterIcon = false
+          this.centerIconTimer = null
+        }, 600)
+      }
+    },
+
+    async toggleLike() {
+      if (this.likeLoading || !this.creation.creationId) return
+      this.likeLoading = true
+      try {
+        if (this.isLiked) {
+          await cancelDigg('creation', this.creation.creationId)
+          this.isLiked = false
+          this.creation.likes = Math.max(0, this.creation.likes - 1)
+        } else {
+          await digg('creation', this.creation.creationId)
+          this.isLiked = true
+          this.creation.likes += 1
+        }
+      } catch (e) {
+        console.error('点赞失败', e)
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      } finally {
+        this.likeLoading = false
+      }
+    },
+
+    async handleFollowClick() {
+      // await follow(this.creation.author.user_id)
+      this.isFollowed = true
+      uni.showToast({ title: '关注成功', icon: 'none' })
+    },
+
+    toggleDetail() {
+      this.isDetailExpanded = !this.isDetailExpanded
+    },
+
+    openCommentsPanel() {
+      this.showCommentsPanel = true
+      this.commentInputFocus = false
+    },
+
+    closeCommentsPanel() {
+      this.showCommentsPanel = false
+      this.commentText = ''
+      this.replyingTo = null
+      this.commentPlaceholder = '说点什么...'
+    },
+
+    closeCommentsPanelByMask() {
+      this.closeCommentsPanel()
+    },
+
+    goToUserPage(userId) {
+      let targetId = userId
+      if (targetId && typeof targetId === 'object') {
+        targetId = targetId.user_id || targetId.id
+      }
+      if (!targetId) {
+        targetId = this.creation.author.user_id
+      }
+      if (!targetId) return
+      uni.navigateTo({
+        url: `/pages/user/user_profile?userId=${targetId}`
+      })
+    },
+
+    toggleCommentLike(comment) {
+      comment.isLiked = !comment.isLiked
+      comment.likes = Math.max(0, comment.likes + (comment.isLiked ? 1 : -1))
+    },
+
+    toggleReplyLike(reply) {
+      reply.isLiked = !reply.isLiked
+      reply.likes = Math.max(0, reply.likes + (reply.isLiked ? 1 : -1))
+    },
+
+    replyToComment(comment, reply) {
+      const target = reply || comment
+      this.replyingTo = target
+      this.commentPlaceholder = `回复 @${target.user.name}`
+      this.commentInputFocus = true
+    },
+
+    loadMoreReplies(comment) {
+      uni.showToast({ title: '加载更多回复开发中', icon: 'none' })
+    },
+
+    handleInputBlurInPanel() {
+      setTimeout(() => {
+        this.commentInputFocus = false
+      }, 200)
+    },
+
+    async sendComment() {
+      const text = this.commentText.trim()
+      if (!text) return
+
+      try {
+        // TODO: 接评论接口
+        uni.showToast({ title: '发送成功', icon: 'success' })
+        this.commentText = ''
+        this.commentPlaceholder = '说点什么...'
+        this.replyingTo = null
+        this.fetchCommentsAndStats()
+      } catch (e) {
+        console.error('发送评论失败', e)
+        uni.showToast({ title: '发送失败', icon: 'none' })
+      }
+    },
+
+    handleShare() {
+      uni.showToast({ title: '分享功能开发中', icon: 'none' })
+    },
+
+    formatNumber(num) {
+      if (!num) return 0
+      const n = Number(num) || 0
+      if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
+      return n
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  flex: 1;
+  background-color: #000000;
+}
+
+/* 视频：宽占满屏幕，高度用 flex 撑满，object-fit=contain 居中显示 */
+.video {
+  width: 750rpx;
+  flex: 1;
+}
+
+/* 顶部返回贴左上角一点 */
+.top-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  padding-left: 10px;
+  padding-top: 10px;
+  height: 56px;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.back-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: rgba(0, 0, 0, 0.4);
+  justify-content: center;
+  align-items: center;
+}
+
+.back-icon {
+  font-size: 22px;
+  color: #ffffff;
+}
+
+/* 右侧操作栏再往下一点 */
+.right-actions {
+  position: absolute;
+  right: 16px;
+  top: 55%;
+  align-items: center;
+}
+
+/* 每个按钮一个统一的大点击区域 */
+.action-item {
+  width: 68px;
+  height: 68px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+/* 头像那一项稍微大一点 */
+.avatar-item {
+  height: 90px;
+}
+
+/* 头像点击区域更大一点 */
+.avatar-touch {
+  width: 72px;
+  height: 72px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 头像圆形边框，与头像齐平 */
+.avatar-wrapper {
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #ffffff;
+  overflow: hidden;
+  justify-content: center;
+  align-items: center;
+}
+
+.avatar-img {
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
+}
+
+/* 关注 + 圆形，和头像对正（靠下中偏右） */
+.follow-plus {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background-color: #ff4757;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #ffffff;
+  justify-content: center;
+  align-items: center;
+}
+
+.follow-plus-text {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* 点赞/评论/转发的点击块 */
+.action-hit {
+  width: 68px;
+  justify-content: center;
+  align-items: center;
+}
+
+.action-icon {
+  font-size: 30px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.action-icon.liked {
+  color: #ff4757;
+}
+
+.action-count {
+  font-size: 12px;
+  color: #ffffff;
+  margin-top: 2px;
+  text-align: center;
+}
+
+/* 中间暂停 / 播放图标 */
+.center-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin-left: -40px;
+  margin-top: -40px;
+  width: 80px;
+  height: 80px;
+  border-radius: 40px;
+  background-color: rgba(0, 0, 0, 0.4);
+  justify-content: center;
+  align-items: center;
+}
+
+.center-icon-text {
+  font-size: 44px;
+  color: #ffffff;
+}
+
+/* 底部信息整体再大一点，贴底 */
+.bottom-info {
+  position: absolute;
+  left: 16px;
+  right: 90px;
+  bottom: 24px;
+}
+
+/* 用户名加粗，和标题分开一点距离 */
+.author-row {
+  margin-bottom: 10px;
+}
+
+.author-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.title-row {
+  margin-bottom: 8px;
+}
+
+.title-text {
+  font-size: 16px;
+  color: #ffffff;
+  line-height: 22px;
+}
+
+.detail-row {
+  margin-bottom: 6px;
+}
+
+.detail-text {
+  font-size: 14px;
+  color: #f5f5f5;
+  line-height: 20px;
+}
+
+.detail-expand {
+  margin-top: 2px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.tags-row {
+  margin-top: 4px;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.tag-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-right: 6px;
+  margin-bottom: 2px;
+}
+
+/* 评论遮罩和抽屉：高度 80%，更高一点 */
+.comments-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.comments-panel {
+  width: 750rpx;
+  height: 80%;
+  background-color: #ffffff;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+/* 评论头部 */
+.comments-header {
+  height: 48px;
+  padding-left: 16px;
+  padding-right: 16px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: #f0f0f0;
+}
+
+.comments-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.comments-close {
+  font-size: 20px;
+  color: #999999;
+}
+
+/* 评论列表滚动 */
+.comments-scroll {
+  flex: 1;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* 单条评论 */
+.comment-item {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: #f5f5f5;
+  flex-direction: row;
+}
+
+.comment-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  margin-right: 10px;
+}
+
+.comment-main {
+  flex: 1;
+}
+
+.comment-header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comment-username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.comment-like {
+  flex-direction: row;
+  align-items: center;
+}
+
+.comment-like-icon {
+  font-size: 18px;
+  color: #999999;
+}
+
+.comment-like-count {
+  font-size: 12px;
+  color: #999999;
+  margin-left: 4px;
+}
+
+.comment-like.liked .comment-like-icon {
+  color: #ff4757;
+}
+
+.comment-text {
+  font-size: 14px;
+  color: #333333;
+  line-height: 20px;
+  margin-top: 4px;
+}
+
+.comment-meta {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.comment-time {
+  font-size: 12px;
+  color: #999999;
+  margin-right: 16px;
+}
+
+.comment-reply {
+  font-size: 13px;
+  color: #666666;
+}
+
+/* 二级回复 */
+.reply-list {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left-width: 2px;
+  border-left-style: solid;
+  border-left-color: #f0f0f0;
+}
+
+.reply-item {
+  flex-direction: row;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.reply-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  margin-right: 8px;
+}
+
+.reply-main {
+  flex: 1;
+}
+
+.reply-header {
+  flex-direction: row;
+  align-items: center;
+}
+
+.reply-username {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333333;
+  margin-right: 6px;
+}
+
+.reply-to {
+  font-size: 12px;
+  color: #999999;
+}
+
+.flex-spacer {
+  flex: 1;
+}
+
+.reply-like {
+  flex-direction: row;
+  align-items: center;
+}
+
+.reply-like-icon {
+  font-size: 16px;
+  color: #999999;
+}
+
+.reply-like-count {
+  font-size: 11px;
+  color: #999999;
+  margin-left: 4px;
+}
+
+.reply-like.liked .reply-like-icon {
+  color: #ff4757;
+}
+
+.reply-text {
+  font-size: 13px;
+  color: #333333;
+  line-height: 18px;
+  margin-top: 2px;
+}
+
+.reply-meta {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.reply-time {
+  font-size: 11px;
+  color: #999999;
+  margin-right: 12px;
+}
+
+.reply-reply {
+  font-size: 12px;
+  color: #666666;
+}
+
+.more-replies {
+  font-size: 13px;
+  color: #5b7dff;
+  margin-top: 4px;
+}
+
+/* 空状态 */
+.empty-comments {
+  padding-top: 32px;
+  padding-bottom: 32px;
+  justify-content: center;
+  align-items: center;
+}
+
+.empty-comments-text {
+  font-size: 14px;
+  color: #999999;
+}
+
+/* 评论输入条 */
+.comment-input-bar {
+  height: 52px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: #f0f0f0;
+  flex-direction: row;
+  align-items: center;
+}
+
+.comment-input {
+  flex: 1;
+  height: 36px;
+  background-color: #f5f5f5;
+  border-radius: 18px;
+  padding-left: 12px;
+  padding-right: 12px;
+  font-size: 14px;
+}
+
+.send-btn {
+  margin-left: 8px;
+  padding-left: 14px;
+  padding-right: 14px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-radius: 18px;
+  background-color: #f0f0f0;
+}
+
+.send-btn-text {
+  font-size: 14px;
+  color: #999999;
+}
+
+.send-btn.active {
+  background-color: #667eea;
+}
+
+.send-btn-text-active {
+  color: #ffffff;
+}
+</style>
