@@ -9,39 +9,12 @@
                         v-model="keyword" 
                         type="text" 
                         placeholder="搜索你感兴趣的创作..." 
-                        @focus="handleInputFocus" 
-                        @blur="handleInputBlur" 
-                        @input="handleInputChange"
                         @confirm="goToSearchPage"
                     />
                     <text v-if="keyword" class="clear-icon" @click.stop="clearKeyword">✕</text>
                 </view>
                 <view class="search-button" @click="goToSearchPage">
                     <text>搜索</text>
-                </view>
-            </view>
-            
-            <!-- 热搜列表 - 修复bug：使用@click代替@mousedown -->
-            <view v-if="showHotSearchList && hotSearchList.length" class="hot-search-list" @click.stop>
-                <view class="hot-search-header">
-                    <view class="hot-title-row">
-                        <text class="hot-icon">🔥</text>
-                        <text class="hot-title">热门搜索</text>
-                    </view>
-                    <text class="refresh-btn" @click="refreshHotSearch">
-                        <text class="refresh-icon">🔄</text>
-                    </text>
-                </view>
-                <view class="hot-search-tags">
-                    <view 
-                        class="hot-search-tag" 
-                        v-for="(hotSearch, index) in displayedHotSearch" 
-                        :key="`hot-${index}`" 
-                        @click="selectHotSearch(hotSearch)"
-                    >
-                        <text class="hot-rank" :class="getRankClass(index)">{{ index + 1 }}</text>
-                        <text class="hot-text">{{ hotSearch }}</text>
-                    </view>
                 </view>
             </view>
         </view>
@@ -60,7 +33,7 @@
                     class="creation-card" 
                     v-for="(creation, index) in creations" 
                     :key="`creation-${creation.creation_id}-${index}`" 
-                    @click="goToCreationDetail(creation.creation_id)"
+                    @click="goToCreationDetail(creation)"
                 >
                     <!-- 图片容器 -->
                     <view class="image-wrapper">
@@ -94,9 +67,16 @@
                                 ></image>
                                 <text class="author-name">{{ creation.author?.name || '未知作者' }}</text>
                             </view>
-                            <view class="card-likes" v-if="creation.likes">
-                                <text class="like-icon">❤️</text>
-                                <text class="like-count">{{ formatNumber(creation.likes) }}</text>
+                            <view 
+                                class="card-likes" 
+                                @click.stop="toggleDigg(index)"
+                            >
+                                <text class="like-icon">
+                                    {{ creation.is_digg ? '♥️' : '♡' }}
+                                </text>
+                                <text class="like-count">
+                                    {{ formatNumber(creation.likes) }}
+                                </text>
                             </view>
                         </view>
                     </view>
@@ -113,65 +93,17 @@
             <!-- 加载更多 -->
             <view v-if="loading && creations.length > 0" class="loading-more">
                 <view class="loading-spinner small"></view>
-                <text class="loading-more-text">正在加载更多...</text>
+                <text class="loading-more-text">
+                    {{ hasMore ? '正在加载更多...' : '没有更多了' }}
+                </text>
             </view>
         </view>
     </view>
 </template>
 
 <script>
-const mockGetCreations = (page = 1) => {
-    return [
-        {
-            creation_id: `cre-${page}-01`,
-            image: `https://picsum.photos/id/${237 + page}/400/600`,
-            title: "治愈系猫咪摄影集",
-            author: { avatar: `https://picsum.photos/id/${64 + page}/100/100`, name: "猫系摄影师" },
-            type: "image",
-            likes: 1234 + page * 10
-        },
-        {
-            creation_id: `cre-${page}-02`,
-            image: `https://picsum.photos/id/${119 + page}/400/600`,
-            title: "手工皮具制作教程",
-            author: { avatar: `https://picsum.photos/id/${91 + page}/100/100`, name: "手工匠人阿木" },
-            type: "video",
-            likes: 856 + page * 15
-        },
-        {
-            creation_id: `cre-${page}-03`,
-            image: `https://picsum.photos/id/${160 + page}/400/600`,
-            title: "城市夜景拍摄技巧",
-            author: { avatar: `https://picsum.photos/id/${22 + page}/100/100`, name: "光影捕手" },
-            type: "image",
-            likes: 2341 + page * 20
-        },
-        {
-            creation_id: `cre-${page}-04`,
-            image: `https://picsum.photos/id/${292 + page}/400/600`,
-            title: "复古风手账排版",
-            author: { avatar: `https://picsum.photos/id/${54 + page}/100/100`, name: "手账小能手" },
-            type: "image",
-            likes: 678 + page * 8
-        },
-        {
-            creation_id: `cre-${page}-05`,
-            image: `https://picsum.photos/id/${325 + page}/400/600`,
-            title: "家常红烧肉教程",
-            author: { avatar: `https://picsum.photos/id/${82 + page}/100/100`, name: "家常菜大厨" },
-            type: "video",
-            likes: 1987 + page * 12
-        },
-        {
-            creation_id: `cre-${page}-06`,
-            image: `https://picsum.photos/id/${366 + page}/400/600`,
-            title: "极简PPT设计",
-            author: { avatar: `https://picsum.photos/id/${45 + page}/100/100`, name: "设计狮Leo" },
-            type: "image",
-            likes: 543 + page * 5
-        }
-    ];
-};
+import { getCreationsByRec } from '@/request/creation.js'
+import { digg, cancelDigg } from '@/request/action.js'
 
 export default {
     data() {
@@ -180,67 +112,112 @@ export default {
             creations: [],
             loading: false,
             currentPage: 1,
-            hotSearchList: [
-                "AI绘画教程", 
-                "手工制作", 
-                "美食摄影", 
-                "旅行vlog", 
-                "手账排版",
-                "PPT设计",
-                "摄影技巧",
-                "创意短视频"
-            ],
-            displayedHotSearch: [],
-            showHotSearchList: false,
-            blurTimer: null // 修复: 添加延时器避免blur和click冲突
+            hasMore: true,
+            isRefreshing: false
         };
     },
     onLoad() {
-        this.displayedHotSearch = this.hotSearchList.slice(0, 6);
-        setTimeout(() => this.loadInitialData(), 100);
+        // 初始加载推荐流
+        this.fetchCreations(1, false);
     },
+    // 下拉刷新（需要在页面 json 里开启 enablePullDownRefresh）
+    onPullDownRefresh() {
+        this.refreshList();
+    },
+    // 上拉触底加载更多
     onReachBottom() {
-        if (!this.loading) this.loadMore();
+        if (!this.loading && this.hasMore) {
+            this.loadMore();
+        }
     },
     methods: {
-        async loadInitialData() {
+        /* ========== 列表加载 ========== */
+        async fetchCreations(page = 1, append = false) {
+            if (this.loading) return;
             this.loading = true;
+
             try {
-                await new Promise(resolve => setTimeout(resolve, 600));
-                this.creations = mockGetCreations(this.currentPage);
+                const res = await getCreationsByRec(getApp().globalData.userId);
+
+                // 兼容多种返回格式：数组 或 {creations: [...]}
+                const list = Array.isArray(res)
+                    ? res
+                    : (res && (res.creations || res.list)) 
+                        ? (res.creations || res.list)
+                        : [];
+
+                const mapped = list.map(item => {
+                    const materialType = Number(item.material_type);
+                    const isVideo = materialType === 2;
+
+                    return {
+                        creation_id: item.creation_id,
+                        user_id: item.user_id,
+                        image: item.cover_url || item.material_url || '/static/images/default.png',
+                        title: item.title || '未命名作品',
+                        author: {
+                            avatar: item.avatar || item.author_avatar || '/static/user_avatar.png',
+                            name: item.username || item.author_name || '未知作者',
+                            user_id: item.user_id
+                        },
+                        type: isVideo ? 'video' : 'image',
+                        material_type: materialType,
+                        likes: item.digg_count || item.like_count || 0,
+                        is_digg: !!item.is_digg
+                    };
+                });
+
+                if (append) {
+                    this.creations = this.creations.concat(mapped);
+                    this.currentPage = page;
+                } else {
+                    this.creations = mapped;
+                    this.currentPage = page;
+                }
+
+                const pageSize = 20; // 根据你后端分页大小调整
+                this.hasMore = list.length >= pageSize && mapped.length > 0;
+
             } catch (err) {
-                console.error("初始数据加载失败：", err);
+                console.error("加载创作列表失败：", err);
+                if (append && this.currentPage > 1) {
+                    this.currentPage -= 1;
+                }
                 uni.showToast({ title: "加载失败，请重试", icon: "none" });
             } finally {
                 this.loading = false;
+                if (this.isRefreshing) {
+                    this.isRefreshing = false;
+                    uni.stopPullDownRefresh();
+                }
             }
         },
-        
+
         async loadMore() {
-            this.loading = true;
-            try {
-                this.currentPage++;
-                await new Promise(resolve => setTimeout(resolve, 800));
-                const newData = mockGetCreations(this.currentPage);
-                this.creations = [...this.creations, ...newData];
-            } catch (err) {
-                this.currentPage--;
-                uni.showToast({ title: "加载更多失败", icon: "none" });
-            } finally {
-                this.loading = false;
-            }
+            if (!this.hasMore) return;
+            const nextPage = this.currentPage + 1;
+            await this.fetchCreations(nextPage, true);
         },
-        
+
+        async refreshList() {
+            this.isRefreshing = true;
+            this.hasMore = true;
+            await this.fetchCreations(1, false);
+        },
+
+        /* ========== 图片出错兜底 ========== */
         handleImageError(creation) {
             if (creation) {
                 creation.image = "/static/images/default.png";
             }
         },
-        
+
+        /* ========== 搜索 ========== */
         goToSearchPage() {
-            if (this.keyword.trim()) {
+            const kw = this.keyword.trim();
+            if (kw) {
                 uni.navigateTo({
-                    url: `/pages/creation/search?keyword=${encodeURIComponent(this.keyword)}`
+                    url: `/pages/creation/search?keyword=${encodeURIComponent(kw)}`
                 });
             } else {
                 uni.showToast({
@@ -249,63 +226,64 @@ export default {
                 });
             }
         },
-        
-        goToCreationDetail(creationId) {
-            uni.navigateTo({ 
-                url: `/pages/creation/creation?id=${encodeURIComponent(creationId)}` 
-            });
-        },
-        
-        handleInputFocus() {
-            if (this.blurTimer) {
-                clearTimeout(this.blurTimer);
-                this.blurTimer = null;
-            }
-            if (!this.keyword.trim()) {
-                this.showHotSearchList = true;
-            }
-        },
-        
-        handleInputBlur() {
-            // 修复: 延迟关闭热搜列表,避免和点击事件冲突
-            this.blurTimer = setTimeout(() => {
-                this.showHotSearchList = false;
-            }, 200);
-        },
-        
-        handleInputChange() {
-            if (this.keyword.trim()) {
-                this.showHotSearchList = false;
-            } else {
-                this.showHotSearchList = true;
-            }
-        },
-        
-        selectHotSearch(hotSearch) {
-            this.keyword = hotSearch;
-            this.showHotSearchList = false;
-            this.goToSearchPage();
-        },
-        
+
         clearKeyword() {
             this.keyword = '';
-            this.showHotSearchList = true;
         },
-        
-        refreshHotSearch() {
-            // 打乱热搜列表
-            const shuffled = [...this.hotSearchList].sort(() => Math.random() - 0.5);
-            this.displayedHotSearch = shuffled.slice(0, 6);
+
+        /* ========== 点赞 / 取消点赞 ========== */
+        async toggleDigg(index) {
+            const item = this.creations[index];
+            if (!item || item._digging) return;
+
+            item._digging = true;
+            try {
+                if (item.is_digg) {
+                    // 取消点赞
+                    await cancelDigg("creation",item.creation_id);
+                    item.is_digg = false;
+                    if (item.likes > 0) item.likes -= 1;
+                } else {
+                    // 点赞
+                    await digg("creation",item.creation_id);
+                    item.is_digg = true;
+                    item.likes += 1;
+                }
+            } catch (e) {
+                console.error('点赞操作失败：', e);
+                uni.showToast({
+                    title: '操作失败',
+                    icon: 'none'
+                });
+            } finally {
+                item._digging = false;
+            }
         },
-        
-        getRankClass(index) {
-            if (index === 0) return 'rank-1';
-            if (index === 1) return 'rank-2';
-            if (index === 2) return 'rank-3';
-            return '';
+
+        /* ========== 跳转详情：按类型进入不同详情页 ========== */
+        goToCreationDetail(creation) {
+            if (!creation || !creation.creation_id) return;
+
+            const creationId = encodeURIComponent(creation.creation_id);
+            const userId = encodeURIComponent(
+                creation.user_id || creation.author?.user_id || ''
+            );
+
+            const isVideo = creation.type === 'video' 
+                || Number(creation.material_type) === 2;
+
+            const basePath = isVideo
+                ? '/pages/creation/creation_video'
+                : '/pages/creation/creation_image';
+
+            uni.navigateTo({
+                url: `${basePath}?creationId=${creationId}&userId=${userId}`
+            });
         },
-        
+
+        /* ========== 数字格式化 ========== */
         formatNumber(num) {
+            if (!num && num !== 0) return '0';
             if (num >= 10000) {
                 return (num / 10000).toFixed(1) + 'w';
             }
@@ -406,117 +384,6 @@ export default {
 
 .search-button:active {
     transform: scale(0.95);
-}
-
-/* ==================== 热搜列表 ==================== */
-.hot-search-list {
-    padding: 12px;
-    background: #fff;
-    border-top: 1px solid #f0f0f0;
-    animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.hot-search-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
-
-.hot-title-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.hot-icon {
-    font-size: 18px;
-}
-
-.hot-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: #333;
-}
-
-.refresh-btn {
-    display: flex;
-    align-items: center;
-    padding: 4px 12px;
-    background: #f5f7fa;
-    border-radius: 12px;
-    font-size: 12px;
-    color: #666;
-}
-
-.refresh-icon {
-    font-size: 14px;
-}
-
-.hot-search-tags {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.hot-search-tag {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: #f8f9fa;
-    border-radius: 10px;
-    transition: all 0.3s;
-}
-
-.hot-search-tag:active {
-    background: #e8e9eb;
-    transform: scale(0.98);
-}
-
-.hot-rank {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
-    background: #e0e0e0;
-    color: #666;
-}
-
-.hot-rank.rank-1 {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: #fff;
-}
-
-.hot-rank.rank-2 {
-    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-    color: #fff;
-}
-
-.hot-rank.rank-3 {
-    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-    color: #666;
-}
-
-.hot-text {
-    flex: 1;
-    font-size: 14px;
-    color: #333;
 }
 
 /* ==================== 创作列表 ==================== */

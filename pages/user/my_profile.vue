@@ -442,11 +442,11 @@ export default {
 				if (item.is_digg) {
 					// 注意：这里你的 digg/cancelDigg 后端签名是啥？
 					// 前面其他页面是 cancelDigg('creation', id)，如果这里也要统一，就改成那种
-					await cancelDigg(item.creation_id);
+					await cancelDigg("creation",item.creation_id);
 					item.is_digg = false;
 					if (item.digg_count > 0) item.digg_count -= 1;
 				} else {
-					await digg(item.creation_id);
+					await digg("creation",item.creation_id);
 					item.is_digg = true;
 					item.digg_count += 1;
 				}

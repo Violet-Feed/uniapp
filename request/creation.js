@@ -17,8 +17,8 @@ export const getMaterialByUser = async (page) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
 			return res.data;
 		}else {
 			uni.showToast({
@@ -65,11 +65,11 @@ export const createCreation = async (payload) => {
 		data: dataJson,
 		dataType: 'string',
 	});
-	console.log(res);
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
+			return true;
 		}else {
 			uni.showToast({
 				title: '服务器错误',
@@ -90,6 +90,7 @@ export const createCreation = async (payload) => {
 			icon: 'none'
 		});
 	}
+	return false;
 }
 
 export const getCreationById = async (creationId) => {
@@ -110,8 +111,8 @@ export const getCreationById = async (creationId) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
 			return res.data;
 		}else {
 			uni.showToast({
@@ -155,8 +156,8 @@ export const getCreationsByUser = async (userId,page) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
 			return res.data;
 		}else {
 			uni.showToast({
@@ -200,8 +201,8 @@ export const getCreationsByDigg = async (userId,page) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
 			return res.data;
 		}else {
 			uni.showToast({
@@ -244,8 +245,51 @@ export const getCreationsByFriend = async (page) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
+			return res.data;
+		}else {
+			uni.showToast({
+				title: '服务器错误',
+				icon: 'none'
+			});
+		}
+	} else if (res.statusCode === 403) {
+		uni.showToast({
+			title: '登录过期',
+			icon: 'none'
+		});
+		uni.reLaunch({
+			url: '/pages/user/login'
+		});
+	} else {
+		uni.showToast({
+			title: '网络错误',
+			icon: 'none'
+		});
+	}
+	return undefined;
+}
+
+export const getCreationsByRec = async () => {
+	const token = getApp().globalData.token;
+	const data = {
+	};
+	const dataJson = JSONbig.stringify(data);
+	let res = await uni.request({
+		url: 'http://127.0.0.1:3000/api/aigc/get_creations_by_rec',
+		method: 'POST',
+		header: {
+			'content-type': 'application/json',
+			'Authorization': `Bearer ${token}`
+		},
+		data: dataJson,
+		dataType: 'string',
+	});
+	if (res.statusCode === 200) {
+		res = JSONbig.parse(res.data);
+		console.log(res);
+		if (res.code === 1000) {
 			return res.data;
 		}else {
 			uni.showToast({
@@ -277,6 +321,7 @@ export const getCreationsBySearch = async (keyword,page) => {
 		page: page
 	};
 	const dataJson = JSONbig.stringify(data);
+	console.log(dataJson);
 	let res = await uni.request({
 		url: 'http://127.0.0.1:3000/api/aigc/get_creations_by_search',
 		method: 'POST',
@@ -289,8 +334,8 @@ export const getCreationsBySearch = async (keyword,page) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
+		console.log(res);
 		if (res.code === 1000) {
-			console.log(res.data);
 			return res.data;
 		}else {
 			uni.showToast({

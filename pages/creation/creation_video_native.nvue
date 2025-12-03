@@ -76,9 +76,11 @@
 
     <!-- 中间暂停 / 播放 图标 -->
     <view v-if="showCenterIcon && !showCommentsPanel" class="center-icon">
-      <text class="center-icon-text">
-        {{ isPlaying ? '⏸' : '▶️' }}
-      </text>
+      <view class="center-icon-inner">
+        <text class="center-icon-text">
+          {{ isPlaying ? '⏸' : '▶️' }}
+        </text>
+      </view>
     </view>
 
     <!-- 底部信息 -->
@@ -649,23 +651,25 @@ export default {
 .page {
   flex: 1;
   background-color: #000000;
+  position: relative;
 }
 
-/* 视频：宽占满屏幕，高度用 flex 撑满，object-fit=contain 居中显示 */
+/* 视频 */
 .video {
   width: 750rpx;
   flex: 1;
 }
 
-/* 顶部返回贴左上角一点 */
+/* 顶部返回左上角 */
 .top-bar {
   position: absolute;
-  left: 0;
-  right: 0;
   top: 0;
-  padding-left: 10px;
-  padding-top: 10px;
-  height: 56px;
+  left: 0;
+  width: 750rpx;
+  height: 64px;
+  padding-left: 20px;
+  padding-top: 20px;
+  flex-direction: row;
   justify-content: flex-start;
   align-items: center;
 }
@@ -684,12 +688,15 @@ export default {
   color: #ffffff;
 }
 
-/* 右侧操作栏再往下一点 */
+/* 右侧操作栏：靠下偏上一点 */
 .right-actions {
   position: absolute;
   right: 16px;
-  top: 55%;
+  top: 0;
+  bottom: 0;
+  justify-content: flex-end;   /* 底对齐 */
   align-items: center;
+  padding-bottom: 50%;         /* 离底部留 1/4 屏，让整列落在下半部分偏中间 */
 }
 
 /* 每个按钮一个统一的大点击区域 */
@@ -701,20 +708,19 @@ export default {
   margin-bottom: 18px;
 }
 
-/* 头像那一项稍微大一点 */
+/* 头像项 + 关注 */
 .avatar-item {
   height: 90px;
+  position: relative;
 }
 
-/* 头像点击区域更大一点 */
 .avatar-touch {
-  width: 72px;
-  height: 72px;
+  width: 68px;
+  height: 68px;
   justify-content: center;
   align-items: center;
 }
 
-/* 头像圆形边框，与头像齐平 */
 .avatar-wrapper {
   width: 52px;
   height: 52px;
@@ -733,11 +739,11 @@ export default {
   border-radius: 26px;
 }
 
-/* 关注 + 圆形，和头像对正（靠下中偏右） */
+/* 关注 + 圆形，和头像中心在同一竖直线 */
 .follow-plus {
   position: absolute;
-  bottom: 4px;
-  right: 4px;
+  bottom: 6px;
+  left: 23px;
   width: 22px;
   height: 22px;
   border-radius: 11px;
@@ -755,7 +761,6 @@ export default {
   font-weight: bold;
 }
 
-/* 点赞/评论/转发的点击块 */
 .action-hit {
   width: 68px;
   justify-content: center;
@@ -782,10 +787,15 @@ export default {
 /* 中间暂停 / 播放图标 */
 .center-icon {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  margin-left: -40px;
-  margin-top: -40px;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  justify-content: center;
+  align-items: center;
+}
+
+.center-icon-inner {
   width: 80px;
   height: 80px;
   border-radius: 40px;
@@ -799,7 +809,7 @@ export default {
   color: #ffffff;
 }
 
-/* 底部信息整体再大一点，贴底 */
+/* 底部信息 */
 .bottom-info {
   position: absolute;
   left: 16px;
@@ -807,7 +817,6 @@ export default {
   bottom: 24px;
 }
 
-/* 用户名加粗，和标题分开一点距离 */
 .author-row {
   margin-bottom: 10px;
 }
@@ -857,7 +866,7 @@ export default {
   margin-bottom: 2px;
 }
 
-/* 评论遮罩和抽屉：高度 80%，更高一点 */
+/* 评论遮罩和抽屉 */
 .comments-mask {
   position: absolute;
   left: 0;
@@ -871,7 +880,7 @@ export default {
 
 .comments-panel {
   width: 750rpx;
-  height: 80%;
+  height: 900rpx;  /* 大约 2/3 屏高，可按设备再调 */
   background-color: #ffffff;
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
