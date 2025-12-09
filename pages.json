@@ -30,14 +30,6 @@
 			}
 		},
 		{
-			"path" : "pages/creation/creation_video_native",
-			"style" : 
-			{
-				"navigationBarTitleText" : "创作",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
 			"path" : "pages/creation/friend",
 			"style" : 
 			{

@@ -1,3 +1,4 @@
+import { httpRequestBackData, httpRequestBackBool } from '@/request/common.js';
 import JSONbig from 'json-bigint';
 export const follow = async (fromUserId,toUserId) => {
 	const token = getApp().globalData.token;
@@ -316,4 +317,67 @@ export const cancelDigg = async (entityType,entityId) => {
 		});
 	}
 	return false;
+}
+
+export const createComment = async (payload) => {
+	const data = {
+		entity_type: payload.entityType,
+		entity_id: payload.entityId,
+		content_type: payload.contentType,
+		content: payload.content
+	};
+	return httpRequestBackData("/action/create_comment",data);
+}
+
+export const createReply = async (payload) => {
+	const data = {
+		entity_type: payload.entityType,
+		entity_id: payload.entityId,
+		parent_id: payload.parentId,
+		sib_id: payload.sibId,
+		sib_user_id: payload.sibUserId,
+		content_type: payload.contentType,
+		content: payload.content
+	};
+	return httpRequestBackData("/action/create_reply",data);
+}
+
+export const getCommentList = async (payload) => {
+	const data = {
+		entity_type: payload.entityType,
+		entity_id: payload.entityId,
+		page: payload.page,
+		sort_type: payload.sortType
+	};
+	return httpRequestBackData("/action/get_comment_list",data);
+}
+
+export const getReplyList = async (payload) => {
+	const data = {
+		comment_id: payload.commentId,
+		page: payload.page
+	};
+	return httpRequestBackData("/action/get_reply_list",data);
+}
+
+export const getCommentCount = async (payload) => {
+	const data = {
+		entity_type: payload.entityType,
+		entity_id: payload.entityId
+	};
+	return httpRequestBackData("/action/get_comment_count",data);
+}
+
+export const diggComment = async (payload) => {
+	const data = {
+		comment_id: payload.commentId
+	};
+	return httpRequestBackBool("/action/digg_comment",data);
+}
+
+export const cancelDiggComment = async (payload) => {
+	const data = {
+		comment_id: payload.commentId
+	};
+	return httpRequestBackBool("/action/cancel_digg_comment",data);
 }

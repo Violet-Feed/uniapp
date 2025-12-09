@@ -490,7 +490,7 @@ export default {
 			const isVideo = Number(work.material_type) === 2;
 
 			const basePath = isVideo
-				? '/pages/creation/creation_video_native'
+				? '/pages/creation/creation_video'
 				: '/pages/creation/creation_image';
 
 			uni.navigateTo({

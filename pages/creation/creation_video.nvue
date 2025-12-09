@@ -22,8 +22,11 @@
 
     <!-- 右侧头像 + 点赞 / 评论 / 转发 -->
     <view class="right-actions">
-      <!-- 头像 + 关注 -->
-      <view class="action-item avatar-item" @click="goToUserPage">
+      <!-- 头像 + 关注（作者本人不显示关注） -->
+      <view
+        class="action-item avatar-item"
+        @click="goToUserPage(creation.author.user_id)"
+      >
         <view class="avatar-touch">
           <view class="avatar-wrapper">
             <image
@@ -33,7 +36,7 @@
           </view>
         </view>
         <view
-          v-if="!isFollowed"
+          v-if="!isSelfAuthor && !isFollowed"
           class="follow-plus"
           @click.stop="handleFollowClick"
         >
@@ -53,7 +56,7 @@
         </view>
       </view>
 
-      <!-- 评论 -->
+      <!-- 评论：点击后再加载评论列表 / 回复列表 -->
       <view class="action-item" @click="openCommentsPanel">
         <view class="action-hit">
           <text class="action-icon">💬</text>
@@ -85,7 +88,7 @@
 
     <!-- 底部信息 -->
     <view class="bottom-info">
-      <view class="author-row" @click="goToUserPage">
+      <view class="author-row" @click="goToUserPage(creation.author.user_id)">
         <text class="author-name">
           @{{ creation.author.username || '匿名用户' }}
         </text>
@@ -113,6 +116,11 @@
         </text>
       </view>
 
+      <!-- category 灰色圆角矩形 -->
+      <view class="category-row" v-if="categoryLabel">
+        <text class="category-text"># {{ categoryLabel }}</text>
+      </view>
+
       <view class="tags-row" v-if="creation.tags && creation.tags.length">
         <text
           class="tag-text"
@@ -135,13 +143,25 @@
           <text class="comments-title">
             评论 {{ formatNumber(creation.comments) }}
           </text>
-          <text class="comments-close" @click="closeCommentsPanel">✕</text>
+
+          <view class="comments-header-right">
+            <view class="comments-sort" @click="toggleCommentSort">
+              <text class="comments-sort-label">
+                {{ commentSortType === 'time' ? '按时间' : '按热度' }}
+              </text>
+            </view>
+            <text class="comments-close" @click="closeCommentsPanel">✕</text>
+          </view>
         </view>
 
+        <!-- 评论列表：触底分页 -->
         <scroll-view
           scroll-y="true"
           class="comments-scroll"
+          @scrolltolower="onCommentsScrollToLower"
+          lower-threshold="80"
         >
+          <!-- 一级评论 -->
           <view
             class="comment-item"
             v-for="comment in commentList"
@@ -177,28 +197,40 @@
                 </view>
               </view>
 
-              <text class="comment-text">
-                {{ comment.text }}
-              </text>
+              <view class="comment-text-wrap">
+                <text class="comment-text">
+                  {{ comment.text }}
+                </text>
+              </view>
 
               <view class="comment-meta">
-                <text class="comment-time">{{ comment.time }}</text>
+                <text class="comment-time">
+                  {{ formatRelativeTime(comment.time) }}
+                </text>
                 <text
                   class="comment-reply"
-                  @click="replyToComment(comment)"
+                  @click="replyToComment(comment, comment)"
                 >
                   回复
                 </text>
               </view>
 
-              <!-- 二级回复 -->
+              <!-- 一级评论下方：展开 X 条回复 -->
               <view
-                class="reply-list"
-                v-if="comment.replies && comment.replies.length"
+                v-if="comment.replyCount && !comment.showReplies"
+                class="comment-replies-toggle"
+                @click="toggleReplies(comment)"
               >
+                <text class="comment-replies-toggle-text">
+                  展开{{ comment.replyCount }}条回复
+                </text>
+              </view>
+
+              <!-- 二级回复列表 -->
+              <view v-if="comment.showReplies" class="reply-list">
                 <view
                   class="reply-item"
-                  v-for="reply in comment.replies.slice(0, 3)"
+                  v-for="reply in comment.replies"
                   :key="reply.id"
                 >
                   <image
@@ -208,23 +240,27 @@
                   />
                   <view class="reply-main">
                     <view class="reply-header">
-                      <text
-                        class="reply-username"
-                        @click="goToUserPage(reply.user.user_id)"
-                      >
-                        {{ reply.user.name }}
-                      </text>
-                      <text
-                        v-if="reply.replyToUser"
-                        class="reply-to"
-                      >
-                        回复 @{{ reply.replyToUser }}
-                      </text>
-                      <view class="flex-spacer"></view>
+                      <view class="reply-name-line">
+                        <text
+                          class="reply-username"
+                          @click="goToUserPage(reply.user.user_id)"
+                        >
+                          {{ reply.user.name }}
+                        </text>
+                        <!-- 仅对二级评论的回复展示 @sib_username -->
+                        <text
+                          v-if="reply.replyToUser && reply.replyToUserId"
+                          class="reply-at"
+                          @click.stop="goToUserPage(reply.replyToUserId)"
+                        >
+                          回复 @{{ reply.replyToUser }}
+                        </text>
+                      </view>
+
                       <view
                         class="reply-like"
                         :class="{ liked: reply.isLiked }"
-                        @click="toggleReplyLike(reply)"
+                        @click="toggleCommentLike(reply)"
                       >
                         <text class="reply-like-icon">
                           {{ reply.isLiked ? '♥️' : '♡' }}
@@ -243,10 +279,12 @@
                     </text>
 
                     <view class="reply-meta">
-                      <text class="reply-time">{{ reply.time }}</text>
+                      <text class="reply-time">
+                        {{ formatRelativeTime(reply.time) }}
+                      </text>
                       <text
                         class="reply-reply"
-                        @click="replyToComment(comment, reply)"
+                        @click="replyToComment(reply, comment)"
                       >
                         回复
                       </text>
@@ -254,13 +292,27 @@
                   </view>
                 </view>
 
-                <text
-                  v-if="comment.totalReplies > 3"
-                  class="more-replies"
-                  @click="loadMoreReplies(comment)"
-                >
-                  查看全部 {{ comment.totalReplies }} 条回复 &gt;
-                </text>
+                <!-- 展开更多 / 收起 在同一行，整体与一级评论用户名左侧对齐 -->
+                <view class="reply-footer">
+                  <text
+                    v-if="comment.replyHasMore && !comment.replyLoading"
+                    @click="loadMoreReplies(comment)"
+                  >
+                    展开更多回复
+                  </text>
+                  <text
+                    v-if="comment.replyLoading"
+                    class="reply-footer-loading"
+                  >
+                    回复加载中...
+                  </text>
+                  <text
+                    class="reply-footer-collapse"
+                    @click="toggleReplies(comment)"
+                  >
+                    收起
+                  </text>
+                </view>
               </view>
             </view>
           </view>
@@ -273,7 +325,7 @@
           </view>
 
           <view
-            v-if="commentLoading"
+            v-if="commentLoading && commentList.length"
             class="empty-comments"
           >
             <text class="empty-comments-text">评论加载中...</text>
@@ -314,9 +366,19 @@
 <script>
 import { getCreationById } from '@/request/creation.js'
 import { getUserProfile } from '@/request/user.js'
-import { digg, cancelDigg } from '@/request/action.js'
-// import { getCommentsByCreation } from '@/request/comment.js'
-// import { follow, unfollow } from '@/request/follow.js'
+import {
+  digg,
+  cancelDigg,
+  createComment,
+  createReply,
+  getCommentList,
+  getCommentCount,
+  diggComment,
+  cancelDiggComment,
+  getReplyList,
+  follow,
+  unfollow
+} from '@/request/action.js'
 
 export default {
   data() {
@@ -350,6 +412,10 @@ export default {
         shares: 0
       },
 
+      currentUserId: null,
+      username: '',
+      avatar: '',
+
       isLiked: false,
       isFollowed: false,
       isDetailExpanded: false,
@@ -358,10 +424,18 @@ export default {
       showCenterIcon: false,
       centerIconTimer: null,
 
+      // 评论抽屉
       showCommentsPanel: false,
+
+      // 评论数据
       commentList: [],
       commentLoading: false,
+      commentPage: 1,
+      commentHasMore: true,
+      commentSortType: 'digg',
+      commentsInitialized: false,
 
+      // 输入状态
       commentText: '',
       commentPlaceholder: '说点什么...',
       commentInputFocus: false,
@@ -371,9 +445,35 @@ export default {
     }
   },
 
+  computed: {
+    // category -> 中文标签
+    categoryLabel() {
+      const map = {
+        life: '生活',
+        society: '社会',
+        tech: '科技',
+        entertainment: '娱乐'
+      }
+      return map[this.creation.category] || ''
+    },
+    // 是否作者本人
+    isSelfAuthor() {
+      if (!this.currentUserId || !this.creation.author.user_id) return false
+      return String(this.currentUserId) === String(this.creation.author.user_id)
+    }
+  },
+
   onLoad(options) {
     this.creationId = options.creationId
     this.authorId = options.userId
+
+    const app = getApp()
+    if (app && app.globalData) {
+      this.currentUserId = app.globalData.userId || null
+      this.username = app.globalData.username || app.globalData.nickname || ''
+      this.avatar = app.globalData.avatar || this.defaultAvatar
+    }
+
     this.initPage()
   },
 
@@ -389,30 +489,23 @@ export default {
   },
 
   methods: {
-    goBack() {
-      uni.navigateBack()
-    },
-
     async initPage() {
       uni.showLoading({ title: '加载中...' })
-      try {
-        await Promise.all([
-          this.fetchCreationDetail(),
-          this.fetchAuthorInfo(),
-          this.fetchCommentsAndStats()
-        ])
-      } catch (e) {
-        console.error(e)
+      const ok1 = await this.fetchCreationDetail()
+      const ok2 = await this.fetchAuthorInfo()
+      // 进入视频页面时就加载评论数量
+      const ok3 = await this.fetchCommentCount()
+      if (!ok1 || !ok2 || !ok3) {
         uni.showToast({ title: '加载失败', icon: 'none' })
-      } finally {
-        uni.hideLoading()
       }
+      uni.hideLoading()
     },
 
     async fetchCreationDetail() {
       const res = await getCreationById(this.creationId)
-      const c = res.creation || res
+      if (!res || !res.creation) return false
 
+      const c = res.creation
       const materialType = c.material_type
       const isVideo = Number(materialType) === 2
 
@@ -427,81 +520,47 @@ export default {
       const cover = c.cover_url || c.material_url || ''
       this.creation.coverImage = cover
       this.creation.videoUrl = isVideo ? (c.material_url || '') : ''
+
+      this.creation.likes = c.digg_count || 0
+      this.creation.comments = c.comment_count || 0
+      this.creation.shares = c.share_count || 0
+      this.isLiked = !!c.is_digg
+
+      return true
     },
 
     async fetchAuthorInfo() {
-      if (!this.authorId) return
-      const res = await getUserProfile(this.authorId, true, false)
-      const info = res.user_info || {}
+      const targetUserId = this.authorId || this.creation.userId
+      if (!targetUserId) return false
 
+      const res = await getUserProfile(targetUserId, true, false)
+      if (!res || !res.user_info) return false
+
+      const info = res.user_info || {}
       this.creation.author = {
-        user_id: info.user_id || this.authorId,
+        user_id: info.user_id || targetUserId,
         username: info.username || info.nickname || '',
         avatar: info.avatar || this.defaultAvatar,
         followerCount: res.follower_count || 0
       }
       this.isFollowed = !!res.is_following
+      return true
     },
 
-    async fetchCommentsAndStats() {
-      this.commentLoading = true
-      try {
-        // const res = await getCommentsByCreation(this.creationId)
-        const res = { comments: [] }
-
-        const list = res.comments || res.comment_list || []
-
-        this.commentList = list.map((c) => {
-          const replies = (c.replies || []).map((r) => ({
-            id: r.comment_id,
-            user: {
-              user_id: r.user_id,
-              name: r.username,
-              avatar: r.avatar
-            },
-            text: r.content,
-            time: r.create_time,
-            likes: r.digg_count || 0,
-            isLiked: !!r.is_digg,
-            replyToUser: r.reply_to_username || ''
-          }))
-
-          return {
-            id: c.comment_id,
-            user: {
-              user_id: c.user_id,
-              name: c.username,
-              avatar: c.avatar
-            },
-            text: c.content,
-            time: c.create_time,
-            likes: c.digg_count || 0,
-            isLiked: !!c.is_digg,
-            totalReplies: c.reply_count || replies.length,
-            replies
-          }
-        })
-
-        if (typeof res.comment_count === 'number') {
-          this.creation.comments = res.comment_count
-        } else {
-          this.creation.comments = this.commentList.length
-        }
-        if (typeof res.digg_count === 'number') {
-          this.creation.likes = res.digg_count
-        }
-        if (typeof res.share_count === 'number') {
-          this.creation.shares = res.share_count
-        }
-        if (typeof res.is_digg === 'boolean') {
-          this.isLiked = res.is_digg
-        }
-      } catch (e) {
-        console.error('加载评论失败', e)
-        uni.showToast({ title: '评论加载失败', icon: 'none' })
-      } finally {
-        this.commentLoading = false
+    async fetchCommentCount() {
+      if (!this.creationId) return false
+      const payload = {
+        entityType: 'creation',
+        entityId: BigInt(this.creationId)
       }
+      const res = await getCommentCount(payload)
+      if (!res || typeof res.comment_count !== 'number') return false
+      this.creation.comments = res.comment_count
+      return true
+    },
+
+    goBack() {
+      uni.navigateBack()
     },
 
     handleVideoTap() {
@@ -530,27 +589,40 @@ export default {
     async toggleLike() {
       if (this.likeLoading || !this.creation.creationId) return
       this.likeLoading = true
-      try {
-        if (this.isLiked) {
-          await cancelDigg('creation', this.creation.creationId)
+
+      let ok = false
+      if (this.isLiked) {
+        ok = await cancelDigg('creation', this.creation.creationId)
+        if (ok) {
           this.isLiked = false
           this.creation.likes = Math.max(0, this.creation.likes - 1)
-        } else {
-          await digg('creation', this.creation.creationId)
+        }
+      } else {
+        ok = await digg('creation', this.creation.creationId)
+        if (ok) {
           this.isLiked = true
           this.creation.likes += 1
         }
-      } catch (e) {
-        console.error('点赞失败', e)
-        uni.showToast({ title: '操作失败', icon: 'none' })
-      } finally {
-        this.likeLoading = false
       }
+
+      if (!ok) {
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      }
+      this.likeLoading = false
     },
 
     async handleFollowClick() {
-      // await follow(this.creation.author.user_id)
+      const currentUserId = this.currentUserId
+      const targetUserId = this.creation.author.user_id
+      if (!currentUserId || !targetUserId) return
+
+      const ok = await follow(currentUserId, targetUserId)
+      if (!ok) {
+        uni.showToast({ title: '操作失败', icon: 'none' })
+        return
+      }
       this.isFollowed = true
+      this.creation.author.followerCount += 1
       uni.showToast({ title: '关注成功', icon: 'none' })
     },
 
@@ -558,9 +630,18 @@ export default {
       this.isDetailExpanded = !this.isDetailExpanded
     },
 
-    openCommentsPanel() {
+    async openCommentsPanel() {
       this.showCommentsPanel = true
       this.commentInputFocus = false
+
+      // 评论数量已在进入页面时加载；这里只做评论列表初始化
+      if (!this.commentsInitialized) {
+        const ok2 = await this.fetchComments(true)
+        this.commentsInitialized = true
+        if (!ok2) {
+          uni.showToast({ title: '评论加载失败', icon: 'none' })
+        }
+      }
     },
 
     closeCommentsPanel() {
@@ -568,45 +649,214 @@ export default {
       this.commentText = ''
       this.replyingTo = null
       this.commentPlaceholder = '说点什么...'
+      this.commentInputFocus = false
     },
 
     closeCommentsPanelByMask() {
       this.closeCommentsPanel()
     },
 
+    async fetchComments(reset = false) {
+      if (this.commentLoading) return false
+      if (!reset && !this.commentHasMore) return false
+      if (!this.creationId) return false
+
+      this.commentLoading = true
+      const pageToLoad = reset ? 1 : this.commentPage + 1
+
+      const payload = {
+        entityType: 'creation',
+        entityId: BigInt(this.creationId),
+        page: pageToLoad,
+        sortType: this.commentSortType
+      }
+
+      const res = await getCommentList(payload)
+      if (!res) {
+        this.commentLoading = false
+        return false
+      }
+
+      const list = res.comments || []
+      const mapped = list.map((c) => ({
+        id: c.comment_id,
+        user: {
+          user_id: c.user_id,
+          name: c.username,
+          avatar: c.avatar
+        },
+        text: c.content,
+        time: c.create_time,
+        likes: c.digg_count || 0,
+        isLiked: !!c.is_digg,
+        replyToUser: c.sib_username || '',
+        replyToUserId: c.sib_user_id || null,
+        replyCount: c.reply_count || 0,
+
+        showReplies: false,
+        replies: [],
+        replyPage: 0,
+        replyHasMore: (c.reply_count || 0) > 0,
+        replyLoading: false,
+        _loading: false
+      }))
+
+      if (reset) {
+        this.commentList = mapped
+        this.commentPage = 1
+      } else {
+        this.commentList = this.commentList.concat(mapped)
+        this.commentPage = pageToLoad
+      }
+
+      const pageSize = 10
+      this.commentHasMore = list.length >= pageSize
+      this.commentLoading = false
+      return true
+    },
+
+    onCommentsScrollToLower() {
+      this.fetchComments(false)
+    },
+
+    toggleCommentSort() {
+      this.commentSortType = this.commentSortType === 'time' ? 'digg' : 'time'
+      this.commentPage = 1
+      this.commentHasMore = true
+      this.fetchComments(true)
+    },
+
+    async toggleReplies(comment) {
+      if (!comment) return
+      if (!comment.showReplies) {
+        comment.showReplies = true
+        if (!comment.replies.length && comment.replyCount) {
+          await this.loadReplies(comment, true)
+        }
+      } else {
+        comment.showReplies = false
+      }
+    },
+
+    async loadReplies(comment, reset = false) {
+      if (!comment) return
+      if (comment.replyLoading) return
+      if (!reset && !comment.replyHasMore) return
+      if (!this.creationId) return
+
+      comment.replyLoading = true
+      const pageToLoad = reset ? 1 : (comment.replyPage || 0) + 1
+
+      const payload = {
+        entityType: 'creation',
+        entityId: BigInt(this.creationId),
+        commentId: BigInt(comment.id),
+        page: pageToLoad
+      }
+
+      const res = await getReplyList(payload)
+      if (!res) {
+        comment.replyLoading = false
+        return
+      }
+
+      const list = res.replies || res.comments || []
+      const mapped = list.map((r) => ({
+        id: r.comment_id,
+        user: {
+          user_id: r.user_id,
+          name: r.username,
+          avatar: r.avatar
+        },
+        text: r.content,
+        time: r.create_time,
+        likes: r.digg_count || 0,
+        isLiked: !!r.is_digg,
+        replyToUser: r.sib_username || '',
+        replyToUserId: r.sib_user_id || null,
+        replyCount: 0,
+        showReplies: false,
+        replies: [],
+        replyPage: 0,
+        replyHasMore: false,
+        replyLoading: false,
+        _loading: false
+      }))
+
+      if (reset || !comment.replies.length) {
+        comment.replies = mapped
+        comment.replyPage = 1
+      } else {
+        comment.replies = comment.replies.concat(mapped)
+        comment.replyPage = pageToLoad
+      }
+
+      const pageSize = 10
+      comment.replyHasMore = list.length >= pageSize
+      comment.replyLoading = false
+    },
+
+    loadMoreReplies(comment) {
+      this.loadReplies(comment, false)
+    },
+
     goToUserPage(userId) {
-      let targetId = userId
-      if (targetId && typeof targetId === 'object') {
-        targetId = targetId.user_id || targetId.id
-      }
-      if (!targetId) {
-        targetId = this.creation.author.user_id
-      }
+      const targetId = userId || this.creation.author.user_id
       if (!targetId) return
       uni.navigateTo({
         url: `/pages/user/user_profile?userId=${targetId}`
       })
     },
 
-    toggleCommentLike(comment) {
-      comment.isLiked = !comment.isLiked
-      comment.likes = Math.max(0, comment.likes + (comment.isLiked ? 1 : -1))
+    async toggleCommentLike(comment) {
+      if (!comment || comment._loading) return
+
+      comment._loading = true
+      const payload = {
+        commentId: BigInt(comment.id)
+      }
+
+      let ok = false
+      if (comment.isLiked) {
+        ok = await cancelDiggComment(payload)
+        if (ok) {
+          comment.isLiked = false
+          comment.likes = Math.max(0, comment.likes - 1)
+        }
+      } else {
+        ok = await diggComment(payload)
+        if (ok) {
+          comment.isLiked = true
+          comment.likes += 1
+        }
+      }
+
+      if (!ok) {
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      }
+      comment._loading = false
     },
 
-    toggleReplyLike(reply) {
-      reply.isLiked = !reply.isLiked
-      reply.likes = Math.max(0, reply.likes + (reply.isLiked ? 1 : -1))
-    },
+    // parentComment 是一级评论，targetComment 可能是一级或二级
+    replyToComment(targetComment, parentComment) {
+      if (!targetComment) return
+      const parent = parentComment || targetComment
 
-    replyToComment(comment, reply) {
-      const target = reply || comment
-      this.replyingTo = target
-      this.commentPlaceholder = `回复 @${target.user.name}`
+      const isReplyToReply = parent.id !== targetComment.id
+
+      this.replyingTo = {
+        parentId: parent.id,
+        displayName: targetComment.user.name || '',
+        isReplyToReply,
+        // 对一级评论的回复：sibId / sibUserId 为 0
+        sibId: isReplyToReply ? targetComment.id : 0,
+        sibUserId: isReplyToReply ? (targetComment.user.user_id || 0) : 0
+      }
+
+      this.commentPlaceholder = this.replyingTo.displayName
+        ? `回复 @${this.replyingTo.displayName}`
+        : '回复'
       this.commentInputFocus = true
-    },
-
-    loadMoreReplies(comment) {
-      uni.showToast({ title: '加载更多回复开发中', icon: 'none' })
     },
 
     handleInputBlurInPanel() {
@@ -619,17 +869,111 @@ export default {
       const text = this.commentText.trim()
       if (!text) return
 
-      try {
-        // TODO: 接评论接口
-        uni.showToast({ title: '发送成功', icon: 'success' })
-        this.commentText = ''
-        this.commentPlaceholder = '说点什么...'
-        this.replyingTo = null
-        this.fetchCommentsAndStats()
-      } catch (e) {
-        console.error('发送评论失败', e)
-        uni.showToast({ title: '发送失败', icon: 'none' })
+      const currentUserId = this.currentUserId
+      const currentUserName = this.username || ''
+      const currentAvatar = this.avatar || this.defaultAvatar
+
+      let res
+
+      if (this.replyingTo) {
+        // 回复
+        const payload = {
+          parentId: BigInt(this.replyingTo.parentId),
+          entityType: 'creation',
+          entityId: BigInt(this.creationId),
+          contentType: 1,
+          content: text,
+          sibId: BigInt(this.replyingTo.sibId || 0),
+          sibUserId: BigInt(this.replyingTo.sibUserId || 0)
+        }
+        res = await createReply(payload)
+      } else {
+        // 一级评论
+        const payload = {
+          entityType: 'creation',
+          entityId: BigInt(this.creationId),
+          contentType: 1,
+          content: text
+        }
+        res = await createComment(payload)
       }
+
+      if (!res || !res.comment_id) {
+        uni.showToast({ title: '发送失败', icon: 'none' })
+        return
+      }
+
+      const newId = res.comment_id
+
+      if (this.replyingTo) {
+        const parentIndex = this.commentList.findIndex(
+          (c) => String(c.id) === String(this.replyingTo.parentId)
+        )
+        if (parentIndex !== -1) {
+          const parent = this.commentList[parentIndex]
+          const isReplyToReply = !!this.replyingTo.isReplyToReply
+
+          const replyComment = {
+            id: newId,
+            user: {
+              user_id: currentUserId,
+              name: currentUserName,
+              avatar: currentAvatar
+            },
+            text,
+            time: Date.now(),
+            likes: 0,
+            isLiked: false,
+            replyToUser: isReplyToReply ? (this.replyingTo.displayName || '') : '',
+            replyToUserId: isReplyToReply ? (this.replyingTo.sibUserId || null) : null,
+            replyCount: 0,
+            showReplies: false,
+            replies: [],
+            replyPage: 0,
+            replyHasMore: false,
+            replyLoading: false,
+            _loading: false
+          }
+
+          if (!Array.isArray(parent.replies)) {
+            parent.replies = []
+          }
+          parent.replies.push(replyComment)
+          parent.replyCount += 1
+          parent.showReplies = true
+        }
+      } else {
+        const newComment = {
+          id: newId,
+          user: {
+            user_id: currentUserId,
+            name: currentUserName,
+            avatar: currentAvatar
+          },
+          text,
+          time: Date.now(),
+          likes: 0,
+          isLiked: false,
+          replyToUser: '',
+          replyToUserId: null,
+          replyCount: 0,
+          showReplies: false,
+          replies: [],
+          replyPage: 0,
+          replyHasMore: false,
+          replyLoading: false,
+          _loading: false
+        }
+        this.commentList.unshift(newComment)
+      }
+
+      this.creation.comments += 1
+
+      uni.showToast({ title: '发送成功', icon: 'success' })
+      this.commentText = ''
+      this.commentPlaceholder = '说点什么...'
+      this.replyingTo = null
+      this.commentInputFocus = false
     },
 
     handleShare() {
@@ -642,6 +986,58 @@ export default {
       if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
       if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
       return n
+    },
+
+    formatRelativeTime(msTimestamp) {
+      if (!msTimestamp) return ''
+      if (msTimestamp < 1e12) {
+        msTimestamp = msTimestamp * 1000
+      }
+
+      const now = new Date()
+      const target = new Date(msTimestamp)
+      const nowMs = now.getTime()
+      const diffMs = nowMs - msTimestamp
+      const diffSec = Math.floor(diffMs / 1000)
+
+      if (diffSec < 60) {
+        return '刚刚'
+      }
+      if (diffSec < 3600) {
+        const m = Math.floor(diffSec / 60)
+        return `${m}分钟前`
+      }
+
+      const oneDayMs = 24 * 60 * 60 * 1000
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      ).getTime()
+
+      const pad2 = (n) => (n < 10 ? '0' + n : '' + n)
+      const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`
+
+      if (msTimestamp >= todayStart) {
+        return `今天 ${hhmm}`
+      }
+      if (msTimestamp >= todayStart - oneDayMs) {
+        return `昨天 ${hhmm}`
+      }
+
+      const diffDay = Math.floor(diffMs / oneDayMs)
+      if (diffDay < 7) {
+        return `${diffDay}天前`
+      }
+
+      const year = target.getFullYear()
+      const month = target.getMonth() + 1
+      const day = target.getDate()
+
+      if (year !== now.getFullYear()) {
+        return `${year}年${month}月${day}日`
+      }
+      return `${month}月${day}日`
     }
   }
 }
@@ -688,18 +1084,17 @@ export default {
   color: #ffffff;
 }
 
-/* 右侧操作栏：靠下偏上一点 */
+/* 右侧操作栏：靠下偏中 */
 .right-actions {
   position: absolute;
   right: 16px;
   top: 0;
   bottom: 0;
-  justify-content: flex-end;   /* 底对齐 */
+  justify-content: flex-end;
   align-items: center;
-  padding-bottom: 50%;         /* 离底部留 1/4 屏，让整列落在下半部分偏中间 */
+  padding-bottom: 50%;
 }
 
-/* 每个按钮一个统一的大点击区域 */
 .action-item {
   width: 68px;
   height: 68px;
@@ -708,7 +1103,6 @@ export default {
   margin-bottom: 18px;
 }
 
-/* 头像项 + 关注 */
 .avatar-item {
   height: 90px;
   position: relative;
@@ -809,12 +1203,12 @@ export default {
   color: #ffffff;
 }
 
-/* 底部信息 */
+/* 底部信息：整体稍微向左、向下紧贴一点 */
 .bottom-info {
   position: absolute;
-  left: 16px;
+  left: 10px;
   right: 90px;
-  bottom: 24px;
+  bottom: 12px;
 }
 
 .author-row {
@@ -822,7 +1216,7 @@ export default {
 }
 
 .author-name {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   color: #ffffff;
 }
@@ -832,9 +1226,10 @@ export default {
 }
 
 .title-text {
-  font-size: 16px;
+  font-size: 18px;
   color: #ffffff;
   line-height: 22px;
+  margin-left: 6px;
 }
 
 .detail-row {
@@ -842,15 +1237,32 @@ export default {
 }
 
 .detail-text {
-  font-size: 14px;
+  font-size: 16px;
   color: #f5f5f5;
   line-height: 20px;
+  margin-left: 6px;
 }
 
 .detail-expand {
   margin-top: 2px;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* category 灰色圆角矩形 */
+.category-row {
+  margin-bottom: 6px;
+}
+
+.category-text {
+  padding-left: 6px;
+  padding-right: 10px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 14px;
+  color: #f5f5f5;
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 999px;
 }
 
 .tags-row {
@@ -880,7 +1292,7 @@ export default {
 
 .comments-panel {
   width: 750rpx;
-  height: 900rpx;  /* 大约 2/3 屏高，可按设备再调 */
+  height: 900rpx; /* 大约 2/3 屏高 */
   background-color: #ffffff;
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
@@ -905,6 +1317,23 @@ export default {
   color: #333333;
 }
 
+.comments-header-right {
+  flex-direction: row;
+  align-items: center;
+}
+
+.comments-sort {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #f5f5f5;
+  margin-right: 8px;
+}
+
+.comments-sort-label {
+  font-size: 12px;
+  color: #666666;
+}
+
 .comments-close {
   font-size: 20px;
   color: #999999;
@@ -919,8 +1348,8 @@ export default {
 
 /* 单条评论 */
 .comment-item {
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 10px;
+  padding-bottom: 10px;
   border-bottom-width: 1px;
   border-bottom-style: solid;
   border-bottom-color: #f5f5f5;
@@ -970,11 +1399,14 @@ export default {
   color: #ff4757;
 }
 
+.comment-text-wrap {
+  margin-top: 4px;
+}
+
 .comment-text {
   font-size: 14px;
   color: #333333;
   line-height: 20px;
-  margin-top: 4px;
 }
 
 .comment-meta {
@@ -994,13 +1426,18 @@ export default {
   color: #666666;
 }
 
-/* 二级回复 */
+/* 展开 X 条回复 */
+.comment-replies-toggle {
+  margin-top: 4px;
+}
+
+.comment-replies-toggle-text {
+  font-size: 12px;
+  color: #666666;
+}
+
 .reply-list {
-  margin-top: 8px;
-  padding-left: 10px;
-  border-left-width: 2px;
-  border-left-style: solid;
-  border-left-color: #f0f0f0;
+  margin-top: 6px;
 }
 
 .reply-item {
@@ -1022,23 +1459,26 @@ export default {
 
 .reply-header {
   flex-direction: row;
+  justify-content: space-between;
   align-items: center;
+}
+
+.reply-name-line {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .reply-username {
   font-size: 13px;
   font-weight: 500;
   color: #333333;
-  margin-right: 6px;
 }
 
-.reply-to {
+.reply-at {
+  margin-left: 6px;
   font-size: 12px;
-  color: #999999;
-}
-
-.flex-spacer {
-  flex: 1;
+  color: #666666;
 }
 
 .reply-like {
@@ -1085,10 +1525,26 @@ export default {
   color: #666666;
 }
 
-.more-replies {
-  font-size: 13px;
-  color: #5b7dff;
-  margin-top: 4px;
+/* 展开更多 / 收起 在同一行，整体位置与回复列表左边一致 */
+.reply-footer {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 2px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #666666;
+}
+
+.reply-footer-loading {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #999999;
+}
+
+.reply-footer-collapse {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #666666;
 }
 
 /* 空状态 */
