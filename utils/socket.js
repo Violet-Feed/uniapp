@@ -5,7 +5,9 @@ import {
 	encodeConnectPacket,
 	decodeConnectPacket,
 	decodeNormalPacket,
-	decodeCommandPacket
+	decodeCommandPacket,
+	decodeMaterialPacket,
+	decodeActionPacket
 } from '@/proto_gen/packet.js';
 import {
 	getConversationInfo
@@ -78,6 +80,14 @@ class Socket {
 						const data = decodeCommandPacket(dataByte);
 						console.log(JSONbig.stringify(data));
 						this.handleCommandPacket(data);
+					} else if (packetType == encodePacketType.Material) {
+						const data = decodeMaterialPacket(dataByte);
+						console.log(JSONbig.stringify(data));
+						this.handleMaterialPacket(data);
+					} else if (packetType == encodePacketType.Action) {
+						const data = decodeActionPacket(dataByte);
+						console.log(JSONbig.stringify(data));
+						this.handleActionPacket(data);
 					}
 					reading = false;
 				}
@@ -271,6 +281,14 @@ class Socket {
 		}else if(data.msg_body.msg_type==102){
 			
 		}
+	}
+	
+	handleMaterialPacket(data){
+		uni.$emit('material', data);
+	}
+	
+	handleActionPacket(data){
+		uni.$emit('action', data);
 	}
 }
 

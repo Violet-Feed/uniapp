@@ -1,4 +1,13 @@
+import { httpRequestBackData, httpRequestBackBool } from '@/request/common.js';
 import JSONbig from 'json-bigint';
+export const createMaterial = async (payload) => {
+	const data = {
+		material_type: payload.materialType,
+		prompt: payload.prompt,
+		source_url: payload.sourceUrl
+	};
+	return httpRequestBackData("/aigc/create_material",data);
+}
 export const getMaterialByUser = async (page) => {
 	const token = getApp().globalData.token;
 	const data = {
