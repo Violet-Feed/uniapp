@@ -17,9 +17,9 @@
                     <text class="item-icon">👥</text>
                     <text class="item-text">创建群聊</text>
                 </view>
-                <view class="dropdown-item" @click="goToAIPage">
+                <view class="dropdown-item" @click="goToAgentPage">
                     <text class="item-icon">🤖</text>
-                    <text class="item-text">AI问答</text>
+                    <text class="item-text">管理智能体</text>
                 </view>
             </view>
         </view>
@@ -27,13 +27,51 @@
         <!-- 会话列表 -->
         <scroll-view class="conversation-scroll" scroll-y>
             <view class="conversation-list">
+                <!-- 固定通知会话：关注通知 -->
+                <view class="conversation-item" @click="openNotice('follow')">
+                    <view class="avatar-wrapper">
+                        <image class="avatar" src="/static/conv_avatar.png" mode="aspectFill"></image>
+                        <view class="unread-badge" v-if="followNoticeCount > 0">
+                            {{ followNoticeCount > 99 ? '99+' : followNoticeCount }}
+                        </view>
+                    </view>
+                    <view class="conversation-content">
+                        <view class="conversation-header">
+                            <text class="conversation-name">关注通知</text>
+                            <text class="conversation-time"></text>
+                        </view>
+                        <view class="conversation-message">
+                            <text class="last-message">新的关注与粉丝动态</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 固定通知会话：互动通知 -->
+                <view class="conversation-item" @click="openNotice('action')">
+                    <view class="avatar-wrapper">
+                        <image class="avatar" src="/static/conv_avatar.png" mode="aspectFill"></image>
+                        <view class="unread-badge" v-if="actionNoticeCount > 0">
+                            {{ actionNoticeCount > 99 ? '99+' : actionNoticeCount }}
+                        </view>
+                    </view>
+                    <view class="conversation-content">
+                        <view class="conversation-header">
+                            <text class="conversation-name">互动通知</text>
+                            <text class="conversation-time"></text>
+                        </view>
+                        <view class="conversation-message">
+                            <text class="last-message">点赞评论互动提醒</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 普通会话列表 -->
                 <view 
                     class="conversation-item" 
                     v-for="(conversation, index) in conversationList" 
                     :key="index"
                     @click="openChat(conversation)"
                 >
-                    <!-- 头像 -->
                     <view class="avatar-wrapper">
                         <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
                         <view 
@@ -44,7 +82,6 @@
                         </view>
                     </view>
                     
-                    <!-- 会话信息 -->
                     <view class="conversation-content">
                         <view class="conversation-header">
                             <text class="conversation-name">{{ conversation.name }}</text>
@@ -56,7 +93,6 @@
                     </view>
                 </view>
                 
-                <!-- 空状态 -->
                 <view v-if="conversationList.length === 0" class="empty-state">
                     <text class="empty-icon">💬</text>
                     <text class="empty-text">暂无消息</text>
@@ -70,6 +106,7 @@
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
+// import { GetNoitceCount } from '@/request/im.js';
 
 export default {
     data() {
@@ -79,6 +116,9 @@ export default {
             showDropdown: false,
             normalListener: null,
             commandListener: null,
+
+            followNoticeCount: 0,
+            actionNoticeCount: 0
         };
     },
     onLoad() {
@@ -88,8 +128,9 @@ export default {
             })
            .catch((err) => {
                 console.error('pullConversation err', err);
-            })
-        this.normalListener=uni.$on('normal', (data) => {
+            });
+        
+        this.normalListener = uni.$on('normal', (data) => {
             this.userConIndex = data.user_con_index;
             let index = -1;
             for (let i = 0; i < this.conversationList.length; i++) {
@@ -104,62 +145,71 @@ export default {
             if (index !== -1) {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
-            }else{
+            } else {
                 DB.selectConversation(data.msg_body.con_id)
-                .then((res)=>{
-					console.log(res);
-                    this.conversationList=res.concat(this.conversationList);
-                })
+                  .then((res) => {
+                      this.conversationList = res.concat(this.conversationList);
+                  });
             }
         });
-        this.commandListener=uni.$on('command', (data) => {
+
+        this.commandListener = uni.$on('command', (data) => {
             for (let i = 0; i < this.conversationList.length; i++) {
                 if (this.conversationList[i].con_id == data.msg_body.con_id) {
                     const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
                     if (data.msg_body.msg_type == 101) {
                         this.conversationList[i].read_index_end = cmdMessage.read_index_end;
                         this.conversationList[i].read_badge_count = cmdMessage.read_badge_count;
-                    } else if (data.msg_body.msg_type == 102) {
-
                     }
                     break;
                 }
             }
         });
+
+        this.loadNoticeCounts();
     },
     onUnload() {
-        uni.$off('normal',this.normalListener);
-        uni.$off('command',this.commandListener);
+        uni.$off('normal', this.normalListener);
+        uni.$off('command', this.commandListener);
     },
     methods: {
+        async loadNoticeCounts() {
+            // const followRes = await GetNoitceCount('follow');
+            // this.followNoticeCount = (followRes && typeof followRes.notice_count === 'number') ? followRes.notice_count : 0;
+
+            // const actionRes = await GetNoitceCount('action');
+            // this.actionNoticeCount = (actionRes && typeof actionRes.notice_count === 'number') ? actionRes.notice_count : 0;
+        },
+
+        openNotice(group) {
+            uni.navigateTo({
+                url: `/pages/im/notice?group=${group}`
+            });
+        },
+
         goToCreateConversationPage() {
             this.showDropdown = false;
-            uni.navigateTo({
-                url: '/pages/im/create'
-            });
+            uni.navigateTo({ url: '/pages/im/create' });
         },
-        goToAIPage() {
+
+        goToAgentPage() {
             this.showDropdown = false;
-            const userId = getApp().globalData.userId;
-            const conId=`4:${userId}`
-            uni.navigateTo({
-                url: `/pages/im/conversation?conId=${conId}&name=AI&conType=4`
-            });
+            uni.navigateTo({ url: '/pages/im/agent' });
         },
+
         openChat(conversation) {
             uni.navigateTo({
                 url: `/pages/im/conversation?conId=${conversation.con_id}&name=${conversation.name}&conType=${conversation.con_type}`
             });
         },
+
         formatTime(timestamp) {
             const now = Date.now() / 1000;
             const diff = now - timestamp;
-            
             if (diff < 60) return '刚刚';
             if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
             if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
             if (diff < 604800) return Math.floor(diff / 86400) + '天前';
-            
             const date = new Date(timestamp * 1000);
             return `${date.getMonth() + 1}/${date.getDate()}`;
         }
@@ -249,14 +299,8 @@ export default {
 }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .dropdown-item {
@@ -268,17 +312,11 @@ export default {
     border-bottom: 1px solid #f0f0f0;
 }
 
-.dropdown-item:last-child {
-    border-bottom: none;
-}
+.dropdown-item:last-child { border-bottom: none; }
 
-.dropdown-item:active {
-    background: #f5f5f5;
-}
+.dropdown-item:active { background: #f5f5f5; }
 
-.item-icon {
-    font-size: 20px;
-}
+.item-icon { font-size: 20px; }
 
 .item-text {
     font-size: 15px;
@@ -305,9 +343,7 @@ export default {
     transition: background 0.2s;
 }
 
-.conversation-item:active {
-    background: #f5f5f5;
-}
+.conversation-item:active { background: #f5f5f5; }
 
 /* 头像 */
 .avatar-wrapper {

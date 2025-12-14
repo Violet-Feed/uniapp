@@ -76,6 +76,18 @@
 			}
 		},
 		{
+			"path": "pages/im/notice",
+			"style": {
+				"navigationBarTitleText": "通知"
+			}
+		},
+		{
+			"path": "pages/im/agent",
+			"style": {
+				"navigationBarTitleText": "管理智能体"
+			}
+		},
+		{
 			"path": "pages/user/my_profile",
 			"style": {
 				"navigationBarTitleText":"我的"
