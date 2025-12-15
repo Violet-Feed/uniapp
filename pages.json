@@ -82,6 +82,12 @@
 			}
 		},
 		{
+			"path": "pages/im/notice_agg",
+			"style": {
+				"navigationBarTitleText": "通知"
+			}
+		},
+		{
 			"path": "pages/im/agent",
 			"style": {
 				"navigationBarTitleText": "管理智能体"

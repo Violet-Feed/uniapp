@@ -210,7 +210,7 @@ export default {
             if (res.statusCode === 200) {
                 res = JSONbig.parse(res.data);
                 if (res.code === 1000) {
-                    if (this.messages[this.messages.length - 1].client_msg_id < clientMsgId) {
+                    if (this.messages.length == 0 || this.messages[this.messages.length - 1].client_msg_id < clientMsgId) {
                         this.messages.push({
                             user_id: this.userId,
                             con_short_id: this.conversation.con_short_id,

@@ -4,7 +4,7 @@ import file from '@/utils/file';
 import {
 	getUserProfile
 } from '@/request/user.js';
-
+import { httpRequestBackData, httpRequestBackBool } from '@/request/common.js';
 export const getMessageByUser = async() => {
 	const {
 		token,
@@ -341,4 +341,34 @@ export const markRead = async (conShortId, readIndex, readCount) => {
 			icon: 'none'
 		});
 	}
+};
+
+export const getNoitceCount = async (payload) => {
+	const data = {
+		group: payload.group
+	};
+	return httpRequestBackData("/notice/get_notice_count",data);
+};
+
+export const getNoticeList = async (payload) => {
+	const data = {
+		group: payload.group,
+		page: payload.page
+	};
+	return httpRequestBackData("/notice/get_notice_list",data);
+};
+
+export const getNoticeAggList = async (payload) => {
+	const data = {
+		notice_id: payload.noticeId,
+		page: payload.page
+	};
+	return httpRequestBackData("/notice/get_notice_agg_list",data);
+};
+
+export const markNoticeRead = async (payload) => {
+	const data = {
+		group: payload.group
+	};
+	return httpRequestBackBool("/notice/mark_notice_read",data);
 };

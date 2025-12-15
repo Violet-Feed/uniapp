@@ -7,7 +7,7 @@ import {
 	decodeNormalPacket,
 	decodeCommandPacket,
 	decodeMaterialPacket,
-	decodeActionPacket
+	decodeNoticePacket
 } from '@/proto_gen/packet.js';
 import {
 	getConversationInfo
@@ -84,10 +84,10 @@ class Socket {
 						const data = decodeMaterialPacket(dataByte);
 						console.log(JSONbig.stringify(data));
 						this.handleMaterialPacket(data);
-					} else if (packetType == encodePacketType.Action) {
-						const data = decodeActionPacket(dataByte);
+					} else if (packetType == encodePacketType.Notice) {
+						const data = decodeNoticePacket(dataByte);
 						console.log(JSONbig.stringify(data));
-						this.handleActionPacket(data);
+						this.handleNoticePacket(data);
 					}
 					reading = false;
 				}
@@ -287,8 +287,8 @@ class Socket {
 		uni.$emit('material', data);
 	}
 	
-	handleActionPacket(data){
-		uni.$emit('action', data);
+	handleNoticePacket(data){
+		uni.$emit('notice', data);
 	}
 }
 

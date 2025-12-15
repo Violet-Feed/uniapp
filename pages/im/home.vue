@@ -9,7 +9,7 @@
                 </view>
             </view>
         </view>
-        
+
         <!-- 下拉菜单 -->
         <view class="dropdown-overlay" v-if="showDropdown" @click="showDropdown = false">
             <view class="dropdown-menu" @click.stop>
@@ -23,65 +23,61 @@
                 </view>
             </view>
         </view>
-        
+
         <!-- 会话列表 -->
         <scroll-view class="conversation-scroll" scroll-y>
             <view class="conversation-list">
                 <!-- 固定通知会话：关注通知 -->
-                <view class="conversation-item" @click="openNotice('follow')">
+                <view class="conversation-item notice-item" @click="openNotice(NOTICE_GROUP.FOLLOW)">
                     <view class="avatar-wrapper">
                         <image class="avatar" src="/static/conv_avatar.png" mode="aspectFill"></image>
                         <view class="unread-badge" v-if="followNoticeCount > 0">
                             {{ followNoticeCount > 99 ? '99+' : followNoticeCount }}
                         </view>
                     </view>
-                    <view class="conversation-content">
-                        <view class="conversation-header">
+                    <view class="conversation-content notice-center">
+                        <view class="notice-title-row">
                             <text class="conversation-name">关注通知</text>
-                            <text class="conversation-time"></text>
-                        </view>
-                        <view class="conversation-message">
-                            <text class="last-message">新的关注与粉丝动态</text>
                         </view>
                     </view>
                 </view>
 
                 <!-- 固定通知会话：互动通知 -->
-                <view class="conversation-item" @click="openNotice('action')">
+                <view class="conversation-item notice-item" @click="openNotice(NOTICE_GROUP.ACTION)">
                     <view class="avatar-wrapper">
                         <image class="avatar" src="/static/conv_avatar.png" mode="aspectFill"></image>
                         <view class="unread-badge" v-if="actionNoticeCount > 0">
                             {{ actionNoticeCount > 99 ? '99+' : actionNoticeCount }}
                         </view>
                     </view>
-                    <view class="conversation-content">
-                        <view class="conversation-header">
+                    <view class="conversation-content notice-center">
+                        <view class="notice-title-row">
                             <text class="conversation-name">互动通知</text>
-                            <text class="conversation-time"></text>
-                        </view>
-                        <view class="conversation-message">
-                            <text class="last-message">点赞评论互动提醒</text>
                         </view>
                     </view>
                 </view>
 
                 <!-- 普通会话列表 -->
-                <view 
-                    class="conversation-item" 
-                    v-for="(conversation, index) in conversationList" 
+                <view
+                    class="conversation-item"
+                    v-for="(conversation, index) in conversationList"
                     :key="index"
                     @click="openChat(conversation)"
                 >
                     <view class="avatar-wrapper">
                         <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
-                        <view 
-                            class="unread-badge" 
+                        <view
+                            class="unread-badge"
                             v-if="conversation.badge_count - conversation.read_badge_count > 0"
                         >
-                            {{ conversation.badge_count - conversation.read_badge_count > 99 ? '99+' : conversation.badge_count - conversation.read_badge_count }}
+                            {{
+                                conversation.badge_count - conversation.read_badge_count > 99
+                                    ? '99+'
+                                    : conversation.badge_count - conversation.read_badge_count
+                            }}
                         </view>
                     </view>
-                    
+
                     <view class="conversation-content">
                         <view class="conversation-header">
                             <text class="conversation-name">{{ conversation.name }}</text>
@@ -92,7 +88,7 @@
                         </view>
                     </view>
                 </view>
-                
+
                 <view v-if="conversationList.length === 0" class="empty-state">
                     <text class="empty-icon">💬</text>
                     <text class="empty-text">暂无消息</text>
@@ -106,16 +102,25 @@
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-// import { GetNoitceCount } from '@/request/im.js';
+import { getNoitceCount } from '@/request/im.js';
 
 export default {
     data() {
         return {
+            NOTICE_GROUP: {
+                SYSTEM: 1,
+                FOLLOW: 2,
+                ACTION: 3
+            },
+
             userConIndex: getApp().globalData.userConIndex,
             conversationList: [],
             showDropdown: false,
             normalListener: null,
             commandListener: null,
+
+            // 新增：通知监听器引用
+            noticeListener: null,
 
             followNoticeCount: 0,
             actionNoticeCount: 0
@@ -123,13 +128,13 @@ export default {
     },
     onLoad() {
         DB.pullConversation(this.userConIndex)
-           .then((res) => {
+            .then((res) => {
                 this.conversationList = res;
             })
-           .catch((err) => {
+            .catch((err) => {
                 console.error('pullConversation err', err);
             });
-        
+
         this.normalListener = uni.$on('normal', (data) => {
             this.userConIndex = data.user_con_index;
             let index = -1;
@@ -143,13 +148,13 @@ export default {
                 }
             }
             if (index !== -1) {
+                // todo: getConversaionCore
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             } else {
-                DB.selectConversation(data.msg_body.con_id)
-                  .then((res) => {
-                      this.conversationList = res.concat(this.conversationList);
-                  });
+                DB.selectConversation(data.msg_body.con_id).then((res) => {
+                    this.conversationList = res.concat(this.conversationList);
+                });
             }
         });
 
@@ -166,19 +171,50 @@ export default {
             }
         });
 
+        this.noticeListener = uni.$on('notice', (data) => {
+            const g = data && typeof data.group === 'number' ? data.group : 0;
+            const op = data && typeof data.op_type === 'number' ? data.op_type : 0;
+        
+            // 只处理 FOLLOW / ACTION
+            const isFollow = g === this.NOTICE_GROUP.FOLLOW;
+            const isAction = g === this.NOTICE_GROUP.ACTION;
+            if (!isFollow && !isAction) return;
+        
+            // Send = 1; MarkRead = 2;
+            if (op === 1) {
+                if (isFollow) this.followNoticeCount = Number(this.followNoticeCount || 0) + 1;
+                if (isAction) this.actionNoticeCount = Number(this.actionNoticeCount || 0) + 1;
+                return;
+            }
+        
+            if (op === 2) {
+                if (isFollow) this.followNoticeCount = 0;
+                if (isAction) this.actionNoticeCount = 0;
+            }
+        });
+
         this.loadNoticeCounts();
     },
     onUnload() {
         uni.$off('normal', this.normalListener);
         uni.$off('command', this.commandListener);
+        uni.$off('notice', this.noticeListener);
     },
     methods: {
         async loadNoticeCounts() {
-            // const followRes = await GetNoitceCount('follow');
-            // this.followNoticeCount = (followRes && typeof followRes.notice_count === 'number') ? followRes.notice_count : 0;
+            let payload = { group: this.NOTICE_GROUP.FOLLOW };
+            const followRes = await getNoitceCount(payload);
+            this.followNoticeCount =
+                followRes && typeof followRes.notice_count === 'number'
+                    ? followRes.notice_count
+                    : 0;
 
-            // const actionRes = await GetNoitceCount('action');
-            // this.actionNoticeCount = (actionRes && typeof actionRes.notice_count === 'number') ? actionRes.notice_count : 0;
+            payload = { group: this.NOTICE_GROUP.ACTION };
+            const actionRes = await getNoitceCount(payload);
+            this.actionNoticeCount =
+                actionRes && typeof actionRes.notice_count === 'number'
+                    ? actionRes.notice_count
+                    : 0;
         },
 
         openNotice(group) {
@@ -313,11 +349,9 @@ export default {
 }
 
 .dropdown-item:last-child { border-bottom: none; }
-
 .dropdown-item:active { background: #f5f5f5; }
 
 .item-icon { font-size: 20px; }
-
 .item-text {
     font-size: 15px;
     color: #333;
@@ -325,14 +359,8 @@ export default {
 }
 
 /* ==================== 会话列表 ==================== */
-.conversation-scroll {
-    flex: 1;
-    overflow: hidden;
-}
-
-.conversation-list {
-    padding: 8px 0;
-}
+.conversation-scroll { flex: 1; overflow: hidden; }
+.conversation-list { padding: 8px 0; }
 
 .conversation-item {
     display: flex;
@@ -344,6 +372,20 @@ export default {
 }
 
 .conversation-item:active { background: #f5f5f5; }
+
+/* 通知项：只显示标题，垂直居中 */
+.notice-item .conversation-content {
+    display: flex;
+    align-items: center;
+}
+.notice-center {
+    justify-content: center;
+}
+.notice-title-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
 
 /* 头像 */
 .avatar-wrapper {
@@ -379,10 +421,7 @@ export default {
 }
 
 /* 会话内容 */
-.conversation-content {
-    flex: 1;
-    overflow: hidden;
-}
+.conversation-content { flex: 1; overflow: hidden; }
 
 .conversation-header {
     display: flex;
@@ -403,10 +442,7 @@ export default {
     margin-left: 8px;
 }
 
-.conversation-message {
-    display: flex;
-    align-items: center;
-}
+.conversation-message { display: flex; align-items: center; }
 
 .last-message {
     font-size: 14px;
@@ -425,19 +461,7 @@ export default {
     padding: 100px 20px;
 }
 
-.empty-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-}
-
-.empty-text {
-    font-size: 16px;
-    color: #666;
-    margin-bottom: 8px;
-}
-
-.empty-hint {
-    font-size: 14px;
-    color: #999;
-}
+.empty-icon { font-size: 64px; margin-bottom: 16px; }
+.empty-text { font-size: 16px; color: #666; margin-bottom: 8px; }
+.empty-hint { font-size: 14px; color: #999; }
 </style>

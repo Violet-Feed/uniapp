@@ -23,7 +23,7 @@
         <view
           class="notice-item"
           v-for="(n, idx) in notices"
-          :key="String(n.notice_id || idx)"
+          :key="String(n.sender_id || '') + '-' + String(n.create_time || '') + '-' + idx"
           @click="handleItemClick(n)"
         >
           <!-- 左侧头像 -->
@@ -45,16 +45,8 @@
             </view>
 
             <view class="row-mid">
-              <!-- 可聚合：等N人（可点击进入聚合页） -->
-              <text
-                v-if="n._text_parts && n._text_parts.aggPrefix"
-                class="agg-prefix"
-                @click.stop="openAgg(n)"
-              >
-                {{ n._text_parts.aggPrefix }}
-              </text>
               <text class="notice-text">
-                {{ n._text_parts ? n._text_parts.rest : '' }}
+                {{ noticeText }}
               </text>
             </view>
 
@@ -63,15 +55,15 @@
             </view>
           </view>
 
-          <!-- 右侧引用封面 -->
-          <view class="ref-cover" v-if="n.ref_id && n.ref_cover_url">
-            <image class="ref-image" :src="n.ref_cover_url" mode="aspectFill" />
+          <!-- 右侧引用封面（所有行一致，按进入页时传入或接口返回兜底） -->
+          <view class="ref-cover" v-if="resolvedRefId && resolvedRefCoverUrl">
+            <image class="ref-image" :src="resolvedRefCoverUrl" mode="aspectFill" />
           </view>
         </view>
 
         <view v-if="!loading && notices.length === 0" class="empty">
           <text class="empty-icon">🔔</text>
-          <text class="empty-text">暂无通知</text>
+          <text class="empty-text">暂无记录</text>
         </view>
 
         <view v-if="notices.length > 0" class="footer">
@@ -84,14 +76,22 @@
 </template>
 
 <script>
-import { getNoticeList, markNoticeRead } from '@/request/im.js'
-import JSONbig from 'json-bigint'
+import { getNoticeAggList } from '@/request/im.js'
 
 export default {
   data() {
     return {
-      // enum NoticeGroup: 1 System, 2 Follow, 3 Action
-      group: 2,
+      noticeId: '',
+
+      // Digg=3 / DiggComment=4（从上页传入）
+      noticeType: 3,
+      noticeContent: '',
+
+      // 这些与进入那条通知一致（从上页传入；接口若也回传，下面会兜底）
+      refId: '',
+      refType: 0,
+      refCoverUrl: '',
+      refUserId: '',
 
       notices: [],
       page: 1,
@@ -99,23 +99,36 @@ export default {
 
       loading: false,
       loadingMore: false,
-
       refresherTriggered: false
     }
   },
   computed: {
     pageTitle() {
-      if (Number(this.group) === 2) return '关注通知'
-      if (Number(this.group) === 3) return '互动通知'
-      if (Number(this.group) === 1) return '系统通知'
-      return '通知'
+      return this.noticeType === 4 ? '赞评详情' : '点赞详情'
+    },
+    noticeText() {
+      if (Number(this.noticeType) === 4) return '赞了你的评论'
+      return '赞了你的创作'
+    },
+    resolvedRefId() {
+      return this.refId
+    },
+    resolvedRefCoverUrl() {
+      return this.refCoverUrl
     }
   },
-  async onLoad(options) {
-    const g = Number(options.group)
-    this.group = g || 2
-	await markNoticeRead({ group: Number(this.group) })
-    this.loadNotices(true)
+  onLoad(options) {
+    this.noticeId = options.noticeId ? String(options.noticeId) : ''
+
+    this.noticeType = Number(options.noticeType) || 3
+    this.noticeContent = options.noticeContent ? decodeURIComponent(String(options.noticeContent)) : ''
+
+    this.refId = options.refId ? String(options.refId) : ''
+    this.refType = Number(options.refType) || 0
+    this.refCoverUrl = options.refCoverUrl ? decodeURIComponent(String(options.refCoverUrl)) : ''
+    this.refUserId = options.refUserId ? String(options.refUserId) : ''
+
+    this.loadAggNotices(true)
   },
   methods: {
     goBack() {
@@ -124,16 +137,19 @@ export default {
 
     async onRefresh() {
       this.refresherTriggered = true
-      const p = this.loadNotices(true)
+      const p = this.loadAggNotices(true)
       Promise.resolve(p).finally(() => {
         this.refresherTriggered = false
       })
     },
 
-    // ========= 数据加载 =========
-    async loadNotices(reset = false) {
+    async loadAggNotices(reset = false) {
       if (this.loading || this.loadingMore) return
       if (!reset && !this.hasMore) return
+      if (!this.noticeId) {
+        this.hasMore = false
+        return
+      }
 
       if (reset) {
         this.page = 1
@@ -145,12 +161,21 @@ export default {
       }
 
       const payload = {
-        group: Number(this.group),
+        noticeId: this.noticeId,
         page: this.page
       }
 
-      const res = await getNoticeList(payload)
+      const res = await getNoticeAggList(payload)
       const list = res && Array.isArray(res.notices) ? res.notices : []
+
+      // 若后端在聚合接口里顺便回传 ref 信息，这里也可兜底
+      if (res) {
+        if (!this.refId && res.ref_id) this.refId = String(res.ref_id)
+        if (!this.refType && res.ref_type) this.refType = Number(res.ref_type) || 0
+        if (!this.refCoverUrl && res.ref_cover_url) this.refCoverUrl = String(res.ref_cover_url)
+        if (!this.refUserId && res.ref_user_id) this.refUserId = String(res.ref_user_id)
+        if (!this.noticeType && res.notice_type) this.noticeType = Number(res.notice_type) || 3
+      }
 
       if (!list || list.length === 0) {
         this.hasMore = false
@@ -159,13 +184,10 @@ export default {
         return
       }
 
-      const mapped = list.map((n) => this.decorateNotice(n))
+      const mapped = list.map((n) => this.decorateItem(n))
 
-      if (reset) {
-        this.notices = mapped
-      } else {
-        this.notices = this.notices.concat(mapped)
-      }
+      if (reset) this.notices = mapped
+      else this.notices = this.notices.concat(mapped)
 
       this.page += 1
       this.loading = false
@@ -173,80 +195,18 @@ export default {
     },
 
     loadMore() {
-      this.loadNotices(false)
+      this.loadAggNotices(false)
     },
 
-    // ========= 展示与解析 =========
-    decorateNotice(n) {
-      const noticeType = this.toSafeNumber(n.notice_type)
-      const aggCount = this.toSafeNumber(n.agg_count)
+    decorateItem(n) {
       const createTimeNum = this.toSafeNumber(n.create_time)
-
-      const textParts = this.buildNoticeTextParts(
-        noticeType,
-        n.notice_content,
-        aggCount
-      )
-
       return {
         ...n,
-        _notice_type_num: noticeType,
-        _agg_count_num: aggCount,
         _create_time_num: createTimeNum,
-        _display_time: this.formatRelativeTime(createTimeNum),
-        _text_parts: textParts
+        _display_time: this.formatRelativeTime(createTimeNum)
       }
     },
 
-    buildNoticeTextParts(noticeType, noticeContent, aggCountNum) {
-      // NoticeType:
-      // 1 System, 2 Follow, 3 Digg, 4 DiggComment, 5 CreateComment, 6 CreateReply
-      if (noticeType === 1) {
-        const rest = (noticeContent || '').toString()
-        return { aggPrefix: '', rest }
-      }
-
-      if (noticeType === 2) {
-        return { aggPrefix: '', rest: '关注了你' }
-      }
-
-      if (noticeType === 3) {
-        const rest = '赞了你的创作'
-        if (aggCountNum > 0) return { aggPrefix: `等${aggCountNum + 1}人`, rest }
-        return { aggPrefix: '', rest }
-      }
-
-      if (noticeType === 4) {
-        const rest = '赞了你的评论'
-        if (aggCountNum > 0) return { aggPrefix: `等${aggCountNum + 1}人`, rest }
-        return { aggPrefix: '', rest }
-      }
-
-      if (noticeType === 5) {
-        const payload = this.safeParseJson(noticeContent)
-        const c = payload && payload.content ? payload.content : ''
-        return { aggPrefix: '', rest: `评论了你：${c}` }
-      }
-
-      if (noticeType === 6) {
-        const payload = this.safeParseJson(noticeContent)
-        const c = payload && payload.content ? payload.content : ''
-        return { aggPrefix: '', rest: `回复了你：${c}` }
-      }
-
-      return { aggPrefix: '', rest: '' }
-    },
-
-    safeParseJson(str) {
-      if (!str) return null
-      try {
-        return JSONbig.parse(str)
-      } catch (e) {
-        return null
-      }
-    },
-
-    // ========= 点击行为 =========
     goToUser(userId) {
       const uid = encodeURIComponent(String(userId || ''))
       if (!uid) return
@@ -255,42 +215,17 @@ export default {
       })
     },
 
-    openAgg(n) {
-      const noticeId = encodeURIComponent(String(n.notice_id || ''))
-      if (!noticeId) return
-    
-      const noticeType = encodeURIComponent(String(n.notice_type || ''))
-      const noticeContent = encodeURIComponent(String(n.notice_content || ''))
-    
-      const refId = encodeURIComponent(String(n.ref_id || ''))
-      const refType = encodeURIComponent(String(n.ref_type || ''))
-      const refCoverUrl = encodeURIComponent(String(n.ref_cover_url || ''))
-      const refUserId = encodeURIComponent(String(n.ref_user_id || ''))
-    
-      uni.navigateTo({
-        url:
-          `/pages/im/notice_agg?noticeId=${noticeId}` +
-          `&noticeType=${noticeType}` +
-          `&noticeContent=${noticeContent}` +
-          `&refId=${refId}` +
-          `&refType=${refType}` +
-          `&refCoverUrl=${refCoverUrl}` +
-          `&refUserId=${refUserId}`
-      })
+    handleItemClick() {
+      // 点击除头像/用户名之外区域：进入对应创作详情
+      if (!this.refId) return
+      this.goToCreationByRef()
     },
 
-    handleItemClick(n) {
-      if (!n) return
-      if (!n.ref_id) return
-      this.goToCreationByRef(n)
-    },
+    goToCreationByRef() {
+      const creationId = encodeURIComponent(String(this.refId))
+      const userId = encodeURIComponent(String(this.refUserId || ''))
 
-    goToCreationByRef(n) {
-      const creationId = encodeURIComponent(String(n.ref_id))
-      const userId = encodeURIComponent(String(n.ref_user_id || ''))
-
-      // 约定：ref_type=2 -> 视频；否则图片（如与你后端枚举不同，改这里即可）
-      const isVideo = Number(n.ref_type) === 2
+      const isVideo = Number(this.refType) === 2
       const basePath = isVideo
         ? '/pages/creation/creation_video'
         : '/pages/creation/creation_image'
@@ -300,7 +235,6 @@ export default {
       })
     },
 
-    // ========= 工具函数 =========
     toSafeNumber(v) {
       if (v === null || v === undefined) return 0
       if (typeof v === 'number') return v
@@ -457,12 +391,6 @@ export default {
   align-items: center;
   gap: 4px;
   min-width: 0;
-}
-
-.agg-prefix {
-  font-size: 14px;
-  color: #5b7dff;
-  flex-shrink: 0;
 }
 
 .notice-text {
