@@ -16,7 +16,7 @@ export const init = async () => {
 		userId=BigInt(JSONbig.parse(userId).data);
 		app.globalData.token = token;
 		app.globalData.userId = userId;
-		const res = await getUserProfile(userId,true,true);
+		const res = await getUserProfile(userId,false,false);
 		if(res!=undefined){
 			uni.setStorageSync("username_"+userId, res.user_info.username);
 			uni.setStorageSync("user_avatar_"+userId, res.user_info.avatar);
@@ -25,9 +25,6 @@ export const init = async () => {
 			if (app.globalData.avatar === "") {
 				app.globalData.avatar = "/static/user_avatar.png";
 			}
-			app.globalData.followingCount = res.following_count;
-			app.globalData.followerCount = res.follower_count;
-			app.globalData.friendCount = res.friend_count;
 			//app.globalData.userConIndex=uni.setStorageSync('user_con_index_'+userId,0);
 			app.globalData.userConIndex=uni.getStorageSync('user_con_index_'+userId);
 			app.globalData.userCmdIndex=uni.getStorageSync('user_cmd_index_'+userId);

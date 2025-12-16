@@ -38,7 +38,15 @@
         </view>
         
         <!-- 好友列表 -->
-        <scroll-view class="friend-scroll" scroll-y>
+        <scroll-view
+            class="friend-scroll"
+            scroll-y
+            :lower-threshold="120"
+            @scrolltolower="loadMore"
+            refresher-enabled
+            :refresher-triggered="refreshing"
+            @refresherrefresh="onRefresh"
+        >
             <view class="friend-list">
                 <view 
                     class="friend-item" 
@@ -80,10 +88,20 @@
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js'
 import { getFriendList } from '@/request/action.js';
+
 export default {
     data() {
         return {
-            userList: []
+            userList: [],
+
+            // 分页
+            page: 1,
+            hasMore: true,
+            pageSize: 20,
+
+            loading: false,
+            loadingMore: false,
+            refreshing: false
         };
     },
     computed: {
@@ -91,23 +109,89 @@ export default {
             return this.userList.filter(user => user.selected).length;
         }
     },
-    async onLoad() {
-		let res = await getFriendList(getApp().globalData.userId);
-		this.userList = res.user_infos || [];
-		for (const user of this.userList) {
-			if (user.avatar == "") {
-				user.avatar = "/static/user_avatar.png";
-			}
-			user.selected = false;
-		}
+    onLoad() {
+        this.loadFriendList(true);
     },
     methods: {
         goBack() {
             uni.navigateBack();
         },
+
         toggleUserSelection(index) {
             this.userList[index].selected = !this.userList[index].selected;
         },
+
+        async onRefresh() {
+            this.refreshing = true;
+            const p = this.loadFriendList(true);
+            Promise.resolve(p).finally(() => {
+                this.refreshing = false;
+            });
+        },
+
+        loadMore() {
+            this.loadFriendList(false);
+        },
+
+        async loadFriendList(reset = false) {
+            if (this.loading || this.loadingMore) return;
+            if (!reset && !this.hasMore) return;
+
+            if (reset) {
+                this.page = 1;
+                this.hasMore = true;
+                this.loading = true;
+            } else {
+                this.loadingMore = true;
+            }
+
+            const payload = {
+                userId: String(getApp().globalData.userId || ''),
+                page: this.page
+            };
+
+            let res;
+            try {
+                res = await getFriendList(payload);
+            } catch (e) {
+                res = undefined;
+            }
+
+            const list = res && Array.isArray(res.user_infos) ? res.user_infos : [];
+
+            if (reset) this.userList = [];
+
+            if (list.length === 0) {
+                this.hasMore = false;
+                this.loading = false;
+                this.loadingMore = false;
+                this.refreshing = false;
+                return;
+            }
+
+            // 去重（防止分页重复）
+            const exist = new Set(this.userList.map(u => String(u.user_id || u.userId || '')));
+            const mapped = list
+                .map((u) => ({
+                    // 兼容下划线字段
+                    user_id: String(u.user_id || u.userId || ''),
+                    username: u.username || '未知用户',
+                    avatar: u.avatar && u.avatar !== '' ? u.avatar : '/static/user_avatar.png',
+                    bio: u.bio,
+                    selected: false
+                }))
+                .filter(u => u.user_id && !exist.has(u.user_id));
+
+            this.userList = this.userList.concat(mapped);
+
+            this.hasMore = list.length >= this.pageSize;
+            this.page += 1;
+
+            this.loading = false;
+            this.loadingMore = false;
+            this.refreshing = false;
+        },
+
         async createConversation() {
             const selectedUserIds = this.userList.filter(user => user.selected).map(user => user.user_id);
             if(selectedUserIds.length==0){

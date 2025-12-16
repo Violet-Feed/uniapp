@@ -8,11 +8,11 @@
                 </view>
                 <view class="search-input-container">
                     <text class="search-icon">🔍</text>
-                    <input 
-                        v-model="keyword" 
-                        type="text" 
-                        placeholder="搜索创作或用户" 
-                        @confirm="onSearchConfirm" 
+                    <input
+                        v-model="keyword"
+                        type="text"
+                        placeholder="搜索创作或用户"
+                        @confirm="onSearchConfirm"
                         :focus="autoFocus"
                     />
                     <text v-if="keyword" class="clear-icon" @click.stop="clearKeyword">✕</text>
@@ -25,17 +25,17 @@
 
         <!-- 筛选栏：创作 / 用户 / 群聊（群聊先不做） -->
         <view class="filter-bar">
-            <view 
-                class="filter-item" 
-                :class="{ active: activeFilter === 'creation' }" 
+            <view
+                class="filter-item"
+                :class="{ active: activeFilter === 'creation' }"
                 @click="changeFilter('creation')"
             >
                 <text class="filter-text">创作</text>
                 <view class="filter-indicator" v-if="activeFilter === 'creation'"></view>
             </view>
-            <view 
-                class="filter-item" 
-                :class="{ active: activeFilter === 'user' }" 
+            <view
+                class="filter-item"
+                :class="{ active: activeFilter === 'user' }"
                 @click="changeFilter('user')"
             >
                 <text class="filter-text">用户</text>
@@ -46,25 +46,11 @@
             </view>
         </view>
 
-        <!-- 搜索结果统计 -->
-        <view 
-            class="result-info" 
-            v-if="creationList.length > 0 || userList.length > 0"
-        >
-            <text class="result-text">
-                找到 
-                <text class="result-count">
-                    {{ activeFilter === 'creation' ? creationList.length : userList.length }}
-                </text> 
-                个相关结果
-            </text>
-        </view>
-
         <!-- 内容区域 -->
         <view class="creation-grid-container">
             <!-- 初始加载状态（创作） -->
-            <view 
-                v-if="activeFilter === 'creation' && creationLoading && creationList.length === 0" 
+            <view
+                v-if="activeFilter === 'creation' && creationLoading && creationList.length === 0"
                 class="initial-loading"
             >
                 <view class="loading-spinner"></view>
@@ -74,37 +60,33 @@
             <!-- 创作结果：双列宫格 -->
             <view v-if="activeFilter === 'creation'">
                 <view class="creation-grid" v-if="creationList.length > 0">
-					<view 
-						class="creation-card" 
-						v-for="(creation, index) in creationList" 
-						:key="`creation-${creation.creation_id}-${index}`" 
-						@click="goToCreationDetail(creation)"
-					>
-                        <!-- 图片容器 -->
+                    <view
+                        class="creation-card"
+                        v-for="(creation, index) in creationList"
+                        :key="`creation-${creation.creation_id}-${index}`"
+                        @click="goToCreationDetail(creation)"
+                    >
                         <view class="image-wrapper">
-                            <image 
-                                class="card-image" 
-                                :src="creation.cover" 
+                            <image
+                                class="card-image"
+                                :src="creation.cover"
                                 mode="aspectFill"
                                 @error="handleCreationImageError(creation)"
                                 lazy-load
                             ></image>
-                            <!-- 渐变遮罩 -->
                             <view class="image-gradient"></view>
                         </view>
-                        
-                        <!-- 内容区域 -->
+
                         <view class="card-content">
                             <view class="card-title-container">
                                 <text class="card-title">{{ creation.title }}</text>
                             </view>
 
-                            <!-- 作者 + 时间 + 点赞 -->
                             <view class="card-footer">
                                 <view class="card-author">
-                                    <image 
-                                        class="author-avatar" 
-                                        :src="creation.avatar" 
+                                    <image
+                                        class="author-avatar"
+                                        :src="creation.avatar"
                                         mode="aspectFill"
                                         lazy-load
                                     ></image>
@@ -113,26 +95,17 @@
                                         <text class="card-time">{{ creation.displayTime }}</text>
                                     </view>
                                 </view>
-                                <view 
-                                    class="card-likes"
-                                    @click.stop="toggleDigg(creation, index)"
-                                >
-                                    <text 
-                                        class="like-icon"
-                                        :class="{ active: creation.is_digg }"
-                                    >
+                                <view class="card-likes" @click.stop="toggleDigg(creation, index)">
+                                    <text class="like-icon" :class="{ active: creation.is_digg }">
                                         {{ creation.is_digg ? '♥️' : '♡' }}
                                     </text>
-                                    <text class="like-count">
-                                        {{ formatNumber(creation.digg_count) }}
-                                    </text>
+                                    <text class="like-count">{{ formatNumber(creation.digg_count) }}</text>
                                 </view>
                             </view>
                         </view>
                     </view>
                 </view>
 
-                <!-- 创作空状态 -->
                 <view v-else-if="!creationLoading" class="empty-state">
                     <text class="empty-icon">🔍</text>
                     <text class="empty-text">没有找到相关创作</text>
@@ -140,20 +113,20 @@
                 </view>
             </view>
 
-            <!-- 用户结果：列表，参考粉丝列表设计 -->
+            <!-- 用户结果：列表 -->
             <view v-else-if="activeFilter === 'user'">
-                <scroll-view 
-                    class="user-list-scroll" 
-                    scroll-y 
+                <scroll-view
+                    class="user-list-scroll"
+                    scroll-y
                     @scrolltolower="loadMoreUsers"
                     refresher-enabled
                     :refresher-triggered="userRefreshing"
                     @refresherrefresh="onUserRefresh"
                 >
                     <view class="user-list" v-if="userList.length > 0">
-                        <view 
-                            class="user-item" 
-                            v-for="(user, index) in userList" 
+                        <view
+                            class="user-item"
+                            v-for="(user, index) in userList"
                             :key="`user-${user.user_id || index}`"
                         >
                             <view class="user-left" @click="goToUserPage(user)">
@@ -164,51 +137,35 @@
                                     <view class="user-name-row">
                                         <text class="user-name">{{ user.username }}</text>
                                     </view>
-                                    <text class="user-bio" v-if="user.bio">{{ user.bio }}</text>
-                                    <text class="user-bio placeholder" v-else>
-                                        这个人很懒，什么都没写~
-                                    </text>
+                                    <text class="user-fans">粉丝：{{ formatFans(user.follower_count) }}</text>
                                 </view>
                             </view>
-                            <view class="user-right">
-                                <!-- 已关注 -->
-                                <view 
-                                    v-if="user.is_following"
-                                    class="following-btn"
-                                    @click.stop="confirmUnfollow(user)"
-                                >
-                                    <text class="btn-text">✓ 已关注</text>
-                                </view>
-                                <!-- 未关注 -->
-                                <view 
-                                    v-else
-                                    class="follow-btn" 
-                                    @click.stop="followUser(user)"
-                                >
-                                    <text class="btn-text">+ 关注</text>
+
+                            <!-- 自己：不显示关注按钮 -->
+                            <view class="user-right" v-if="!isSelf(user)">
+                                <view :class="followBtnClass(user)" @click.stop="onFollowBtnClick(user)">
+                                    <text class="btn-text">{{ followBtnText(user) }}</text>
                                 </view>
                             </view>
                         </view>
                     </view>
 
-                    <!-- 用户空状态 -->
                     <view v-if="!userLoading && userList.length === 0" class="empty-state">
                         <text class="empty-icon">👤</text>
                         <text class="empty-text">没有找到相关用户</text>
                         <text class="empty-hint">试试换个昵称或关键词</text>
                     </view>
 
-                    <!-- 用户加载更多 -->
                     <view v-if="userLoadingMore" class="loading-state">
                         <view class="loading-spinner small"></view>
                         <text class="loading-text">加载中...</text>
                     </view>
                 </scroll-view>
             </view>
-            
+
             <!-- 加载更多提示（创作） -->
-            <view 
-                v-if="creationLoadingMore && activeFilter === 'creation' && creationList.length > 0" 
+            <view
+                v-if="creationLoadingMore && activeFilter === 'creation' && creationList.length > 0"
                 class="loading-more"
             >
                 <view class="loading-spinner small"></view>
@@ -245,7 +202,7 @@ export default {
             userLoadingMore: false,
             userRefreshing: false,
 
-            activeFilter: 'creation',   // 'creation' | 'user'
+            activeFilter: 'creation',
             isPageAlive: true,
 
             autoFocus: false,
@@ -264,20 +221,15 @@ export default {
     },
     onReachBottom() {
         if (!this.isPageAlive) return;
-        if (this.activeFilter === 'creation') {
-            this.loadMoreCreations();
-        } else if (this.activeFilter === 'user') {
-            this.loadMoreUsers();
-        }
+        if (this.activeFilter === 'creation') this.loadMoreCreations();
+        else if (this.activeFilter === 'user') this.loadMoreUsers();
     },
     onPullDownRefresh() {
         if (!this.isPageAlive) return;
         let p;
-        if (this.activeFilter === 'creation') {
-            p = this.searchCreations(true);
-        } else if (this.activeFilter === 'user') {
-            p = this.searchUsers(true);
-        }
+        if (this.activeFilter === 'creation') p = this.searchCreations(true);
+        else if (this.activeFilter === 'user') p = this.searchUsers(true);
+
         Promise.resolve(p).finally(() => {
             uni.stopPullDownRefresh();
         });
@@ -301,22 +253,16 @@ export default {
                 uni.showToast({ title: '请输入搜索词', icon: 'none' });
                 return;
             }
-            if (this.activeFilter === 'creation') {
-                this.searchCreations(true);
-            } else if (this.activeFilter === 'user') {
-                this.searchUsers(true);
-            }
+            if (this.activeFilter === 'creation') this.searchCreations(true);
+            else if (this.activeFilter === 'user') this.searchUsers(true);
         },
         changeFilter(type) {
             if (this.activeFilter === type) return;
             this.activeFilter = type;
             const kw = this.keyword.trim();
             if (!kw) return;
-            if (type === 'creation') {
-                this.searchCreations(true);
-            } else if (type === 'user') {
-                this.searchUsers(true);
-            }
+            if (type === 'creation') this.searchCreations(true);
+            else if (type === 'user') this.searchUsers(true);
         },
 
         /* ========= 创作搜索 ========= */
@@ -334,32 +280,20 @@ export default {
                 this.creationList = [];
             }
 
-            if (reset) {
-                this.creationLoading = true;
-            } else {
-                this.creationLoadingMore = true;
-            }
+            if (reset) this.creationLoading = true;
+            else this.creationLoadingMore = true;
 
             const res = await getCreationsBySearch(kw, this.creationPage);
             const list = (res && res.creations) || [];
             const mapped = list.map(item => this.normalizeCreation(item));
 
-            if (reset) {
-                this.creationList = mapped;
-            } else {
-                this.creationList = this.creationList.concat(mapped);
-            }
+            if (reset) this.creationList = mapped;
+            else this.creationList = this.creationList.concat(mapped);
 
-            // 简单判断是否还有更多
-            if (!list.length || list.length < this.creationPageSize) {
-                this.creationHasMore = false;
-            }
+            if (!list.length || list.length < this.creationPageSize) this.creationHasMore = false;
 
-            if (reset) {
-                this.creationLoading = false;
-            } else {
-                this.creationLoadingMore = false;
-            }
+            if (reset) this.creationLoading = false;
+            else this.creationLoadingMore = false;
         },
 
         async loadMoreCreations() {
@@ -368,67 +302,50 @@ export default {
             await this.searchCreations(false);
         },
 
-		normalizeCreation(item) {
-			const cover = item.cover_url || this.defaultImage;
-			const avatar = item.avatar || this.defaultAvatar;
-			return {
-				creation_id: item.creation_id,
-				// 新增：作者 ID（供跳转详情）
-				user_id: item.user_id || item.userId || '',
-				// 新增：素材类型（1-图片 / 2-视频）
-				material_type: item.material_type || item.materialType || 1,
-				cover,
-				title: item.title || '未命名创作',
-				username: item.username || '未知作者',
-				avatar,
-				digg_count: item.digg_count || 0,
-				is_digg: !!item.is_digg,
-				displayTime: this.formatCreationTime(item.create_time)
-			};
-		},
-		goToCreationDetail(creation) {
-			if (!creation || !creation.creation_id) return;
+        normalizeCreation(item) {
+            const cover = item.cover_url || this.defaultImage;
+            const avatar = item.avatar || this.defaultAvatar;
+            return {
+                creation_id: item.creation_id,
+                user_id: item.user_id || item.userId || '',
+                material_type: item.material_type || item.materialType || 1,
+                cover,
+                title: item.title || '未命名创作',
+                username: item.username || '未知作者',
+                avatar,
+                digg_count: item.digg_count || 0,
+                is_digg: !!item.is_digg,
+                displayTime: this.formatCreationTime(item.create_time)
+            };
+        },
 
-			const creationId = encodeURIComponent(creation.creation_id);
-			const userId = encodeURIComponent(creation.user_id || '');
-
-			// 1 = 图片，2 = 视频（你后端 Creation 里 materialType 也是这么约定的）
-			const isVideo = Number(creation.material_type) === 2;
-
-			const basePath = isVideo
-				? '/pages/creation/creation_video'
-				: '/pages/creation/creation_image';
-
-			uni.navigateTo({
-				url: `${basePath}?creationId=${creationId}&userId=${userId}`
-			});
-		},
+        goToCreationDetail(creation) {
+            if (!creation || !creation.creation_id) return;
+            const creationId = encodeURIComponent(creation.creation_id);
+            const userId = encodeURIComponent(creation.user_id || '');
+            const isVideo = Number(creation.material_type) === 2;
+            const basePath = isVideo ? '/pages/creation/creation_video' : '/pages/creation/creation_image';
+            uni.navigateTo({ url: `${basePath}?creationId=${creationId}&userId=${userId}` });
+        },
 
         handleCreationImageError(creation) {
             if (creation) creation.cover = this.defaultImage;
         },
 
-        /* ========= 点赞 / 取消点赞 ========= */
         async toggleDigg(creation, index) {
             if (!creation || creation._digging) return;
             creation._digging = true;
-
             try {
                 if (creation.is_digg) {
-                    // 取消点赞
-                    await cancelDigg("creation",creation.creation_id);
+                    await cancelDigg('creation', creation.creation_id);
                     this.creationList[index].is_digg = false;
-                    if (this.creationList[index].digg_count > 0) {
-                        this.creationList[index].digg_count -= 1;
-                    }
+                    if (this.creationList[index].digg_count > 0) this.creationList[index].digg_count -= 1;
                 } else {
-                    // 点赞
-                    await digg("creation",creation.creation_id);
+                    await digg('creation', creation.creation_id);
                     this.creationList[index].is_digg = true;
                     this.creationList[index].digg_count += 1;
                 }
             } catch (err) {
-                // 这里你也可以根据需要加 toast
                 console.error('点赞操作失败:', err);
             } finally {
                 creation._digging = false;
@@ -450,38 +367,28 @@ export default {
                 this.userList = [];
             }
 
-            if (reset) {
-                this.userLoading = true;
-            } else {
-                this.userLoadingMore = true;
-            }
+            if (reset) this.userLoading = true;
+            else this.userLoadingMore = true;
 
             const data = await searchUsers(kw, this.userPage);
             const list = (data && data.user_infos) || [];
 
             const mapped = list.map(u => ({
-                user_id: u.user_id,
-                username: u.username,
+                user_id: String(u.user_id || u.userId || ''),
+                username: u.username || '未知用户',
                 avatar: u.avatar && u.avatar !== '' ? u.avatar : this.defaultAvatar,
-                bio: u.bio || '',
-                is_following: !!u.is_following
+                follower_count: Number(u.follower_count ?? u.followerCount ?? 0),
+                is_following: this.toBool(u.is_following ?? u.isFollowing),
+                is_follower: this.toBool(u.is_follower ?? u.isFollower)
             }));
 
-            if (reset) {
-                this.userList = mapped;
-            } else {
-                this.userList = this.userList.concat(mapped);
-            }
+            if (reset) this.userList = mapped;
+            else this.userList = this.userList.concat(mapped);
 
-            if (!list.length) {
-                this.userHasMore = false;
-            }
+            if (!list.length) this.userHasMore = false;
 
-            if (reset) {
-                this.userLoading = false;
-            } else {
-                this.userLoadingMore = false;
-            }
+            if (reset) this.userLoading = false;
+            else this.userLoadingMore = false;
         },
 
         async loadMoreUsers() {
@@ -496,64 +403,98 @@ export default {
             this.userRefreshing = false;
         },
 
+        isSelf(user) {
+            const me = String(getApp().globalData.userId || '');
+            return String(user?.user_id || '') === me;
+        },
+
         goToUserPage(user) {
+            if (this.isSelf(user)) {
+                uni.navigateTo({ url: '/pages/user/my_profile_copy' });
+                return;
+            }
             uni.navigateTo({
-                url: `/pages/user/user_profile?userId=${user.user_id}`
+                url: `/pages/user/user_profile?userId=${encodeURIComponent(String(user.user_id || ''))}`
             });
         },
 
-        /* ========= 关注 / 取关 ========= */
+        toBool(v) {
+            if (v === true) return true;
+            if (v === false) return false;
+            if (v === 1 || v === '1') return true;
+            if (v === 0 || v === '0') return false;
+            return !!v;
+        },
+
+        followBtnText(user) {
+            const f = this.toBool(user.is_following);
+            const r = this.toBool(user.is_follower);
+            if (f && r) return '互相关注';
+            if (f && !r) return '已关注';
+            if (!f && r) return '+ 回关';
+            return '+ 关注';
+        },
+
+        followBtnClass(user) {
+            const f = this.toBool(user.is_following);
+            return f ? 'following-btn' : 'follow-btn';
+        },
+
+        async onFollowBtnClick(user) {
+            const f = this.toBool(user.is_following);
+            if (f) {
+                this.confirmUnfollow(user);
+                return;
+            }
+            await this.followUser(user);
+        },
+
         async followUser(user) {
-			let res = await follow(getApp().globalData.userId,user.user_id);
-			if(res){
-				user.is_following = true;
-				uni.showToast({ title: '关注成功', icon: 'success' });
-			}
+            const res = await follow(getApp().globalData.userId, user.user_id);
+            if (res) {
+                user.is_following = true;
+                uni.showToast({ title: '关注成功', icon: 'success' });
+            }
         },
 
         confirmUnfollow(user) {
             uni.showModal({
                 title: '提示',
                 content: `确定取消关注 ${user.username} 吗？`,
-                success: (res) => {
-                    if (res.confirm) {
-                        this.unfollowUser(user);
-                    }
+                success: res => {
+                    if (res.confirm) this.unfollowUser(user);
                 }
             });
         },
 
         async unfollowUser(user) {
-            let res = await unfollow(getApp().globalData.userId,user.user_id);
-            if(res){
-				user.is_following = false;
-				uni.showToast({ title: '已取消关注', icon: 'success' });
+            const res = await unfollow(getApp().globalData.userId, user.user_id);
+            if (res) {
+                user.is_following = false;
+                uni.showToast({ title: '已取消关注', icon: 'success' });
             }
         },
 
-        /* ========= 工具 ========= */
+        formatFans(n) {
+            const num = Number(n || 0);
+            if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+            return String(num);
+        },
+
         formatCreationTime(msTimestamp) {
             if (!msTimestamp) return '';
-            // 防御：后端如果给的是秒级时间戳，转成毫秒
-            if (msTimestamp < 1e12) {
-                msTimestamp = msTimestamp * 1000;
-            }
+            if (msTimestamp < 1e12) msTimestamp = msTimestamp * 1000;
 
             const now = new Date();
             const target = new Date(msTimestamp);
-            const nowMs = now.getTime();
-            const diffMs = nowMs - msTimestamp;
+            const diffMs = now.getTime() - msTimestamp;
             const diffSec = Math.floor(diffMs / 1000);
 
             if (diffSec < 60) return '刚刚';
             if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分钟前`;
 
             const oneDayMs = 24 * 60 * 60 * 1000;
-            const todayStart = new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate()
-            ).getTime();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
             const pad2 = n => (n < 10 ? '0' + n : '' + n);
             const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`;
@@ -568,9 +509,7 @@ export default {
             const month = target.getMonth() + 1;
             const day = target.getDate();
 
-            if (year !== now.getFullYear()) {
-                return `${year}年${month}月${day}日`;
-            }
+            if (year !== now.getFullYear()) return `${year}年${month}月${day}日`;
             return `${month}月${day}日`;
         },
 
@@ -737,32 +676,9 @@ export default {
     }
 }
 
-/* ==================== 搜索结果统计 ==================== */
-.result-info {
-    position: fixed;
-    top: 100px;
-    left: 0;
-    right: 0;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #f0f0f0;
-    z-index: 997;
-}
-
-.result-text {
-    font-size: 13px;
-    color: #666;
-}
-
-.result-count {
-    color: #667eea;
-    font-weight: 600;
-}
-
-/* ==================== 创作列表 ==================== */
+/* ==================== 内容区域 ==================== */
 .creation-grid-container {
-    padding: 136px 8px 12px;
+    padding: 112px 8px 12px;
     box-sizing: border-box;
 }
 
@@ -790,7 +706,9 @@ export default {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loading-text {
@@ -923,9 +841,9 @@ export default {
     color: #999;
 }
 
-/* ==================== 用户列表（参考粉丝列表） ==================== */
+/* ==================== 用户列表 ==================== */
 .user-list-scroll {
-    height: calc(100vh - 136px);
+    height: calc(100vh - 112px);
 }
 
 .user-list {
@@ -980,16 +898,10 @@ export default {
     color: #333;
 }
 
-.user-bio {
-    font-size: 13px;
-    color: #666;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.user-bio.placeholder {
-    color: #999;
+.user-fans {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.2;
 }
 
 .user-right {

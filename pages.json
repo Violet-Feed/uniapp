@@ -100,6 +100,12 @@
 			}
 		},
 		{
+			"path": "pages/user/my_profile_copy",
+			"style": {
+				"navigationBarTitleText":"我的"
+			}
+		},
+		{
 			"path": "pages/user/user_profile",
 			"style": {
 				"navigationBarTitleText":"用户个人页"

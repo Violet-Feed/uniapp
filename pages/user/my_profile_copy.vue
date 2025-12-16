@@ -2,9 +2,9 @@
 	<view class="user-profile-container">
 		<!-- 顶部区域 - 渐变背景 -->
 		<view class="profile-header">
-			<!-- 设置按钮 -->
-			<view class="setting-btn" @click="showSettingMenu">
-				<text class="setting-icon">⚙️</text>
+			<!-- 返回按钮 -->
+			<view class="back-btn" @click="goBack">
+				<text class="back-icon">←</text>
 			</view>
 
 			<!-- 用户头像 -->
@@ -164,36 +164,6 @@
 				<text class="loading-text">加载中...</text>
 			</view>
 		</view>
-
-		<!-- 设置菜单弹窗 -->
-		<view class="setting-overlay" v-if="showSetting" @click="showSetting = false">
-			<view class="setting-menu" @click.stop>
-				<view class="menu-header">
-					<text class="menu-title">设置</text>
-					<text class="menu-close" @click="showSetting = false">✕</text>
-				</view>
-				<view class="menu-list">
-					<view class="menu-item" @click="goToEditProfile">
-						<text class="menu-icon">✏️</text>
-						<text class="menu-text">编辑资料</text>
-						<text class="menu-arrow">›</text>
-					</view>
-					<view class="menu-item" @click="goToAccountSetting">
-						<text class="menu-icon">👤</text>
-						<text class="menu-text">账号设置</text>
-						<text class="menu-arrow">›</text>
-					</view>
-					<view class="menu-item" @click="goToPrivacySetting">
-						<text class="menu-icon">🔒</text>
-						<text class="menu-text">隐私设置</text>
-						<text class="menu-arrow">›</text>
-					</view>
-				</view>
-				<view class="logout-btn" @click="logout">
-					<text class="logout-text">退出登录</text>
-				</view>
-			</view>
-		</view>
 	</view>
 </template>
 
@@ -226,71 +196,56 @@ export default {
 			likesLoaded: false,
 
 			defaultImage: '/static/images/default.png',
-			defaultAvatar: '/static/user_avatar.png',
-
-			showSetting: false
+			defaultAvatar: '/static/user_avatar.png'
 		}
 	},
 	onLoad() {
-		// 先拿 userId
 		this.userId = getApp().globalData.userId
-		// 拉取用户资料（成功则覆盖；失败则回退 globalData）
 		this.loadUserProfile()
-		// 初始化加载作品列表第一页
 		this.loadUserWorks(true)
 	},
-	// 上拉到底部加载更多
 	onReachBottom() {
-		if (this.activeTab === 'works') {
-			this.loadUserWorks(false)
-		} else if (this.activeTab === 'likes') {
-			this.loadUserLikes(false)
-		}
+		if (this.activeTab === 'works') this.loadUserWorks(false)
+		else if (this.activeTab === 'likes') this.loadUserLikes(false)
 	},
-	// 下拉刷新：重新拉用户资料 + 刷新当前 tab 列表
 	onPullDownRefresh() {
 		const tasks = []
 		tasks.push(this.loadUserProfile())
+		if (this.activeTab === 'works') tasks.push(this.loadUserWorks(true))
+		else if (this.activeTab === 'likes') tasks.push(this.loadUserLikes(true))
 
-		if (this.activeTab === 'works') {
-			tasks.push(this.loadUserWorks(true))
-		} else if (this.activeTab === 'likes') {
-			tasks.push(this.loadUserLikes(true))
-		}
-
-		Promise.all(tasks)
-			.finally(() => {
-				uni.stopPullDownRefresh()
-			})
+		Promise.all(tasks).finally(() => {
+			uni.stopPullDownRefresh()
+		})
 	},
 	methods: {
-		/* ====== 用户资料 ====== */
+		goBack() {
+			uni.navigateBack()
+		},
+
 		async loadUserProfile() {
 			const uid = this.userId || getApp().globalData.userId
 			const res = await getUserProfile(uid, true, true)
 
 			if (res) {
-				this.username = (res.user_info && res.user_info.username) ? res.user_info.username : ''
-				this.avatar = (res.user_info && res.user_info.avatar) ? res.user_info.avatar : '/static/user_avatar.png'
+				this.username = res.user_info?.username || ''
+				this.avatar = res.user_info?.avatar || '/static/user_avatar.png'
 				this.followingCount = res.following_count || 0
 				this.followerCount = res.follower_count || 0
 				this.friendCount = res.friend_count || 0
 				return
 			}
 
-			// 请求失败（undefined）回退 globalData
 			this.userId = getApp().globalData.userId
 			this.username = getApp().globalData.username
 			this.avatar = getApp().globalData.avatar
 		},
 
-		/* ====== 加载作品列表 ====== */
 		async loadUserWorks(reset = false) {
 			if (this.loading) return
 			if (!reset && !this.worksHasMore) return
 
 			this.loading = true
-
 			try {
 				const pageToLoad = reset ? 1 : this.worksPage + 1
 				const res = await getCreationsByUser(this.userId, pageToLoad)
@@ -339,13 +294,11 @@ export default {
 			}
 		},
 
-		/* ====== 加载点赞列表 ====== */
 		async loadUserLikes(reset = false) {
 			if (this.loading) return
 			if (!reset && !this.likesHasMore) return
 
 			this.loading = true
-
 			try {
 				const pageToLoad = reset ? 1 : this.likesPage + 1
 				const res = await getCreationsByDigg(this.userId, pageToLoad)
@@ -399,16 +352,13 @@ export default {
 		switchTab(tab) {
 			if (this.activeTab === tab) return
 			this.activeTab = tab
-			if (tab === 'likes' && !this.likesLoaded) {
-				this.loadUserLikes(true)
-			}
+			if (tab === 'likes' && !this.likesLoaded) this.loadUserLikes(true)
 		},
 
 		onCoverError(item) {
 			if (item) item.cover = this.defaultImage
 		},
 
-		/* ====== 点赞 / 取消点赞 ====== */
 		async toggleDigg(listType, index) {
 			const list = listType === 'works' ? this.worksList : this.likesList
 			const item = list[index]
@@ -432,26 +382,16 @@ export default {
 			}
 		},
 
-		showSettingMenu() {
-			this.showSetting = true
-		},
-
 		goToFriendList() {
-			uni.navigateTo({
-				url: `/pages/user/friend_list?userId=${this.userId}`
-			})
+			uni.navigateTo({ url: `/pages/user/friend_list?userId=${this.userId}` })
 		},
 
 		goToFollowingList() {
-			uni.navigateTo({
-				url: `/pages/user/following_list?userId=${this.userId}`
-			})
+			uni.navigateTo({ url: `/pages/user/following_list?userId=${this.userId}` })
 		},
 
 		goToFollowerList() {
-			uni.navigateTo({
-				url: `/pages/user/follower_list?userId=${this.userId}`
-			})
+			uni.navigateTo({ url: `/pages/user/follower_list?userId=${this.userId}` })
 		},
 
 		goToWorkDetail(work) {
@@ -461,13 +401,9 @@ export default {
 			const userId = encodeURIComponent(work.user_id || this.userId || '')
 
 			const isVideo = Number(work.material_type) === 2
-			const basePath = isVideo
-				? '/pages/creation/creation_video'
-				: '/pages/creation/creation_image'
+			const basePath = isVideo ? '/pages/creation/creation_video' : '/pages/creation/creation_image'
 
-			uni.navigateTo({
-				url: `${basePath}?creationId=${creationId}&userId=${userId}`
-			})
+			uni.navigateTo({ url: `${basePath}?creationId=${creationId}&userId=${userId}` })
 		},
 
 		showWorkOptions(work) {
@@ -481,48 +417,11 @@ export default {
 							title: '提示',
 							content: '确定要删除这个作品吗？',
 							success: (res2) => {
-								if (res2.confirm) {
-									console.log('删除作品', work.creation_id)
-								}
+								if (res2.confirm) console.log('删除作品', work.creation_id)
 							}
 						})
 					} else if (res.tapIndex === 2) {
 						console.log('分享作品', work.creation_id)
-					}
-				}
-			})
-		},
-
-		goToEditProfile() {
-			this.showSetting = false
-			uni.showToast({ title: '编辑资料功能开发中', icon: 'none' })
-		},
-
-		goToAccountSetting() {
-			this.showSetting = false
-			uni.showToast({ title: '账号设置功能开发中', icon: 'none' })
-		},
-
-		goToPrivacySetting() {
-			this.showSetting = false
-			uni.showToast({ title: '隐私设置功能开发中', icon: 'none' })
-		},
-
-		logout() {
-			uni.showModal({
-				title: '提示',
-				content: '确定要退出登录吗？',
-				success: (res) => {
-					if (res.confirm) {
-						try {
-							getApp().globalData.socket?.close()
-						} catch (e) {
-							console.error('退出登录错误:', e)
-						}
-						delete getApp().globalData.token
-						uni.removeStorageSync('token')
-						uni.removeStorageSync('user_id')
-						uni.reLaunch({ url: '/pages/user/login' })
 					}
 				}
 			})
@@ -539,7 +438,6 @@ export default {
 </script>
 
 <style scoped>
-/* 样式保持不变，仅删除了 tab-count 的显示，不需要改 CSS */
 .user-profile-container {
 	min-height: 100vh;
 	background: #f8f9fa;
@@ -552,10 +450,11 @@ export default {
 	padding: 12px 16px 32px;
 }
 
-.setting-btn {
+/* 返回按钮 */
+.back-btn {
 	position: absolute;
 	top: 12px;
-	right: 16px;
+	left: 16px;
 	width: 36px;
 	height: 36px;
 	background: rgba(255, 255, 255, 0.3);
@@ -567,8 +466,9 @@ export default {
 	z-index: 10;
 }
 
-.setting-icon {
-	font-size: 20px;
+.back-icon {
+	font-size: 24px;
+	color: #fff;
 }
 
 /* 头像区域 */
@@ -725,13 +625,8 @@ export default {
 	background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
 }
 
-.card-content {
-	padding: 6px;
-}
-
-.card-title-container {
-	margin-bottom: 4px;
-}
+.card-content { padding: 6px; }
+.card-title-container { margin-bottom: 4px; }
 
 .card-title {
 	font-size: 12px;
@@ -750,7 +645,6 @@ export default {
 	justify-content: space-between;
 }
 
-/* 作者信息 */
 .card-author {
 	display: flex;
 	align-items: center;
@@ -776,7 +670,6 @@ export default {
 	text-overflow: ellipsis;
 }
 
-/* 点赞区域 */
 .card-likes {
 	display: flex;
 	align-items: center;
@@ -789,9 +682,7 @@ export default {
 	transition: transform 0.15s ease;
 }
 
-.like-icon.active {
-	transform: scale(1.1);
-}
+.like-icon.active { transform: scale(1.1); }
 
 .like-count {
 	font-size: 10px;
@@ -841,106 +732,10 @@ export default {
 	animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-	to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ==================== 设置菜单 ==================== */
-.setting-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(0, 0, 0, 0.5);
-	z-index: 999;
-	display: flex;
-	align-items: flex-end;
-	animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-	from { opacity: 0; }
-	to { opacity: 1; }
-}
-
-.setting-menu {
-	width: 100%;
-	background: #fff;
-	border-radius: 16px 16px 0 0;
-	padding: 20px;
-	animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-	from { transform: translateY(100%); }
-	to { transform: translateY(0); }
-}
-
-.menu-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 20px;
-}
-
-.menu-title {
-	font-size: 18px;
-	font-weight: bold;
-	color: #333;
-}
-
-.menu-close {
-	width: 32px;
-	height: 32px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 24px;
+.loading-text {
+	font-size: 13px;
 	color: #999;
-}
-
-.menu-list {
-	margin-bottom: 20px;
-}
-
-.menu-item {
-	display: flex;
-	align-items: center;
-	padding: 16px 0;
-	border-bottom: 1px solid #f0f0f0;
-}
-
-.menu-icon {
-	font-size: 20px;
-	margin-right: 12px;
-}
-
-.menu-text {
-	flex: 1;
-	font-size: 15px;
-	color: #333;
-}
-
-.menu-arrow {
-	font-size: 20px;
-	color: #ccc;
-}
-
-.logout-btn {
-	width: 100%;
-	height: 48px;
-	background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-	border-radius: 24px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
-}
-
-.logout-text {
-	font-size: 16px;
-	font-weight: 500;
-	color: #fff;
 }
 </style>
