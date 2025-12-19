@@ -101,7 +101,7 @@
 
 <script>
 import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite.js';
+import DB from '@/utils/sqlite_new.js';
 import { getNoitceCount } from '@/request/im.js';
 
 export default {
@@ -148,7 +148,6 @@ export default {
                 }
             }
             if (index !== -1) {
-                // todo: getConversaionCore
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             } else {

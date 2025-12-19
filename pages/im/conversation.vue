@@ -139,6 +139,7 @@ export default {
                     this.hasMore = false;
                 }
             }
+			//markRead(this.conversation.con_short_id,this.messages[this.messages.length-1].con_index,this.conversation.badge_count);
         }
         setTimeout(() => this.scrollToBottom(), 100);
 

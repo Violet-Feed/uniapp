@@ -1,4 +1,5 @@
 import JSONbig from 'json-bigint';
+import { httpRequestBackData } from './common';
 export const login = async (username,password) => {
 	const data = {
 		username: username,
@@ -130,6 +131,13 @@ export const getUserProfile = async (userId,needFollowInfo,needFriendInfo) => {
 		});
 	}
 	return {};
+}
+
+export const getUserInfos = async (payload) => {
+	const data = {
+		user_ids: payload.userIds
+	}
+	return httpRequestBackData("/user/get_user_infos")
 }
 
 export const searchUsers = async (keyword,page) => {

@@ -1,5 +1,5 @@
 import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite.js';
+import DB from '@/utils/sqlite_new.js';
 import file from '@/utils/file';
 import {
 	getUserProfile
@@ -305,6 +305,22 @@ export const getConversationInfo = async (conShortId) => {
 	}
 }
 
+export const getCoversationMembers = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId
+	};
+	return httpRequestBackData("/im/get_conversation_members",data);
+};
+
+export const addCoversationMembers = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId,
+		con_id: payload.conId,
+		members: payload.members
+	};
+	return httpRequestBackBool("/im/add_conversation_members",data);
+};
+
 export const markRead = async (conShortId, readIndex, readCount) => {
 	const {
 		token
@@ -371,4 +387,96 @@ export const markNoticeRead = async (payload) => {
 		group: payload.group
 	};
 	return httpRequestBackBool("/notice/mark_notice_read",data);
+};
+
+
+// ------------------------ pull: getMessageByUser_new ------------------------
+import { ensureUsersCached, enqueueGroupRosters } from "@/utils/im-cache.js";
+
+export const getMessageByUser_new = async () => {
+  const { userId } = getApp().globalData;
+  const PAGE_LIMIT = 100;
+  let hasMore = true;
+  while (hasMore) {
+    hasMore = false;
+    const userConIndex = Number(getApp().globalData.userConIndex || 0);
+    const req = { user_con_index: userConIndex + 1, limit: PAGE_LIMIT };
+    const res = await httpRequestBackData("/im/get_message_by_user", req);
+    if (!res) return;
+    const cons = res.cons || [];
+    hasMore = !!res.has_more;
+    const newIdx = Number(res.user_con_index || userConIndex);
+    getApp().globalData.userConIndex = newIdx;
+    uni.setStorageSync("user_con_index_" + userId, newIdx);
+    if (cons.length === 0) continue;
+    // 收集：私聊对端 + 群 con_short_id + peer 映射
+    const privateTargetIds = [];
+    const groupConShortIds = [];
+    const peerMap = new Map(); // con_id(string) -> peer_user_id(BigInt)
+    for (const con of cons) {
+      const conInfo = con.con_info;
+      if (conInfo.con_type === 1) {
+        const parts = conInfo.con_id.split(":");
+        const targetId = (parts[0] === String(userId)) ? BigInt(parts[1]) : BigInt(parts[0]);
+        privateTargetIds.push(targetId);
+        peerMap.set(conInfo.con_id, targetId);
+      } else if (conInfo.con_type === 2) {
+        groupConShortIds.push(conInfo.con_short_id);
+      }
+    }
+    // 私聊：只补缺失（同步；你不需要 TTL 刷新入口）
+    await ensureUsersCached(privateTargetIds);
+    const msgRows = [];
+    const conRows = [];
+    for (const con of cons) {
+      const conInfo = con.con_info;
+      const msgBodies = con.msg_bodies || [];
+      for (const msg of msgBodies) {
+        msgRows.push({
+          user_id: msg.user_id,
+          con_short_id: msg.con_short_id,
+          con_id: msg.con_id,
+          con_type: msg.con_type,
+          client_msg_id: msg.client_msg_id,
+          msg_id: msg.msg_id,
+          msg_type: msg.msg_type,
+          msg_content: msg.msg_content || "",
+          create_time: msg.create_time,
+          extra: msg.extra || "",
+          con_index: msg.con_index
+        });
+      }
+      const core = conInfo.con_core_info || {};
+      const setting = conInfo.con_setting_info || {};
+      const last_message = msgBodies[0]?.msg_content || "";
+      const peer_user_id = (conInfo.con_type === 1) ? (peerMap.get(conInfo.con_id) || null) : null;
+      conRows.push({
+        con_short_id: conInfo.con_short_id,
+        con_id: conInfo.con_id,
+        con_type: conInfo.con_type,
+        name: core.name || "",
+        avatar_uri: core.avatar_uri || "",
+        description: core.description || "",
+        owner_id: core.owner_id ?? 0n,
+        create_time: core.create_time ?? 0,
+        status: core.status ?? 0,
+        min_index: setting.min_index ?? 0,
+        top_timestamp: setting.top_timestamp ?? 0;
+        push_status: setting.push_status ?? 0,
+        core_extra: core.extra || "",
+        setting_extra: setting.extra || "",
+        member_count: core.member_count ?? 0,
+        badge_count: conInfo.badge_count ?? 0,
+        read_index_end: setting.read_index_end ?? 0,
+        read_badge_count: setting.read_badge_count ?? 0,
+        user_con_index: Number(conInfo.user_con_index ?? 0),
+        last_message,
+        peer_user_id
+      });
+    }
+    await DB.insertConversation(conRows);
+    await DB.insertMessage(msgRows);
+    // 群 roster：后台补齐（不阻塞）
+    enqueueGroupRosters(groupConShortIds);
+  }
 };

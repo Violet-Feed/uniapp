@@ -263,6 +263,112 @@ class Socket {
 		}
 	}
 	
+	import { ensureUsersCached, enqueueGroupRosters } from "@/utils/im-cache.js";
+	// ------------------------ socket: handleNormalPacket_new ------------------------
+	handleNormalPacket_new = async (data) => {
+	  try {
+		// ---------- 默认值 ----------
+		if (data.pre_user_con_index === undefined) data.pre_user_con_index = 0;
+		if (data.badge_count === undefined) data.badge_count = 0;
+		if (data.msg_body?.extra === undefined) data.msg_body.extra = "";
+		const newUserConIndex = Number(data.user_con_index);
+		if (data.pre_user_con_index != getApp().globalData.userConIndex) {
+		  console.error("TODO:getByUser");
+		}
+		uni.setStorageSync("user_con_index_" + this.userId, newUserConIndex);
+		getApp().globalData.userConIndex = newUserConIndex;
+		const m = data.msg_body;
+		// ---------- 先落消息 ----------
+		await DB.insertMessage([{
+		  user_id: m.user_id,
+		  con_short_id: m.con_short_id,
+		  con_id: m.con_id,
+		  con_type: m.con_type,
+		  client_msg_id: m.client_msg_id,
+		  msg_id: m.msg_id,
+		  msg_type: m.msg_type,
+		  msg_content: m.msg_content || "",
+		  create_time: m.create_time,
+		  extra: m.extra || "",
+		  con_index: m.con_index
+		}]);
+		// ---------- 再更新/插入会话 ----------
+		const conId = m.con_id;
+		const existing = await DB.selectConversation(conId);
+		if (existing && existing.length > 0) {
+		  const map = new Map();
+		  map.set("badge_count", data.badge_count);
+		  map.set("user_con_index", newUserConIndex);
+		  map.set("last_message", m.msg_content || "");
+		  await DB.updateConversation(m.con_short_id, map);
+		  uni.$emit("normal", data);
+		} else {
+		  // 会话不存在：拉 conInfo（成功直接返回 conInfo，失败 undefined）
+		  const conInfo = await getConversationInfo(m.con_short_id);
+		  if (!conInfo) {
+			// 没有 conInfo 就无法补齐会话，只能先不插 conversation
+			// 但消息已落库，后续可由 getByUser 或重连同步补齐
+			return;
+		  }
+		  let peerUserId = null;
+		  if (conInfo.con_type === 1) {
+			const parts = String(conInfo.con_id).split(":");
+			const selfIdStr = String(this.userId);
+			peerUserId = (parts[0] === selfIdStr) ? BigInt(parts[1]) : BigInt(parts[0]);
+			// 私聊：只补缺失 user（同步，保证本次 emit 列表有头像昵称）
+			await ensureUsersCached([peerUserId]);
+			// 用 DB 现值填充 con_core_info（不依赖服务端 con_core_info）
+			const rows = await DB.getUsersByIds([peerUserId]);
+			const u = rows && rows[0] ? rows[0] : null;
+			conInfo.con_core_info = conInfo.con_core_info || {};
+			conInfo.con_core_info.name = u?.username || conInfo.con_core_info.name || "用户";
+			conInfo.con_core_info.avatar_uri = u?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/user_avatar.png";
+		  } else if (conInfo.con_type === 2) {
+			// 群聊：后台补齐 roster（不阻塞 socket）
+			enqueueGroupRosters([conInfo.con_short_id]);
+			conInfo.con_core_info = conInfo.con_core_info || {};
+			if (!conInfo.con_core_info.name) conInfo.con_core_info.name = "群聊";
+			if (!conInfo.con_core_info.avatar_uri) conInfo.con_core_info.avatar_uri = "/static/conv_avatar.png";
+		  } else if (conInfo.con_type === 4) {
+			conInfo.con_core_info = conInfo.con_core_info || {};
+			conInfo.con_core_info.name = "AI";
+			conInfo.con_core_info.avatar_uri = "/static/ai.png";
+		  }
+		  const core = conInfo.con_core_info || {};
+		  const setting = conInfo.con_setting_info || {};
+		  await DB.insertConversation([{
+			con_short_id: conInfo.con_short_id,
+			con_id: conInfo.con_id,
+			con_type: conInfo.con_type,
+			name: core.name || "",
+			avatar_uri: core.avatar_uri || "",
+			description: core.description || "",
+			owner_id: core.owner_id ?? 0n,
+			create_time: core.create_time ?? 0,
+			status: core.status ?? 0,
+			min_index: setting.min_index ?? 0,
+			top_timestamp: setting.top_timestamp ?? 0,
+			push_status: setting.push_status ?? 0,
+			core_extra: core.extra || "",
+			setting_extra: setting.extra || "",
+			member_count: core.member_count ?? 0,
+			badge_count: data.badge_count,
+			read_index_end: setting.read_index_end ?? 0,
+			read_badge_count: setting.read_badge_count ?? 0,
+			user_con_index: Number(conInfo.user_con_index ?? newUserConIndex),
+			last_message: (m.msg_content || ""),
+			peer_user_id: peerUserId
+		  }]);
+		  uni.$emit("normal", data);
+		}
+		if (m.msg_type == 5) {
+		  // TODO: 你后续要加的其它逻辑写这里
+		}
+	  } catch (err) {
+		console.error("handleNormalPacket_new failed:", err, data);
+	  }
+	};
+	
 	handleCommandPacket(data){
 		if (data.user_cmd_index-1n != getApp().globalData.userCmdIndex) {
 			console.error("TODO:getByUser")
