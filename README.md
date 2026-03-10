@@ -1,3 +1,4 @@
+```bash
 adb -s 127.0.0.1:5555 reverse tcp:3000 tcp:3000
 
 adb -s 127.0.0.1:5555 reverse tcp:3001 tcp:3001
@@ -10,10 +11,13 @@ adb -s 127.0.0.1:5555 shell
 su
 sqlite3 /storage/emulated/0/Android/data/io.dcloud.HBuilder/apps/HBuilder/doc/db/violet.db
 .tables
+```
 
+```
 npm install json-bigint
 
 npx pbjs --es6 proto_gen/packet.js proto/packet.proto
+```
 
 readVarint64函数返回值修改为：
 ```javascript

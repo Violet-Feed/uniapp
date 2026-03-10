@@ -35,7 +35,7 @@
                     </view>
                     
                     <!-- 我发送的消息 -->
-                    <view class="message message-right" v-if="message.user_id==userId">
+                    <view class="message message-right" v-if="message.sender_id == userId && message.sender_type == 1">
                         <view class="message-status">
                             <view class="status-loading" v-if="message.status == -1"></view>
                         </view>
@@ -50,7 +50,7 @@
                     </view>
                     
                     <!-- 他人发送的消息 -->
-                    <view class="message message-left" v-else-if="message.user_id>10">
+                    <view class="message message-left" v-else-if="message.sender_id > 10">
                         <view class="avatar-box" @click="goToUserProfile(message)">
                             <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
                         </view>
@@ -145,7 +145,7 @@ export default {
 
         this.normalListener = uni.$on('normal', (data) => {
             if (this.conversation.con_id == data.msg_body.con_id) {
-                if (this.userId == data.msg_body.user_id) {
+                if (data.msg_body.sender_type == 1 && this.userId == data.msg_body.sender_id) {
                     for (let i = this.messages.length - 1; i >= 0; i--) {
                         if (BigInt(this.messages[i].msg_id) == data.msg_body.msg_id) {
                             this.messages[i] = data.msg_body;
@@ -213,7 +213,8 @@ export default {
                 if (res.code === 1000) {
                     if (this.messages.length == 0 || this.messages[this.messages.length - 1].client_msg_id < clientMsgId) {
                         this.messages.push({
-                            user_id: this.userId,
+                            sender_id: this.userId,
+                            sender_type: 1,
                             con_short_id: this.conversation.con_short_id,
                             con_id: this.conversation.con_id,
                             con_type: this.conversation.con_type,
@@ -235,8 +236,9 @@ export default {
             }
         },
         goToUserProfile(message) {
+            if (message.sender_type != 1) return;
             uni.navigateTo({
-                url: `/pages/user/user_profile?userId=${BigInt(message.user_id)}`
+                url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
             });
         },
         scrollToBottom() {
@@ -279,41 +281,41 @@ export default {
             }
         },
         transformContent(message) {
-    if (message.msg_type == 5) {
-        try {
-            const data = JSON.parse(message.msg_content);
-            const operator = data.operator || '未知用户';
-            switch (data.type) {
-                case 1: // Add_Member - 添加成员
-                    if (Array.isArray(data.content) && data.content.length > 0) {
-                        // 提取成员昵称
-                        const memberNames = data.content.join('、');
-                        return `${operator} 邀请 ${memberNames} 加入了群聊`;
+            if (message.sender_type == 3) {
+                try {
+                    const data = JSON.parse(message.msg_content);
+                    const operator = data.operator || '未知用户';
+                    switch (data.type) {
+                        case 1: // Add_Member - 添加成员
+                            if (Array.isArray(data.content) && data.content.length > 0) {
+                                // 提取成员昵称
+                                const memberNames = data.content.join('、');
+                                return `${operator} 邀请 ${memberNames} 加入了群聊`;
+                            }
+                            // 如果没有content，说明是操作者自己加入
+                            return `${operator} 加入了群聊`;
+                        case 2: // Remove_Member - 移除成员
+                            if (Array.isArray(data.content) && data.content.length > 0) {
+                                const memberNames = data.content.join('、');
+                                return `${operator} 将 ${memberNames} 移出了群聊`;
+                            }
+                            // 如果没有content，说明是操作者自己退出
+                            return `${operator} 退出了群聊`;
+                        case 3: // Modify_Name - 修改群名
+                            return `${operator} 修改群名为 "${data.content}"`;
+                        case 4: // Modify_Description - 修改群资料
+                            return `${operator} 修改群资料为 "${data.content}"`;    
+                        default:
+                            // 未知类型，返回原始内容
+                            console.warn('未知的群聊消息类型:', data.type);
+                            return message.msg_content;
                     }
-                    // 如果没有content，说明是操作者自己加入
-                    return `${operator} 加入了群聊`;
-                case 2: // Remove_Member - 移除成员
-                    if (Array.isArray(data.content) && data.content.length > 0) {
-                        const memberNames = data.content.join('、');
-                        return `${operator} 将 ${memberNames} 移出了群聊`;
-                    }
-                    // 如果没有content，说明是操作者自己退出
-                    return `${operator} 退出了群聊`;
-                case 3: // Modify_Name - 修改群名
-                    return `${operator} 修改群名为 "${data.content}"`;
-                case 4: // Modify_Description - 修改群资料
-                    return `${operator} 修改群资料为 "${data.content}"`;    
-                default:
-                    // 未知类型，返回原始内容
-                    console.warn('未知的群聊消息类型:', data.type);
+                } catch (e) {
+                    // JSON解析失败，返回原始内容
+                    console.error('解析群聊消息失败:', e, message.msg_content);
                     return message.msg_content;
+                }
             }
-        } catch (e) {
-            // JSON解析失败，返回原始内容
-            console.error('解析群聊消息失败:', e, message.msg_content);
-            return message.msg_content;
-        }
-    }
             return message.msg_content;
         },
         formatTime(timestamp) {

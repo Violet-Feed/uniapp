@@ -390,50 +390,76 @@ export const markNoticeRead = async (payload) => {
 };
 
 
-// ------------------------ pull: getMessageByUser_new ------------------------
-import { ensureUsersCached, enqueueGroupRosters } from "@/utils/im-cache.js";
+import {
+  ensureUsersCached,
+  ensureAgentsCached,
+  enqueueGroupRosters
+} from "@/utils/im-cache.js";
 
 export const getMessageByUser_new = async () => {
   const { userId } = getApp().globalData;
   const PAGE_LIMIT = 100;
+
   let hasMore = true;
+
   while (hasMore) {
     hasMore = false;
+
     const userConIndex = Number(getApp().globalData.userConIndex || 0);
-    const req = { user_con_index: userConIndex + 1, limit: PAGE_LIMIT };
+    const req = {
+      user_con_index: userConIndex + 1,
+      limit: PAGE_LIMIT
+    };
+
     const res = await httpRequestBackData("/im/get_message_by_user", req);
     if (!res) return;
+
     const cons = res.cons || [];
     hasMore = !!res.has_more;
+
     const newIdx = Number(res.user_con_index || userConIndex);
     getApp().globalData.userConIndex = newIdx;
     uni.setStorageSync("user_con_index_" + userId, newIdx);
+
     if (cons.length === 0) continue;
-    // 收集：私聊对端 + 群 con_short_id + peer 映射
-    const privateTargetIds = [];
+
+    const privateUserIds = [];
+    const privateAgentIds = [];
     const groupConShortIds = [];
-    const peerMap = new Map(); // con_id(string) -> peer_user_id(BigInt)
+    const peerMap = new Map(); // con_id -> peer_id(BigInt)
+
     for (const con of cons) {
       const conInfo = con.con_info;
+
       if (conInfo.con_type === 1) {
-        const parts = conInfo.con_id.split(":");
-        const targetId = (parts[0] === String(userId)) ? BigInt(parts[1]) : BigInt(parts[0]);
-        privateTargetIds.push(targetId);
-        peerMap.set(conInfo.con_id, targetId);
+        const parts = String(conInfo.con_id).split(":");
+        const peerId = (parts[0] === String(userId)) ? BigInt(parts[1]) : BigInt(parts[0]);
+        privateUserIds.push(peerId);
+        peerMap.set(conInfo.con_id, peerId);
+      } else if (conInfo.con_type === 4) {
+        const parts = String(conInfo.con_id).split(":");
+        const peerId = BigInt(parts[2]);
+        privateAgentIds.push(peerId);
+        peerMap.set(conInfo.con_id, peerId);
       } else if (conInfo.con_type === 2) {
         groupConShortIds.push(conInfo.con_short_id);
       }
     }
-    // 私聊：只补缺失（同步；你不需要 TTL 刷新入口）
-    await ensureUsersCached(privateTargetIds);
+
+    await ensureUsersCached(privateUserIds);
+    await ensureAgentsCached(privateAgentIds);
+
     const msgRows = [];
     const conRows = [];
+
     for (const con of cons) {
       const conInfo = con.con_info;
       const msgBodies = con.msg_bodies || [];
+
       for (const msg of msgBodies) {
         msgRows.push({
-          user_id: msg.user_id,
+          sender_id: msg.sender_id,
+          sender_type: msg.sender_type,
           con_short_id: msg.con_short_id,
           con_id: msg.con_id,
           con_type: msg.con_type,
@@ -446,22 +472,28 @@ export const getMessageByUser_new = async () => {
           con_index: msg.con_index
         });
       }
+
       const core = conInfo.con_core_info || {};
       const setting = conInfo.con_setting_info || {};
       const last_message = msgBodies[0]?.msg_content || "";
-      const peer_user_id = (conInfo.con_type === 1) ? (peerMap.get(conInfo.con_id) || null) : null;
+      const peer_id =
+        (conInfo.con_type === 1 || conInfo.con_type === 4)
+          ? (peerMap.get(conInfo.con_id) || null)
+          : null;
+
       conRows.push({
         con_short_id: conInfo.con_short_id,
         con_id: conInfo.con_id,
         con_type: conInfo.con_type,
         name: core.name || "",
         avatar_uri: core.avatar_uri || "",
+        local_avatar_uri: "",
         description: core.description || "",
         owner_id: core.owner_id ?? 0n,
         create_time: core.create_time ?? 0,
         status: core.status ?? 0,
         min_index: setting.min_index ?? 0,
-        top_timestamp: setting.top_timestamp ?? 0;
+        top_timestamp: setting.top_timestamp ?? 0,
         push_status: setting.push_status ?? 0,
         core_extra: core.extra || "",
         setting_extra: setting.extra || "",
@@ -471,12 +503,13 @@ export const getMessageByUser_new = async () => {
         read_badge_count: setting.read_badge_count ?? 0,
         user_con_index: Number(conInfo.user_con_index ?? 0),
         last_message,
-        peer_user_id
+        peer_id
       });
     }
+
     await DB.insertConversation(conRows);
     await DB.insertMessage(msgRows);
-    // 群 roster：后台补齐（不阻塞）
+
     enqueueGroupRosters(groupConShortIds);
   }
 };

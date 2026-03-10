@@ -1,10 +1,8 @@
-// violet-sqlite.js (BigInt-safe, modify_time added)
-// UniApp (App-Plus) + plus.sqlite
+// sqlite_new.js
+// BigInt-safe + sender_id/sender_type + agent table + generic member table
 
 const dbName = 'violet';
 const dbPath = '_doc/db/violet.db';
-
-// int64 最大值（用于无穷大游标），避免 MAX_SAFE_INTEGER 误伤
 const INT64_MAX_STR = '9223372036854775807';
 
 /* ----------------------------- DB 基础能力 ----------------------------- */
@@ -45,13 +43,16 @@ function getTablesByUser(userId) {
     conTable: `conversation_${userId}`,
     msgTable: `message_${userId}`,
     userTable: `user_${userId}`,
+    agentTable: `agent_${userId}`,
     memberTable: `member_${userId}`
   };
 }
 
 function getLoginUserId() {
   const { userId } = getApp().globalData || {};
-  if (userId === null || userId === undefined) throw new Error('userId is not set in globalData');
+  if (userId === null || userId === undefined) {
+    throw new Error('userId is not set in globalData');
+  }
   return userId;
 }
 
@@ -97,8 +98,6 @@ async function withTransaction(fn) {
 
 /* ----------------------------- 值拼接：BigInt-safe ----------------------------- */
 
-// 关键：禁止把不安全的 number 写进 SQL（否则你本地就会写错/查错）
-// 建议：所有 snowflake/id 一律用 string 或 BigInt 传入
 function sqlValue(v) {
   if (v === null || v === undefined) return 'NULL';
 
@@ -117,7 +116,7 @@ function sqlValue(v) {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-/* ----------------------------- BigInt 转换（统一入口） ----------------------------- */
+/* ----------------------------- BigInt 转换 ----------------------------- */
 
 function toBigIntStrict(v) {
   if (v === null || v === undefined) return null;
@@ -150,12 +149,12 @@ function mapRowsBigInt(rows, fields) {
   });
 }
 
-/* ----------------------------- 建表（不兼容旧库，按新结构直接创建） ----------------------------- */
+/* ----------------------------- 建表 ----------------------------- */
 
 async function createTable(userId) {
   await ensureOpen();
 
-  const { conTable, msgTable, userTable, memberTable } = getTablesByUser(userId);
+  const { conTable, msgTable, userTable, agentTable, memberTable } = getTablesByUser(userId);
 
   const sqls = [
     `CREATE TABLE IF NOT EXISTS ${conTable} (
@@ -164,6 +163,7 @@ async function createTable(userId) {
       con_type INTEGER,
       name TEXT,
       avatar_uri TEXT,
+      local_avatar_uri TEXT,
       description TEXT,
       owner_id INTEGER,
       create_time INTEGER,
@@ -179,12 +179,13 @@ async function createTable(userId) {
       read_badge_count INTEGER,
       user_con_index INTEGER,
       last_message TEXT,
-      peer_user_id INTEGER
+      peer_id INTEGER
     );`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_${conTable}_user_con_index ON ${conTable} (user_con_index);`,
 
     `CREATE TABLE IF NOT EXISTS ${msgTable} (
-      user_id INTEGER,
+      sender_id INTEGER,
+      sender_type INTEGER,
       con_short_id INTEGER,
       con_id TEXT,
       con_type INTEGER,
@@ -197,6 +198,7 @@ async function createTable(userId) {
       con_index INTEGER
     );`,
     `CREATE INDEX IF NOT EXISTS idx_${msgTable}_con_id_con_index ON ${msgTable} (con_id, con_index);`,
+    `CREATE INDEX IF NOT EXISTS idx_${msgTable}_sender ON ${msgTable} (sender_type, sender_id);`,
 
     `CREATE TABLE IF NOT EXISTS ${userTable} (
       user_id INTEGER PRIMARY KEY,
@@ -207,17 +209,30 @@ async function createTable(userId) {
     );`,
     `CREATE INDEX IF NOT EXISTS idx_${userTable}_modify_time ON ${userTable} (modify_time);`,
 
+    `CREATE TABLE IF NOT EXISTS ${agentTable} (
+      agent_id INTEGER PRIMARY KEY,
+      agent_name TEXT,
+      avatar_uri TEXT,
+      local_avatar_uri TEXT,
+      description TEXT,
+      owner_id INTEGER,
+      modify_time INTEGER
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_${agentTable}_modify_time ON ${agentTable} (modify_time);`,
+
     `CREATE TABLE IF NOT EXISTS ${memberTable} (
       con_short_id INTEGER,
-      user_id INTEGER,
+      member_id INTEGER,
+      member_type INTEGER,
       nick_name TEXT,
       privilege INTEGER,
       create_time INTEGER,
       status INTEGER,
       extra TEXT,
-      PRIMARY KEY (con_short_id, user_id)
+      PRIMARY KEY (con_short_id, member_type, member_id)
     );`,
-    `CREATE INDEX IF NOT EXISTS idx_${memberTable}_con_short_id ON ${memberTable} (con_short_id);`
+    `CREATE INDEX IF NOT EXISTS idx_${memberTable}_con_short_id ON ${memberTable} (con_short_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_${memberTable}_member ON ${memberTable} (member_type, member_id);`
   ];
 
   await execSqls(sqls);
@@ -231,7 +246,6 @@ async function insertConversation(data) {
   const userId = getLoginUserId();
   const { conTable } = getTablesByUser(userId);
 
-  // 旧模式保留（不推荐）
   if (typeof data === 'string') {
     const sql = `INSERT OR REPLACE INTO ${conTable} VALUES ${data};`;
     return execSql(sql);
@@ -246,6 +260,7 @@ async function insertConversation(data) {
     'con_type',
     'name',
     'avatar_uri',
+    'local_avatar_uri',
     'description',
     'owner_id',
     'create_time',
@@ -261,7 +276,7 @@ async function insertConversation(data) {
     'read_badge_count',
     'user_con_index',
     'last_message',
-    'peer_user_id'
+    'peer_id'
   ];
 
   const values = rows.map(r => `(${cols.map(c => sqlValue(r[c])).join(',')})`).join(',');
@@ -276,7 +291,6 @@ async function insertMessage(data) {
   const userId = getLoginUserId();
   const { msgTable } = getTablesByUser(userId);
 
-  // 旧模式保留（不推荐）
   if (typeof data === 'string') {
     const sql = `INSERT OR IGNORE INTO ${msgTable} VALUES ${data};`;
     return execSql(sql);
@@ -286,8 +300,18 @@ async function insertMessage(data) {
   if (rows.length === 0) return;
 
   const cols = [
-    'user_id','con_short_id','con_id','con_type','client_msg_id','msg_id','msg_type',
-    'msg_content','create_time','extra','con_index'
+    'sender_id',
+    'sender_type',
+    'con_short_id',
+    'con_id',
+    'con_type',
+    'client_msg_id',
+    'msg_id',
+    'msg_type',
+    'msg_content',
+    'create_time',
+    'extra',
+    'con_index'
   ];
 
   const values = rows.map(r => `(${cols.map(c => sqlValue(r[c])).join(',')})`).join(',');
@@ -296,7 +320,7 @@ async function insertMessage(data) {
   return withTransaction(() => execSql(sql));
 }
 
-/* ----------------------------- 写入：User / Member ----------------------------- */
+/* ----------------------------- 写入：User / Agent / Member ----------------------------- */
 
 async function upsertUsers(users) {
   await ensureOpen();
@@ -318,6 +342,26 @@ async function upsertUsers(users) {
   return withTransaction(() => execSql(sql));
 }
 
+async function upsertAgents(agents) {
+  await ensureOpen();
+
+  const userId = getLoginUserId();
+  const { agentTable } = getTablesByUser(userId);
+
+  const rows = Array.isArray(agents) ? agents : [agents];
+  if (!rows || rows.length === 0) return;
+
+  const cols = ['agent_id', 'agent_name', 'avatar_uri', 'local_avatar_uri', 'description', 'owner_id', 'modify_time'];
+
+  const values = rows.map(a => {
+    const mt = (a.modify_time === null || a.modify_time === undefined) ? Date.now() : a.modify_time;
+    return `(${sqlValue(a.agent_id)}, ${sqlValue(a.agent_name)}, ${sqlValue(a.avatar_uri)}, ${sqlValue(a.local_avatar_uri)}, ${sqlValue(a.description)}, ${sqlValue(a.owner_id)}, ${sqlValue(mt)})`;
+  }).join(',');
+
+  const sql = `INSERT OR REPLACE INTO ${agentTable} (${cols.join(',')}) VALUES ${values};`;
+  return withTransaction(() => execSql(sql));
+}
+
 async function upsertMembers(members) {
   await ensureOpen();
 
@@ -327,24 +371,23 @@ async function upsertMembers(members) {
   const rows = Array.isArray(members) ? members : [members];
   if (!rows || rows.length === 0) return;
 
-  const cols = ['con_short_id', 'user_id', 'nick_name', 'privilege', 'create_time', 'status', 'extra'];
+  const cols = ['con_short_id', 'member_id', 'member_type', 'nick_name', 'privilege', 'create_time', 'status', 'extra'];
 
   const values = rows.map(m =>
-    `(${sqlValue(m.con_short_id)}, ${sqlValue(m.user_id)}, ${sqlValue(m.nick_name)}, ${sqlValue(m.privilege)}, ${sqlValue(m.create_time)}, ${sqlValue(m.status)}, ${sqlValue(m.extra)})`
+    `(${sqlValue(m.con_short_id)}, ${sqlValue(m.member_id)}, ${sqlValue(m.member_type)}, ${sqlValue(m.nick_name)}, ${sqlValue(m.privilege)}, ${sqlValue(m.create_time)}, ${sqlValue(m.status)}, ${sqlValue(m.extra)})`
   ).join(',');
 
   const sql = `INSERT OR REPLACE INTO ${memberTable} (${cols.join(',')}) VALUES ${values};`;
   return withTransaction(() => execSql(sql));
 }
 
-/* ----------------------------- 拉取：Conversation / Members / Message ----------------------------- */
+/* ----------------------------- 拉取：Conversation ----------------------------- */
 
-// Conversation：私聊 name/avatar_uri 从 user 表取；返回 con_short_id/owner_id/peer_user_id 为 BigInt
 async function pullConversation(beforeUserConIndex, limit = 50) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
-  const { conTable, userTable } = getTablesByUser(loginUserId);
+  const { conTable, userTable, agentTable } = getTablesByUser(loginUserId);
 
   const before = (beforeUserConIndex === null || beforeUserConIndex === undefined)
     ? INT64_MAX_STR
@@ -356,14 +399,16 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
       c.con_id,
       c.con_type,
 
-      CASE WHEN c.con_type = 1
-        THEN COALESCE(NULLIF(u.username, ''), c.name)
+      CASE
+        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.username, ''), c.name)
+        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.agent_name, ''), c.name)
         ELSE c.name
       END AS name,
 
-      CASE WHEN c.con_type = 1
-        THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
-        ELSE c.avatar_uri
+      CASE
+        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
+        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
       END AS avatar_uri,
 
       c.description,
@@ -381,31 +426,209 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
       c.read_badge_count,
       c.user_con_index,
       c.last_message,
-      CAST(c.peer_user_id AS TEXT) AS peer_user_id
+      CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c
     LEFT JOIN ${userTable} u
       ON c.con_type = 1
-     AND CAST(u.user_id AS TEXT) = CAST(c.peer_user_id AS TEXT)
+     AND CAST(u.user_id AS TEXT) = CAST(c.peer_id AS TEXT)
+    LEFT JOIN ${agentTable} a
+      ON c.con_type = 4
+     AND CAST(a.agent_id AS TEXT) = CAST(c.peer_id AS TEXT)
     WHERE c.user_con_index <= ${sqlValue(before)}
     ORDER BY c.user_con_index DESC
     LIMIT ${Number(limit)};
   `;
 
   const rows = await selectSql(sql);
-  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_user_id']);
+  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_id']);
 }
 
-// Members：返回 con_short_id/user_id 为 BigInt
-async function pullMembers(conShortId) {
+async function getConversationById(conId) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { conTable, userTable, agentTable } = getTablesByUser(loginUserId);
+
+  const sql = `
+    SELECT
+      CAST(c.con_short_id AS TEXT) AS con_short_id,
+      c.con_id,
+      c.con_type,
+
+      CASE
+        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.username, ''), c.name)
+        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.agent_name, ''), c.name)
+        ELSE c.name
+      END AS name,
+
+      CASE
+        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
+        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
+      END AS avatar_uri,
+
+      c.description,
+      CAST(c.owner_id AS TEXT) AS owner_id,
+      c.create_time,
+      c.status,
+      c.min_index,
+      c.top_timestamp,
+      c.push_status,
+      c.core_extra,
+      c.setting_extra,
+      c.member_count,
+      c.badge_count,
+      c.read_index_end,
+      c.read_badge_count,
+      c.user_con_index,
+      c.last_message,
+      CAST(c.peer_id AS TEXT) AS peer_id
+    FROM ${conTable} c
+    LEFT JOIN ${userTable} u
+      ON c.con_type = 1
+     AND CAST(u.user_id AS TEXT) = CAST(c.peer_id AS TEXT)
+    LEFT JOIN ${agentTable} a
+      ON c.con_type = 4
+     AND CAST(a.agent_id AS TEXT) = CAST(c.peer_id AS TEXT)
+    WHERE c.con_id = ${sqlValue(conId)}
+    LIMIT 1;
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_id']);
+}
+
+async function getConversationByShortId(conShortId) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { conTable } = getTablesByUser(loginUserId);
+
+  const sql = `
+    SELECT
+      CAST(con_short_id AS TEXT) AS con_short_id,
+      con_id,
+      con_type,
+      name,
+      avatar_uri,
+      local_avatar_uri,
+      description,
+      CAST(owner_id AS TEXT) AS owner_id,
+      create_time,
+      status,
+      min_index,
+      top_timestamp,
+      push_status,
+      core_extra,
+      setting_extra,
+      member_count,
+      badge_count,
+      read_index_end,
+      read_badge_count,
+      user_con_index,
+      last_message,
+      CAST(peer_id AS TEXT) AS peer_id
+    FROM ${conTable}
+    WHERE CAST(con_short_id AS TEXT) = ${sqlValue(String(conShortId))}
+    LIMIT 1;
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_id']);
+}
+
+/* ----------------------------- 拉取：Message ----------------------------- */
+
+async function pullMessage(conId, beforeConIndex, limit = 20) {
   await ensureOpen();
 
   const userId = getLoginUserId();
-  const { memberTable, userTable } = getTablesByUser(userId);
+  const { msgTable, memberTable, userTable, agentTable } = getTablesByUser(userId);
+
+  const before = (beforeConIndex === null || beforeConIndex === undefined)
+    ? INT64_MAX_STR
+    : beforeConIndex;
+
+  const sql = `
+    WITH page AS (
+      SELECT
+        sender_id,
+        sender_type,
+        con_short_id,
+        con_id,
+        con_type,
+        client_msg_id,
+        msg_id,
+        msg_type,
+        msg_content,
+        create_time,
+        extra,
+        con_index
+      FROM ${msgTable}
+      WHERE con_id = ${sqlValue(conId)}
+        AND con_index <= ${sqlValue(before)}
+      ORDER BY con_index DESC
+      LIMIT ${Number(limit)}
+    )
+    SELECT
+      CAST(p.sender_id AS TEXT)      AS sender_id,
+      p.sender_type,
+      CAST(p.con_short_id AS TEXT)   AS con_short_id,
+      p.con_id,
+      p.con_type,
+      CAST(p.client_msg_id AS TEXT)  AS client_msg_id,
+      CAST(p.msg_id AS TEXT)         AS msg_id,
+      p.msg_type,
+      p.msg_content,
+      p.create_time,
+      p.extra,
+      p.con_index,
+
+      mem.nick_name AS member_nick_name,
+
+      CASE
+        WHEN p.sender_type = 1 THEN u.username
+        WHEN p.sender_type = 2 THEN a.agent_name
+        ELSE ''
+      END AS sender_name,
+
+      CASE
+        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri)
+        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri)
+        ELSE ''
+      END AS sender_avatar_uri
+
+    FROM page p
+    LEFT JOIN ${memberTable} mem
+      ON mem.con_short_id = p.con_short_id
+     AND mem.member_type = p.sender_type
+     AND mem.member_id = p.sender_id
+    LEFT JOIN ${userTable} u
+      ON p.sender_type = 1
+     AND u.user_id = p.sender_id
+    LEFT JOIN ${agentTable} a
+      ON p.sender_type = 2
+     AND a.agent_id = p.sender_id
+    ORDER BY p.con_index DESC;
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['sender_id', 'con_short_id', 'client_msg_id', 'msg_id']);
+}
+
+/* ----------------------------- 拉取：Members（拆分用户/AI） ----------------------------- */
+
+async function pullUserMembers(conShortId) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { memberTable, userTable } = getTablesByUser(loginUserId);
 
   const sql = `
     SELECT
       CAST(mem.con_short_id AS TEXT) AS con_short_id,
-      CAST(mem.user_id AS TEXT)      AS user_id,
+      CAST(mem.member_id AS TEXT)    AS user_id,
+      mem.member_type,
       mem.nick_name,
       mem.privilege,
       mem.create_time,
@@ -416,8 +639,11 @@ async function pullMembers(conShortId) {
       u.local_avatar_uri,
       u.modify_time
     FROM ${memberTable} mem
-    LEFT JOIN ${userTable} u ON u.user_id = mem.user_id
+    LEFT JOIN ${userTable} u
+      ON mem.member_type = 1
+     AND u.user_id = mem.member_id
     WHERE CAST(mem.con_short_id AS TEXT) = ${sqlValue(String(conShortId))}
+      AND mem.member_type = 1
     ORDER BY mem.create_time ASC;
   `;
 
@@ -425,104 +651,43 @@ async function pullMembers(conShortId) {
   return mapRowsBigInt(rows, ['con_short_id', 'user_id']);
 }
 
-// Message：返回 user_id / con_short_id / client_msg_id / msg_id 为 BigInt
-async function pullMessage(conId, beforeConIndex, limit = 20) {
-  await ensureOpen();
-
-  const userId = getLoginUserId();
-  const { msgTable, memberTable, userTable } = getTablesByUser(userId);
-
-  const before = (beforeConIndex === null || beforeConIndex === undefined)
-    ? INT64_MAX_STR
-    : beforeConIndex;
-
-  const sql = `
-    SELECT
-      CAST(m.user_id AS TEXT)       AS user_id,
-      CAST(m.con_short_id AS TEXT)  AS con_short_id,
-      m.con_id,
-      m.con_type,
-      CAST(m.client_msg_id AS TEXT) AS client_msg_id,
-      CAST(m.msg_id AS TEXT)        AS msg_id,
-      m.msg_type,
-      m.msg_content,
-      m.create_time,
-      m.extra,
-      m.con_index,
-
-      mem.nick_name AS member_nick_name,
-      u.username AS user_name,
-      u.avatar_uri,
-      u.local_avatar_uri,
-      u.modify_time
-    FROM ${msgTable} m
-    LEFT JOIN ${memberTable} mem
-      ON mem.con_short_id = m.con_short_id
-     AND mem.user_id = m.user_id
-    LEFT JOIN ${userTable} u
-      ON u.user_id = m.user_id
-    WHERE m.con_id = ${sqlValue(conId)}
-      AND m.con_index <= ${sqlValue(before)}
-    ORDER BY m.con_index DESC
-    LIMIT ${Number(limit)};
-  `;
-
-  const rows = await selectSql(sql);
-  return mapRowsBigInt(rows, ['user_id', 'con_short_id', 'client_msg_id', 'msg_id']);
-}
-
-// getConversationById：同 pullConversation 行为（私聊从 user 表取）
-async function getConversationById(conId) {
+async function pullAgentMembers(conShortId) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
-  const { conTable, userTable } = getTablesByUser(loginUserId);
+  const { memberTable, agentTable } = getTablesByUser(loginUserId);
 
   const sql = `
     SELECT
-      CAST(c.con_short_id AS TEXT) AS con_short_id,
-      c.con_id,
-      c.con_type,
-
-      CASE WHEN c.con_type = 1
-        THEN COALESCE(NULLIF(u.username, ''), c.name)
-        ELSE c.name
-      END AS name,
-
-      CASE WHEN c.con_type = 1
-        THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
-        ELSE c.avatar_uri
-      END AS avatar_uri,
-
-      c.description,
-      CAST(c.owner_id AS TEXT) AS owner_id,
-      c.create_time,
-      c.status,
-      c.min_index,
-      c.top_timestamp,
-      c.push_status,
-      c.core_extra,
-      c.setting_extra,
-      c.member_count,
-      c.badge_count,
-      c.read_index_end,
-      c.read_badge_count,
-      c.user_con_index,
-      c.last_message,
-      CAST(c.peer_user_id AS TEXT) AS peer_user_id
-    FROM ${conTable} c
-    LEFT JOIN ${userTable} u
-      ON c.con_type = 1
-     AND CAST(u.user_id AS TEXT) = CAST(c.peer_user_id AS TEXT)
-    WHERE c.con_id = ${sqlValue(conId)}
-    LIMIT 1;
+      CAST(mem.con_short_id AS TEXT) AS con_short_id,
+      CAST(mem.member_id AS TEXT)    AS agent_id,
+      mem.member_type,
+      mem.nick_name,
+      mem.privilege,
+      mem.create_time,
+      mem.status,
+      mem.extra,
+      a.agent_name,
+      a.avatar_uri,
+      a.local_avatar_uri,
+      a.description,
+      CAST(a.owner_id AS TEXT) AS owner_id,
+      a.modify_time
+    FROM ${memberTable} mem
+    LEFT JOIN ${agentTable} a
+      ON mem.member_type = 2
+     AND a.agent_id = mem.member_id
+    WHERE CAST(mem.con_short_id AS TEXT) = ${sqlValue(String(conShortId))}
+      AND mem.member_type = 2
+    ORDER BY mem.create_time ASC;
   `;
 
   const rows = await selectSql(sql);
-  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_user_id']);
+  return mapRowsBigInt(rows, ['con_short_id', 'agent_id', 'owner_id']);
 }
 
-// userIds: bigint[]；返回：user_id(BigInt) + modify_time(number)
+/* ----------------------------- 拉取：Users / Agents / Count ----------------------------- */
+
 async function getUsersByIds(userIds) {
   await ensureOpen();
 
@@ -549,7 +714,35 @@ async function getUsersByIds(userIds) {
   return mapRowsBigInt(rows, ['user_id']);
 }
 
-// conShortId: bigint -> number
+async function getAgentsByIds(agentIds) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { agentTable } = getTablesByUser(loginUserId);
+
+  if (!Array.isArray(agentIds) || agentIds.length === 0) return [];
+
+  const uniq = Array.from(new Set(agentIds.map(v => String(v))));
+  const inList = uniq.map(s => sqlValue(s)).join(',');
+
+  const sql = `
+    SELECT
+      CAST(agent_id AS TEXT) AS agent_id,
+      agent_name,
+      avatar_uri,
+      local_avatar_uri,
+      description,
+      CAST(owner_id AS TEXT) AS owner_id,
+      modify_time
+    FROM ${agentTable}
+    WHERE CAST(agent_id AS TEXT) IN (${inList});
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['agent_id', 'owner_id']);
+}
+
+// 只统计普通用户成员
 async function getMemberCount(conShortId) {
   await ensureOpen();
 
@@ -559,14 +752,15 @@ async function getMemberCount(conShortId) {
   const sql = `
     SELECT COUNT(1) AS cnt
     FROM ${memberTable}
-    WHERE CAST(con_short_id AS TEXT) = ${sqlValue(conShortId)};
+    WHERE CAST(con_short_id AS TEXT) = ${sqlValue(conShortId)}
+      AND member_type = 1;
   `;
 
   const rows = await selectSql(sql);
   return Number(rows?.[0]?.cnt || 0);
 }
 
-/* ----------------------------- 更新：Conversation / Message / User ----------------------------- */
+/* ----------------------------- 更新 ----------------------------- */
 
 function toEntries(data) {
   if (!data) return [];
@@ -576,6 +770,7 @@ function toEntries(data) {
 
 async function updateConversation(conShortId, data) {
   await ensureOpen();
+
   const userId = getLoginUserId();
   const { conTable } = getTablesByUser(userId);
 
@@ -589,6 +784,7 @@ async function updateConversation(conShortId, data) {
 
 async function updateMessage(msgId, data) {
   await ensureOpen();
+
   const userId = getLoginUserId();
   const { msgTable } = getTablesByUser(userId);
 
@@ -600,7 +796,6 @@ async function updateMessage(msgId, data) {
   return execSql(sql);
 }
 
-// 更新本地头像路径（头像下载完成后调用）
 async function updateUserLocalAvatar(userIdValue, localPath) {
   await ensureOpen();
 
@@ -615,10 +810,25 @@ async function updateUserLocalAvatar(userIdValue, localPath) {
   return execSql(sql);
 }
 
+async function updateAgentLocalAvatar(agentIdValue, localPath) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { agentTable } = getTablesByUser(loginUserId);
+
+  const sql = `
+    UPDATE ${agentTable}
+    SET local_avatar_uri = ${sqlValue(localPath)}
+    WHERE CAST(agent_id AS TEXT) = ${sqlValue(String(agentIdValue))};
+  `;
+  return execSql(sql);
+}
+
 /* ----------------------------- 删除 ----------------------------- */
 
 async function deleteConversation(conShortId) {
   await ensureOpen();
+
   const userId = getLoginUserId();
   const { conTable } = getTablesByUser(userId);
 
@@ -628,6 +838,7 @@ async function deleteConversation(conShortId) {
 
 async function deleteMessage(msgId) {
   await ensureOpen();
+
   const userId = getLoginUserId();
   const { msgTable } = getTablesByUser(userId);
 
@@ -646,18 +857,24 @@ export default {
   insertConversation,
   insertMessage,
   upsertUsers,
+  upsertAgents,
   upsertMembers,
 
   pullConversation,
-  pullMembers,
   pullMessage,
+  pullUserMembers,
+  pullAgentMembers,
   getConversationById,
+  getConversationByShortId,
+
   getUsersByIds,
+  getAgentsByIds,
   getMemberCount,
 
   updateConversation,
   updateMessage,
   updateUserLocalAvatar,
+  updateAgentLocalAvatar,
 
   deleteConversation,
   deleteMessage

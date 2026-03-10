@@ -1,9 +1,30 @@
+// im-cache.js
+// 统一：
+// 1) ensureUsersCached：只补缺失 user，并对缺失 user 触发头像处理
+// 2) ensureAgentsCached：只补缺失 agent，并对缺失 agent 触发头像处理
+// 3) enqueueProfileRefresh：用户 / AI TTL 异步刷新
+// 4) enqueueGroupRosters：群普通成员 + 群 AI 成员 + 群头像 低优先级后台补齐
+// 5) enqueueEntityAvatars：统一触发 user / agent / conv 头像处理
+//
+// 约定：
+// - 所有 ID 都是 BigInt
+// - 所有接口成功直接返回 data，失败返回 undefined
+// - getUserInfos(ids) -> { user_infos: [{ user_id, username, avatar }] }
+// - getAgentByIds(ids) -> [{ agent_id, agent_name, avatar_uri, description, owner_id }] 或 { agents/list: [...] }
+// - getConversationMembers(conShortId) -> { members: [...] }
+// - getConversationAgents(conShortId) -> [{ agent_id, agent_name, avatar_uri, description, owner_id }] 或 { agents/list: [...] }
+
 import DB from "@/utils/sqlite_new.js";
-import { getUserInfos, getConversationMembers } from "@/request/im.js";
+import {
+  getUserInfos,
+  getConversationMembers,
+  getAgentByIds,
+  getConversationAgents
+} from "@/request/im.js";
 
 const AVATAR_DIR = "_doc/avatar/";
 
-/* ------------------------------ 简单并发队列（统一风格） ------------------------------ */
+/* ------------------------------ 简单并发队列 ------------------------------ */
 
 function createQueue({ concurrency = 4, worker }) {
   const q = [];
@@ -36,7 +57,21 @@ function createQueue({ concurrency = 4, worker }) {
   };
 }
 
-/* ------------------------------ PNG 下载（默认实现） ------------------------------ */
+/* ------------------------------ 返回结构归一化 ------------------------------ */
+
+function normalizeAgentList(resp) {
+  if (!resp) return [];
+  if (Array.isArray(resp)) return resp;
+  return resp.agents || resp.list || [];
+}
+
+function normalizeMembers(resp) {
+  if (!resp) return [];
+  if (Array.isArray(resp)) return resp;
+  return resp.members || resp.list || [];
+}
+
+/* ------------------------------ PNG 下载 ------------------------------ */
 
 async function ensureAvatarDirOnce() {
   return new Promise((resolve) => {
@@ -49,9 +84,9 @@ async function ensureAvatarDirOnce() {
   });
 }
 
-async function downloadPng(userId, url) {
+async function downloadPng(id, url, prefix = "") {
   await ensureAvatarDirOnce();
-  const filePath = `${AVATAR_DIR}${userId.toString()}.png`; // 文件名必须 string
+  const filePath = `${AVATAR_DIR}${prefix}${id.toString()}.png`;
   try {
     const dl = await uni.downloadFile({ url, filePath });
     if (dl.statusCode === 200) return filePath;
@@ -59,175 +94,94 @@ async function downloadPng(userId, url) {
   return "";
 }
 
-/* ------------------------------ avatarQueue：仅下载头像 ------------------------------ */
+/* ------------------------------ avatarQueue：统一处理 user / agent / conv 头像 ------------------------------ */
 
 const avatarQueue = createQueue({
   concurrency: 4,
-  worker: async (userId) => {
-    // task: BigInt
-    const rows = await DB.getUsersByIds([userId]);
-    if (!rows || rows.length === 0) return;
-
-    const u = rows[0];
-    const avatarUri = u.avatar_uri || "";
-    if (!avatarUri || avatarUri.startsWith("/static/")) return;
-
-    // 有本地头像就不下；重下由刷新队列清空 local 控制
-    if (u.local_avatar_uri) return;
-
-    const localPath = await downloadPng(userId, avatarUri);
-    if (localPath) {
-      await DB.updateUserLocalAvatar(userId, localPath);
-    }
-  }
-});
-
-/* ------------------------------ profileRefreshQueue：入口传 userIds + ttl，在 worker 内判断 TTL ------------------------------ */
-/**
- * enqueueProfileRefresh(userIds, ttlMs)
- * - 只处理“已存在 user”的 TTL 刷新（缺失不管；缺失由 ensureUsersCached 负责）
- * - worker 内：
- *   1) DB.getUsersByIds -> 过滤 stale
- *   2) getUserInfos(staleIds) 批量拉新
- *   3) 比较 avatar 是否变化：变化则清空 local + enqueue 头像下载
- *   4) upsertUsers 写回 modify_time
- */
-const profileRefreshQueue = createQueue({
-  concurrency: 2,
   worker: async (task) => {
-    // task: { userIds: BigInt[], ttlMs: number }
-    const { userIds, ttlMs } = task || {};
-    if (!userIds || userIds.length === 0) return;
+    // task: { type: "user" | "agent" | "conv", id: BigInt }
+    if (!task || !task.type || task.id === null || task.id === undefined) return;
 
-    const ttl = Number(ttlMs || 0);
-    if (ttl <= 0) return;
+    if (task.type === "user") {
+      const rows = await DB.getUsersByIds([task.id]);
+      if (!rows || rows.length === 0) return;
 
-    const now = Date.now();
+      const row = rows[0];
+      const avatarUri = row.avatar_uri || "/static/user_avatar.png";
+      const oldLocal = row.local_avatar_uri || "";
 
-    const rows = await DB.getUsersByIds(userIds);
-    if (!rows || rows.length === 0) return;
+      if (avatarUri.startsWith("/static/")) {
+        if (oldLocal !== avatarUri) {
+          await DB.updateUserLocalAvatar(task.id, avatarUri);
+        }
+        return;
+      }
 
-    const staleIds = [];
-    const oldMap = new Map(); // BigInt -> oldRow
-    for (const r of rows) {
-      oldMap.set(r.user_id, r);
-      const mt = Number(r.modify_time || 0);
-      if (!mt || (now - mt) >= ttl) staleIds.push(r.user_id);
+      const localPath = await downloadPng(task.id, avatarUri, "user_");
+      if (localPath) {
+        await DB.updateUserLocalAvatar(task.id, localPath);
+      }
+      return;
     }
 
-    if (staleIds.length === 0) return;
+    if (task.type === "agent") {
+      const rows = await DB.getAgentsByIds([task.id]);
+      if (!rows || rows.length === 0) return;
 
-    const resp = await getUserInfos(staleIds);
-    if (!resp) return;
+      const row = rows[0];
+      const avatarUri = row.avatar_uri || "/static/ai.png";
+      const oldLocal = row.local_avatar_uri || "";
 
-    const infos = resp.user_infos || [];
-    if (!Array.isArray(infos) || infos.length === 0) return;
+      if (avatarUri.startsWith("/static/")) {
+        if (oldLocal !== avatarUri) {
+          await DB.updateAgentLocalAvatar(task.id, avatarUri);
+        }
+        return;
+      }
 
-    const infoMap = new Map(); // BigInt -> info
-    for (const u of infos) {
-      if (!u || u.user_id === null || u.user_id === undefined) continue;
-      infoMap.set(u.user_id, u);
+      const localPath = await downloadPng(task.id, avatarUri, "agent_");
+      if (localPath) {
+        await DB.updateAgentLocalAvatar(task.id, localPath);
+      }
+      return;
     }
 
-    const upserts = [];
-    for (const uid of staleIds) {
-      const old = oldMap.get(uid);
-      const nu = infoMap.get(uid);
-      if (!old || !nu) continue;
+    if (task.type === "conv") {
+      const row = await DB.getConversationByShortId(task.id);
+      if (!row) return;
 
-      const newAvatar = nu.avatar || "/static/user_avatar.png";
-      const oldAvatar = old.avatar_uri || "";
-      const avatarChanged = (newAvatar !== oldAvatar);
+      const avatarUri = row.avatar_uri || "/static/conv_avatar.png";
+      const oldLocal = row.local_avatar_uri || "";
 
-      upserts.push({
-        user_id: uid,
-        username: nu.username || old.username || "",
-        avatar_uri: newAvatar,
-        local_avatar_uri: avatarChanged ? "" : (old.local_avatar_uri || ""),
-        modify_time: now
-      });
+      if (avatarUri.startsWith("/static/")) {
+        if (oldLocal !== avatarUri) {
+          await DB.updateConversation(task.id, { local_avatar_uri: avatarUri });
+        }
+        return;
+      }
 
-      // 私聊刷新：头像变了就重下
-      if (avatarChanged && newAvatar && !newAvatar.startsWith("/static/")) {
-        avatarQueue.enqueue(uid);
+      const localPath = await downloadPng(task.id, avatarUri, "conv_");
+      if (localPath) {
+        await DB.updateConversation(task.id, { local_avatar_uri: localPath });
       }
     }
-
-    if (upserts.length > 0) {
-      await DB.upsertUsers(upserts);
-    }
   }
 });
 
-/* ------------------------------ rosterQueue：群成员后台补齐（不主动下载全员头像） ------------------------------ */
+export function enqueueEntityAvatars(type, ids) {
+  const arr = Array.isArray(ids) ? ids : [ids];
+  if (!type || !arr || arr.length === 0) return;
+  avatarQueue.enqueueMany(arr.map(id => ({ type, id })));
+}
 
-const rosterQueue = createQueue({
-  concurrency: 2,
-  worker: async (conShortId) => {
-    // task: BigInt
-    const cnt = await DB.getMemberCount(conShortId);
-    if (cnt > 0) return;
-
-    const resp = await getConversationMembers(conShortId);
-    if (!resp) return;
-
-    const members = resp.members || [];
-    if (!Array.isArray(members) || members.length === 0) return;
-
-    const now = Date.now();
-
-    // 读取旧 user：用于保留 local_avatar_uri；若 avatar 变化只清空 local（不下载）
-    const memberUserIds = members.map(m => m.user_id);
-    const oldUsers = await DB.getUsersByIds(memberUserIds);
-    const oldMap = new Map((oldUsers || []).map(u => [u.user_id, u]));
-
-    const memberRows = [];
-    const userRows = [];
-
-    for (const m of members) {
-      if (!m || m.user_id === null || m.user_id === undefined) continue;
-
-      const uid = m.user_id; // BigInt
-      memberRows.push({
-        con_short_id: conShortId,
-        user_id: uid,
-        nick_name: m.nick_name || "",
-        privilege: m.privilege ?? 0,
-        create_time: m.create_time ?? 0,
-        status: m.status ?? 0,
-        extra: m.extra || ""
-      });
-
-      const old = oldMap.get(uid);
-      const oldAvatar = old?.avatar_uri || "";
-      const oldLocal = old?.local_avatar_uri || "";
-
-      const newAvatar = m.avatar || oldAvatar || "/static/user_avatar.png";
-      const avatarChanged = (newAvatar !== oldAvatar);
-
-      userRows.push({
-        user_id: uid,
-        username: m.username || old?.username || "",
-        avatar_uri: newAvatar,
-        local_avatar_uri: avatarChanged ? "" : oldLocal, // 群成员不下载：只清空 local 让 UI 回落远程
-        modify_time: now
-      });
-    }
-
-    if (memberRows.length > 0) await DB.upsertMembers(memberRows);
-    if (userRows.length > 0) await DB.upsertUsers(userRows);
-  }
-});
-
-/* ------------------------------ ensureUsersCached：只补缺失 + 缺失必下头像 ------------------------------ */
+/* ------------------------------ ensureUsersCached：只补缺失 user ------------------------------ */
 
 export async function ensureUsersCached(userIds) {
-  // userIds: BigInt[] | BigInt
   const ids = Array.isArray(userIds) ? userIds : [userIds];
   if (!ids || ids.length === 0) return;
 
   const existing = await DB.getUsersByIds(ids);
-  const existSet = new Set((existing || []).map(u => u.user_id)); // BigInt Set（按值比较）
+  const existSet = new Set((existing || []).map(u => u.user_id));
 
   const missing = [];
   for (const id of ids) {
@@ -235,7 +189,7 @@ export async function ensureUsersCached(userIds) {
   }
   if (missing.length === 0) return;
 
-  const resp = await getUserInfos(missing); // 成功直接返回 data
+  const resp = await getUserInfos(missing);
   if (!resp) return;
 
   const infos = resp.user_infos || [];
@@ -247,14 +201,11 @@ export async function ensureUsersCached(userIds) {
   for (const u of infos) {
     if (!u || u.user_id === null || u.user_id === undefined) continue;
 
-    const uid = u.user_id; // BigInt（你保证）
-    const avatarUri = u.avatar || "/static/user_avatar.png";
-
     upserts.push({
-      user_id: uid,
-      username: u.username || "",
-      avatar_uri: avatarUri,
-      local_avatar_uri: "", // 缺失用户：必下头像
+      user_id: u.user_id,
+      username: u.username || "用户",
+      avatar_uri: u.avatar || "/static/user_avatar.png",
+      local_avatar_uri: "",
       modify_time: now
     });
   }
@@ -262,29 +213,323 @@ export async function ensureUsersCached(userIds) {
   if (upserts.length === 0) return;
 
   await DB.upsertUsers(upserts);
+  enqueueEntityAvatars("user", upserts.map(x => x.user_id));
+}
 
-  // 缺失用户：必下头像（只要不是 static）
-  for (const r of upserts) {
-    if (r.avatar_uri && !r.avatar_uri.startsWith("/static/")) {
-      avatarQueue.enqueue(r.user_id);
+/* ------------------------------ ensureAgentsCached：只补缺失 agent ------------------------------ */
+
+export async function ensureAgentsCached(agentIds) {
+  const ids = Array.isArray(agentIds) ? agentIds : [agentIds];
+  if (!ids || ids.length === 0) return;
+
+  const existing = await DB.getAgentsByIds(ids);
+  const existSet = new Set((existing || []).map(a => a.agent_id));
+
+  const missing = [];
+  for (const id of ids) {
+    if (!existSet.has(id)) missing.push(id);
+  }
+  if (missing.length === 0) return;
+
+  const resp = await getAgentByIds(missing);
+  if (!resp) return;
+
+  const infos = normalizeAgentList(resp);
+  if (!Array.isArray(infos) || infos.length === 0) return;
+
+  const now = Date.now();
+  const upserts = [];
+
+  for (const a of infos) {
+    if (!a || a.agent_id === null || a.agent_id === undefined) continue;
+
+    upserts.push({
+      agent_id: a.agent_id,
+      agent_name: a.agent_name || "AI",
+      avatar_uri: a.avatar_uri || "/static/ai.png",
+      local_avatar_uri: "",
+      description: a.description || "",
+      owner_id: a.owner_id ?? 0n,
+      modify_time: now
+    });
+  }
+
+  if (upserts.length === 0) return;
+
+  await DB.upsertAgents(upserts);
+  enqueueEntityAvatars("agent", upserts.map(x => x.agent_id));
+}
+
+/* ------------------------------ profileRefreshQueue：用户 / AI TTL 刷新（已合并） ------------------------------ */
+
+const profileRefreshQueue = createQueue({
+  concurrency: 2,
+  worker: async (task) => {
+    // task: { type: "user" | "agent", ids: BigInt[], ttlMs: number }
+    const { type, ids, ttlMs } = task || {};
+    if (!type || !ids || ids.length === 0) return;
+
+    const ttl = Number(ttlMs || 0);
+    if (ttl <= 0) return;
+
+    const now = Date.now();
+
+    if (type === "user") {
+      const rows = await DB.getUsersByIds(ids);
+      if (!rows || rows.length === 0) return;
+
+      const refreshIds = [];
+      const oldMap = new Map();
+
+      for (const row of rows) {
+        oldMap.set(row.user_id, row);
+        const mt = Number(row.modify_time || 0);
+        const localMissing = !row.local_avatar_uri;
+        const needRefresh = !mt || (now - mt) >= ttl || localMissing;
+        if (needRefresh) refreshIds.push(row.user_id);
+      }
+
+      if (refreshIds.length === 0) return;
+
+      const resp = await getUserInfos(refreshIds);
+      if (!resp) return;
+
+      const infos = resp.user_infos || [];
+      if (!Array.isArray(infos) || infos.length === 0) return;
+
+      const infoMap = new Map();
+      for (const u of infos) {
+        if (!u || u.user_id === null || u.user_id === undefined) continue;
+        infoMap.set(u.user_id, u);
+      }
+
+      const upserts = [];
+      const needAvatarIds = [];
+
+      for (const uid of refreshIds) {
+        const old = oldMap.get(uid);
+        const nu = infoMap.get(uid);
+        if (!old || !nu) continue;
+
+        const newAvatar = nu.avatar || "/static/user_avatar.png";
+        const oldAvatar = old.avatar_uri || "/static/user_avatar.png";
+        const oldLocal = old.local_avatar_uri || "";
+        const avatarChanged = (newAvatar !== oldAvatar);
+        const localMissing = !oldLocal;
+
+        upserts.push({
+          user_id: uid,
+          username: nu.username || old.username || "",
+          avatar_uri: newAvatar,
+          local_avatar_uri: oldLocal,
+          modify_time: now
+        });
+
+        if (avatarChanged || localMissing) {
+          needAvatarIds.push(uid);
+        }
+      }
+
+      if (upserts.length > 0) {
+        await DB.upsertUsers(upserts);
+      }
+      if (needAvatarIds.length > 0) {
+        enqueueEntityAvatars("user", needAvatarIds);
+      }
+      return;
+    }
+
+    if (type === "agent") {
+      const rows = await DB.getAgentsByIds(ids);
+      if (!rows || rows.length === 0) return;
+
+      const refreshIds = [];
+      const oldMap = new Map();
+
+      for (const row of rows) {
+        oldMap.set(row.agent_id, row);
+        const mt = Number(row.modify_time || 0);
+        const localMissing = !row.local_avatar_uri;
+        const needRefresh = !mt || (now - mt) >= ttl || localMissing;
+        if (needRefresh) refreshIds.push(row.agent_id);
+      }
+
+      if (refreshIds.length === 0) return;
+
+      const resp = await getAgentByIds(refreshIds);
+      if (!resp) return;
+
+      const infos = normalizeAgentList(resp);
+      if (!Array.isArray(infos) || infos.length === 0) return;
+
+      const infoMap = new Map();
+      for (const a of infos) {
+        if (!a || a.agent_id === null || a.agent_id === undefined) continue;
+        infoMap.set(a.agent_id, a);
+      }
+
+      const upserts = [];
+      const needAvatarIds = [];
+
+      for (const aid of refreshIds) {
+        const old = oldMap.get(aid);
+        const na = infoMap.get(aid);
+        if (!old || !na) continue;
+
+        const newAvatar = na.avatar_uri || "/static/ai.png";
+        const oldAvatar = old.avatar_uri || "/static/ai.png";
+        const oldLocal = old.local_avatar_uri || "";
+        const avatarChanged = (newAvatar !== oldAvatar);
+        const localMissing = !oldLocal;
+
+        upserts.push({
+          agent_id: aid,
+          agent_name: na.agent_name || old.agent_name || "",
+          avatar_uri: newAvatar,
+          local_avatar_uri: oldLocal,
+          description: na.description || old.description || "",
+          owner_id: na.owner_id ?? old.owner_id ?? 0n,
+          modify_time: now
+        });
+
+        if (avatarChanged || localMissing) {
+          needAvatarIds.push(aid);
+        }
+      }
+
+      if (upserts.length > 0) {
+        await DB.upsertAgents(upserts);
+      }
+      if (needAvatarIds.length > 0) {
+        enqueueEntityAvatars("agent", needAvatarIds);
+      }
     }
   }
+});
+
+export function enqueueProfileRefresh(type, ids, ttlMs) {
+  const arr = Array.isArray(ids) ? ids : [ids];
+  if (!type || !arr || arr.length === 0) return;
+  profileRefreshQueue.enqueue({ type, ids: arr, ttlMs });
 }
 
-export function enqueueProfileRefresh(userIds, ttlMs) {
-  const ids = Array.isArray(userIds) ? userIds : [userIds];
-  if (!ids || ids.length === 0) return;
-  profileRefreshQueue.enqueue({ userIds: ids, ttlMs });
-}
+/* ------------------------------ rosterQueue：群普通成员 + 群 AI 成员 + 群头像 后台补齐 ------------------------------ */
+
+const rosterQueue = createQueue({
+  concurrency: 2,
+  worker: async (conShortId) => {
+    const userCnt = await DB.getMemberCount(conShortId);
+    if (userCnt !== 0) return;
+
+    const now = Date.now();
+
+    // -------- 普通用户成员：只补 user 表里没有的 --------
+    const memberResp = await getConversationMembers(conShortId);
+    if (memberResp) {
+      const members = normalizeMembers(memberResp);
+      if (Array.isArray(members) && members.length > 0) {
+        const memberRows = [];
+        const userRows = [];
+
+        const memberUserIds = members
+          .filter(m => m && m.user_id !== null && m.user_id !== undefined)
+          .map(m => m.user_id);
+
+        const oldUsers = await DB.getUsersByIds(memberUserIds);
+        const oldUserSet = new Set((oldUsers || []).map(u => u.user_id));
+
+        for (const m of members) {
+          if (!m || m.user_id === null || m.user_id === undefined) continue;
+
+          const uid = m.user_id;
+
+          memberRows.push({
+            con_short_id: conShortId,
+            member_id: uid,
+            member_type: 1,
+            nick_name: m.nick_name || "用户",
+            privilege: m.privilege ?? 0,
+            create_time: m.create_time ?? 0,
+            status: m.status ?? 0,
+            extra: m.extra || ""
+          });
+
+          if (!oldUserSet.has(uid)) {
+            userRows.push({
+              user_id: uid,
+              username: m.username || "用户",
+              avatar_uri: m.avatar || "/static/user_avatar.png",
+              local_avatar_uri: "",
+              modify_time: now
+            });
+          }
+        }
+
+        if (memberRows.length > 0) await DB.upsertMembers(memberRows);
+        if (userRows.length > 0) {
+          await DB.upsertUsers(userRows);
+        }
+      }
+    }
+
+    // -------- AI 成员：只补 agent 表里没有的 --------
+    const agentResp = await getConversationAgents(conShortId);
+    if (agentResp) {
+      const agents = normalizeAgentList(agentResp);
+      if (Array.isArray(agents) && agents.length > 0) {
+        const memberRows = [];
+        const agentRows = [];
+
+        const agentIds = agents
+          .filter(a => a && a.agent_id !== null && a.agent_id !== undefined)
+          .map(a => a.agent_id);
+
+        const oldAgents = await DB.getAgentsByIds(agentIds);
+        const oldAgentSet = new Set((oldAgents || []).map(a => a.agent_id));
+
+        for (const a of agents) {
+          if (!a || a.agent_id === null || a.agent_id === undefined) continue;
+
+          const aid = a.agent_id;
+
+          memberRows.push({
+            con_short_id: conShortId,
+            member_id: aid,
+            member_type: 2,
+            nick_name: a.agent_name || "AI",
+            privilege: 0,
+            create_time: 0,
+            status: 0,
+            extra: ""
+          });
+
+          if (!oldAgentSet.has(aid)) {
+            agentRows.push({
+              agent_id: aid,
+              agent_name: a.agent_name || "AI",
+              avatar_uri: a.avatar_uri || "/static/ai.png",
+              local_avatar_uri: "",
+              description: a.description || "",
+              owner_id: a.owner_id ?? 0n,
+              modify_time: now
+            });
+          }
+        }
+
+        if (memberRows.length > 0) await DB.upsertMembers(memberRows);
+        if (agentRows.length > 0) {
+          await DB.upsertAgents(agentRows);
+        }
+      }
+    }
+
+    // -------- 群头像：首次群补全时顺手下载 --------
+    enqueueEntityAvatars("conv", [conShortId]);
+  }
+});
 
 export function enqueueGroupRosters(conShortIds) {
   const ids = Array.isArray(conShortIds) ? conShortIds : [conShortIds];
   if (!ids || ids.length === 0) return;
-  rosterQueue.enqueueMany(ids); // 每个 task 是 BigInt
-}
-
-export function enqueueAvatars(userIds) {
-  const ids = Array.isArray(userIds) ? userIds : [userIds];
-  if (!ids || ids.length === 0) return;
-  avatarQueue.enqueueMany(ids); // 每个 task 是 BigInt
+  rosterQueue.enqueueMany(ids);
 }
