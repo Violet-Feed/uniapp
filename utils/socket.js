@@ -12,6 +12,11 @@ import {
 import {
 	getConversationInfo
 } from '@/request/im.js'
+import {
+  ensureUsersCached,
+  ensureAgentsCached,
+  enqueueGroupRosters
+} from "@/utils/im-cache.js";
 
 class Socket {
 	socket = null;
@@ -170,7 +175,7 @@ class Socket {
 		};
 	}
 	
-	handleNormalPacket(data){
+	handleNormalPacket_old(data){
 		if(data.pre_user_con_index==undefined){
 			data.pre_user_con_index=0;
 		}
@@ -185,7 +190,7 @@ class Socket {
 		}
 		uni.setStorageSync('user_con_index_'+this.userId, Number(data.user_con_index));
 		getApp().globalData.userConIndex = data.user_con_index;
-		DB.selectConversation(data.msg_body.con_id).then((res) => {
+		DB.getConversationById(data.msg_body.con_id).then((res) => {
 			if (res.length > 0) {
 				const map=new Map();
 				map.set("badge_count",data.badge_count);
@@ -262,133 +267,128 @@ class Socket {
 			//TODO:插入成员表/修改会话表
 		}
 	}
-	
-import {
-  ensureUsersCached,
-  ensureAgentsCached,
-  enqueueGroupRosters
-} from "@/utils/im-cache.js";
 
-// ------------------------ socket: handleNormalPacket_new ------------------------
-handleNormalPacket_new = async (data) => {
-  try {
-    if (data.pre_user_con_index === undefined) data.pre_user_con_index = 0;
-    if (data.badge_count === undefined) data.badge_count = 0;
-    if (data.msg_body?.extra === undefined) data.msg_body.extra = "";
 
-    const newUserConIndex = Number(data.user_con_index);
+	// ------------------------ socket: handleNormalPacket_new ------------------------
+	handleNormalPacket = async (data) => {
+	  try {
+		if (data.pre_user_con_index === undefined) data.pre_user_con_index = 0;
+		if (data.badge_count === undefined) data.badge_count = 0;
+		if (data.msg_body?.extra === undefined) data.msg_body.extra = "";
 
-    if (data.pre_user_con_index != getApp().globalData.userConIndex) {
-      console.error("TODO:getByUser");
-    }
+		const newUserConIndex = Number(data.user_con_index);
 
-    uni.setStorageSync("user_con_index_" + this.userId, newUserConIndex);
-    getApp().globalData.userConIndex = newUserConIndex;
+		if (data.pre_user_con_index != getApp().globalData.userConIndex) {
+		  console.error("TODO:getByUser");
+		}
 
-    const m = data.msg_body;
+		uni.setStorageSync("user_con_index_" + this.userId, newUserConIndex);
+		getApp().globalData.userConIndex = newUserConIndex;
 
-    await DB.insertMessage([{
-      sender_id: m.sender_id,
-      sender_type: m.sender_type,
-      con_short_id: m.con_short_id,
-      con_id: m.con_id,
-      con_type: m.con_type,
-      client_msg_id: m.client_msg_id,
-      msg_id: m.msg_id,
-      msg_type: m.msg_type,
-      msg_content: m.msg_content || "",
-      create_time: m.create_time,
-      extra: m.extra || "",
-      con_index: m.con_index
-    }]);
+		const m = data.msg_body;
 
-    const conId = m.con_id;
-    const existing = await DB.getConversationById(conId);
+		await DB.insertMessage([{
+		  sender_id: m.sender_id,
+		  sender_type: m.sender_type,
+		  con_short_id: m.con_short_id,
+		  con_id: m.con_id,
+		  con_type: m.con_type,
+		  client_msg_id: m.client_msg_id,
+		  msg_id: m.msg_id,
+		  msg_type: m.msg_type,
+		  msg_content: m.msg_content || "",
+		  create_time: m.create_time,
+		  extra: m.extra || "",
+		  con_index: m.con_index
+		}]);
 
-    if (existing) {
-      const map = new Map();
-      map.set("badge_count", data.badge_count);
-      map.set("user_con_index", newUserConIndex);
-      map.set("last_message", m.msg_content || "");
-      await DB.updateConversation(m.con_short_id, map);
-      uni.$emit("normal", data);
-    } else {
-      const conInfo = await getConversationInfo(m.con_short_id);
-      if (!conInfo) return;
+		const conId = m.con_id;
+		const existing = await DB.getConversationById(conId);
 
-      let peerId = null;
+		if (existing) {
+		  const map = new Map();
+		  map.set("badge_count", data.badge_count);
+		  map.set("user_con_index", newUserConIndex);
+		  map.set("last_message", m.msg_content || "");
+		  await DB.updateConversation(m.con_id, map);
+		  uni.$emit("normal", data);
+		} else {
+		  const conInfo = await getConversationInfo(m.con_short_id);
+		  if (!conInfo) return;
 
-      if (conInfo.con_type === 1) {
-        const parts = String(conInfo.con_id).split(":");
-        const selfIdStr = String(this.userId);
-        peerId = (parts[0] === selfIdStr) ? BigInt(parts[1]) : BigInt(parts[0]);
+		  let peerId = null;
 
-        await ensureUsersCached([peerId]);
+		  if (conInfo.con_type === 1) {
+			const parts = String(conInfo.con_id).split(":");
+			const selfIdStr = String(this.userId);
+			peerId = (parts[0] === selfIdStr) ? BigInt(parts[1]) : BigInt(parts[0]);
 
-        const rows = await DB.getUsersByIds([peerId]);
-        const u = rows && rows[0] ? rows[0] : null;
+			await ensureUsersCached([peerId]);
 
-        conInfo.con_core_info = conInfo.con_core_info || {};
-        conInfo.con_core_info.name = u?.username || conInfo.con_core_info.name || "用户";
-        conInfo.con_core_info.avatar_uri = u?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/user_avatar.png";
-      } else if (conInfo.con_type === 4) {
-        const parts = String(conInfo.con_id).split(":");
-        peerId = BigInt(parts[2]);
+			const rows = await DB.getUsersByIds([peerId]);
+			const u = rows && rows[0] ? rows[0] : null;
 
-        await ensureAgentsCached([peerId]);
+			conInfo.con_core_info = conInfo.con_core_info || {};
+			conInfo.con_core_info.name = u?.username || conInfo.con_core_info.name || "用户";
+			conInfo.con_core_info.avatar_uri = u?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/user_avatar.png";
+		  } else if (conInfo.con_type === 4) {
+			const parts = String(conInfo.con_id).split(":");
+			peerId = BigInt(parts[2]);
 
-        const rows = await DB.getAgentsByIds([peerId]);
-        const a = rows && rows[0] ? rows[0] : null;
+			await ensureAgentsCached([peerId]);
 
-        conInfo.con_core_info = conInfo.con_core_info || {};
-        conInfo.con_core_info.name = a?.agent_name || conInfo.con_core_info.name || "AI";
-        conInfo.con_core_info.avatar_uri = a?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/ai.png";
-      } else if (conInfo.con_type === 2) {
-        enqueueGroupRosters([conInfo.con_short_id]);
+			const rows = await DB.getAgentsByIds([peerId]);
+			const a = rows && rows[0] ? rows[0] : null;
 
-        conInfo.con_core_info = conInfo.con_core_info || {};
-        if (!conInfo.con_core_info.name) conInfo.con_core_info.name = "群聊";
-        if (!conInfo.con_core_info.avatar_uri) conInfo.con_core_info.avatar_uri = "/static/conv_avatar.png";
-      }
+			conInfo.con_core_info = conInfo.con_core_info || {};
+			conInfo.con_core_info.name = a?.agent_name || conInfo.con_core_info.name || "AI";
+			conInfo.con_core_info.avatar_uri = a?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/ai.png";
+		  } else if (conInfo.con_type === 2) {
+			enqueueGroupRosters([conInfo.con_id]);
 
-      const core = conInfo.con_core_info || {};
-      const setting = conInfo.con_setting_info || {};
+			conInfo.con_core_info = conInfo.con_core_info || {};
+			if (!conInfo.con_core_info.name) conInfo.con_core_info.name = "群聊";
+			if (!conInfo.con_core_info.avatar_uri) conInfo.con_core_info.avatar_uri = "/static/conv_avatar.png";
+		  }
 
-      await DB.insertConversation([{
-        con_short_id: conInfo.con_short_id,
-        con_id: conInfo.con_id,
-        con_type: conInfo.con_type,
-        name: core.name || "",
-        avatar_uri: core.avatar_uri || "",
-        local_avatar_uri: "",
-        description: core.description || "",
-        owner_id: core.owner_id ?? 0n,
-        create_time: core.create_time ?? 0,
-        status: core.status ?? 0,
-        min_index: setting.min_index ?? 0,
-        top_timestamp: setting.top_timestamp ?? 0,
-        push_status: setting.push_status ?? 0,
-        core_extra: core.extra || "",
-        setting_extra: setting.extra || "",
-        member_count: core.member_count ?? 0,
-        badge_count: data.badge_count,
-        read_index_end: setting.read_index_end ?? 0,
-        read_badge_count: setting.read_badge_count ?? 0,
-        user_con_index: Number(conInfo.user_con_index ?? newUserConIndex),
-        last_message: m.msg_content || "",
-        peer_id: peerId
-      }]);
+		  const core = conInfo.con_core_info || {};
+		  const setting = conInfo.con_setting_info || {};
 
-      uni.$emit("normal", data);
-    }
+		  await DB.insertConversation([{
+			con_short_id: conInfo.con_short_id,
+			con_id: conInfo.con_id,
+			con_type: conInfo.con_type,
+			name: core.name || "",
+			avatar_uri: core.avatar_uri || "",
+			local_avatar_uri: "",
+			description: core.description || "",
+			owner_id: core.owner_id ?? 0n,
+			create_time: core.create_time ?? 0,
+			status: core.status ?? 0,
+			min_index: setting.min_index ?? 0,
+			top_timestamp: setting.top_timestamp ?? 0,
+			push_status: setting.push_status ?? 0,
+			core_extra: core.extra || "",
+			setting_extra: setting.extra || "",
+			member_count: core.member_count ?? 0,
+			badge_count: data.badge_count,
+			read_index_end: setting.read_index_end ?? 0,
+			read_badge_count: setting.read_badge_count ?? 0,
+			user_con_index: Number(conInfo.user_con_index ?? newUserConIndex),
+			last_message: m.msg_content || "",
+			peer_id: peerId
+		  }]);
 
-    if (m.msg_type == 100) {
-      // TODO
-    }
-  } catch (err) {
-    console.error("handleNormalPacket_new failed:", err, data);
-  }
-};
+		  uni.$emit("normal", data);
+		}
+
+		if (m.msg_type == 100) {
+		  // TODO
+		}
+	  } catch (err) {
+		console.error("handleNormalPacket_new failed:", err, data);
+	  }
+	};
 	
 	handleCommandPacket(data){
 		if (data.user_cmd_index-1n != getApp().globalData.userCmdIndex) {

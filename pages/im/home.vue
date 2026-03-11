@@ -81,7 +81,6 @@
                     <view class="conversation-content">
                         <view class="conversation-header">
                             <text class="conversation-name">{{ conversation.name }}</text>
-                            <text class="conversation-time">{{ formatTime(conversation.create_time) }}</text>
                         </view>
                         <view class="conversation-message">
                             <text class="last-message">{{ conversation.last_message || '暂无消息' }}</text>
@@ -101,7 +100,7 @@
 
 <script>
 import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite_new.js';
+import DB from '@/utils/sqlite.js';
 import { getNoitceCount } from '@/request/im.js';
 
 export default {
@@ -147,11 +146,13 @@ export default {
                     break;
                 }
             }
+			console.log(JSONbig.stringify(data))
+			console.log(index)
             if (index !== -1) {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             } else {
-                DB.selectConversation(data.msg_body.con_id).then((res) => {
+                DB.getConversationById(data.msg_body.con_id).then((res) => {
                     this.conversationList = res.concat(this.conversationList);
                 });
             }
@@ -240,12 +241,12 @@ export default {
 
         formatTime(timestamp) {
             const now = Date.now() / 1000;
-            const diff = now - timestamp;
+            const diff = now - Number(timestamp);
             if (diff < 60) return '刚刚';
             if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
             if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
             if (diff < 604800) return Math.floor(diff / 86400) + '天前';
-            const date = new Date(timestamp * 1000);
+            const date = new Date(Number(timestamp) * 1000);
             return `${date.getMonth() + 1}/${date.getDate()}`;
         }
     }

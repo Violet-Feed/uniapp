@@ -8,6 +8,7 @@ import {
 	getUserProfile
 } from '@/request/user.js';
 import file from '@/utils/file.js';
+import { ensureUsersCached } from '@/utils/im-cache';
 export const init = async () => {
 	const app = getApp();
 	let token = uni.getStorageSync('token');
@@ -16,6 +17,7 @@ export const init = async () => {
 		userId=BigInt(JSONbig.parse(userId).data);
 		app.globalData.token = token;
 		app.globalData.userId = userId;
+		ensureUsersCached([userId]);
 		const res = await getUserProfile(userId,false,false);
 		if(res!=undefined){
 			uni.setStorageSync("username_"+userId, res.user_info.username);

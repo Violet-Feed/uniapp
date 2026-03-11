@@ -14,50 +14,53 @@
         </view>
 
         <!-- 消息列表 -->
-        <scroll-view class="chat-messages" scroll-y="true" :scroll-into-view="scrollIntoViewId" @scroll="onScroll">
+        <scroll-view 
+            class="chat-messages" 
+            scroll-y="true" 
+            :scroll-into-view="scrollIntoViewId" 
+            @scroll="onScroll"
+        >
             <view class="messages">
                 <!-- 加载提示 -->
                 <view v-if="isLoading" class="loading-tip">
                     <view class="loading-spinner"></view>
                     <text class="loading-text">加载中...</text>
                 </view>
-
+                
                 <!-- 消息列表 -->
-                <view v-for="(message, index) in messages" :key="String(message.msg_id || index)" :id="'message-' + String(message.msg_id)">
+                <view v-for="(message, index) in messages" :key="index" :id="'message-' + message.msg_id">
                     <!-- 时间戳 -->
                     <view class="message-time" v-if="shouldShowTime(index)">
                         <text class="time-text">{{ formatTime(message.create_time) }}</text>
                     </view>
-
-					<!-- 我发送的消息 -->
-					<view class="message message-right" v-if="isSelfMessage(message)">
-						<view class="message-status">
-							<view class="status-loading" v-if="message.status == -1"></view>
-						</view>
-						<view class="message-content message-content-right">
-							<text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
-							<view class="bubble bubble-right">
-								<text class="bubble-text">{{ transformContent(message) }}</text>
-							</view>
-						</view>
-						<view class="avatar-box" @click="goToUserProfile(message)">
-							<image class="avatar" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
-						</view>
-					</view>
-
-                    <!-- 他人/AI 发送的消息 -->
-                    <view class="message message-left" v-else-if="isOtherSenderMessage(message)">
-                        <view class="avatar-box" @click="goToUserProfile(message)">
-                            <image class="avatar" :src="message.avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)" mode="aspectFill"></image>
+                    
+                    <!-- 我发送的消息 -->
+                    <view class="message message-right" v-if="message.sender_id == userId && message.sender_type == 1">
+                        <view class="message-status">
+                            <view class="status-loading" v-if="message.status == -1"></view>
                         </view>
-                        <view class="message-content message-content-left">
-                            <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
+                        <view class="message-content">
+                            <view class="bubble bubble-right">
+                                <text class="bubble-text">{{ transformContent(message) }}</text>
+                            </view>
+                        </view>
+                        <view class="avatar-box" @click="goToUserProfile(message)">
+                            <image class="avatar" :src="myAvatar" mode="aspectFill"></image>
+                        </view>
+                    </view>
+                    
+                    <!-- 他人发送的消息 -->
+                    <view class="message message-left" v-else-if="message.sender_id > 10">
+                        <view class="avatar-box" @click="goToUserProfile(message)">
+                            <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
+                        </view>
+                        <view class="message-content">
                             <view class="bubble bubble-left">
                                 <text class="bubble-text">{{ transformContent(message) }}</text>
                             </view>
                         </view>
                     </view>
-
+                    
                     <!-- 系统消息 -->
                     <view class="message message-center" v-else>
                         <view class="system-message">
@@ -67,11 +70,18 @@
                 </view>
             </view>
         </scroll-view>
-
+        
         <!-- 输入栏 -->
         <view class="input-bar">
             <view class="input-wrapper">
-                <input class="input-field" v-model="inputText" placeholder="说点什么..." placeholder-class="input-placeholder" @confirm="sendMessage" confirm-type="send" />
+                <input 
+                    class="input-field" 
+                    v-model="inputText" 
+                    placeholder="说点什么..."
+                    placeholder-class="input-placeholder"
+                    @confirm="sendMessage"
+                    confirm-type="send"
+                />
             </view>
             <view class="send-btn" :class="{ 'send-btn-active': inputText.trim() }" @click="sendMessage">
                 <text class="send-icon">➤</text>
@@ -82,15 +92,14 @@
 
 <script>
 import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite.js';
-import { getMessageByConversation } from '@/request/im.js';
-
+import DB from '@/utils/sqlite.js'
+import { getMessageByConversation, markRead } from '@/request/im.js';
 export default {
     data() {
         return {
             userId: getApp().globalData.userId,
             myAvatar: getApp().globalData.avatar,
-            senderInfoMap: new Map(),
+            members: new Map(),
             conversation: {},
             conIndex: Number.MAX_SAFE_INTEGER,
             messages: [],
@@ -100,38 +109,28 @@ export default {
             isLoading: false,
             normalListener: null,
             commandListener: null,
-            chatName: '',
-            userDefaultAvatar: '/static/user_avatar.png',
-            aiDefaultAvatar: '/static/ai.png'
+            chatName: '', // 聊天对象昵称
         };
     },
-
     async onLoad(options) {
         this.conversation.con_short_id = 0;
         this.conversation.con_id = options.conId;
         this.conversation.con_type = Number(options.conType);
-        this.chatName = options.name || '聊天';
-        uni.setNavigationBarTitle({ title: options.name || '聊天' });
-
+        this.chatName = options.name || '聊天'; // 保存聊天对象昵称
+        uni.setNavigationBarTitle({ title: options.name });
         let res = await DB.getConversationById(options.conId);
-        const conversation = Array.isArray(res) ? res[0] : res;
-
-        if (conversation) {
-            this.conversation = conversation;
-
+        if (res.length > 0) {
+            this.conversation = res[0];
             res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
             if (res.length > 0) {
-                await this.fillSenderInfos(res);
                 this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
             }
-
             if (this.conIndex <= this.conversation.min_index) {
                 this.hasMore = false;
             } else if (this.messages.length < 20) {
                 res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
                 if (res.length > 0) {
-                    await this.fillSenderInfos(res);
                     res.reverse();
                     this.messages = res.concat(this.messages);
                     this.conIndex = this.messages[0].con_index - 1;
@@ -140,43 +139,31 @@ export default {
                     this.hasMore = false;
                 }
             }
+			//markRead(this.conversation.con_short_id,this.messages[this.messages.length-1].con_index,this.conversation.badge_count);
         }
-
         setTimeout(() => this.scrollToBottom(), 100);
 
-        this.normalListener = async (data) => {
-            if (this.conversation.con_id != data.msg_body.con_id) return;
-
-            const msg = data.msg_body;
-
-            if (String(this.conversation.con_short_id || 0) === '0' && String(msg.con_short_id || 0) !== '0') {
-                this.conversation.con_short_id = msg.con_short_id;
-                for (const item of this.messages) {
-                    if (String(item.con_short_id || 0) === '0') {
-                        item.con_short_id = msg.con_short_id;
+        this.normalListener = uni.$on('normal', (data) => {
+            if (this.conversation.con_id == data.msg_body.con_id) {
+                if (data.msg_body.sender_type == 1 && this.userId == data.msg_body.sender_id) {
+                    for (let i = this.messages.length - 1; i >= 0; i--) {
+                        if (BigInt(this.messages[i].msg_id) == data.msg_body.msg_id) {
+                            this.messages[i] = data.msg_body;
+                            return;
+                        }
+                        if (this.messages[i].con_index && BigInt(this.messages[i].con_index) < data.msg_body.con_index) {
+                            break;
+                        }
                     }
                 }
+                this.messages.push(data.msg_body);
             }
+			if (this.conversation.con_short_id == 0) {
+				
+			}
+        });
 
-            await this.fillSenderInfos([msg]);
-
-            if (this.isSelfMessage(msg)) {
-                for (let i = this.messages.length - 1; i >= 0; i--) {
-                    if (String(this.messages[i].msg_id) === String(msg.msg_id)) {
-                        this.messages.splice(i, 1, msg);
-                        return;
-                    }
-                    if (this.messages[i].con_index && BigInt(this.messages[i].con_index) < BigInt(msg.con_index)) {
-                        break;
-                    }
-                }
-            }
-
-            this.messages.push(msg);
-        };
-        uni.$on('normal', this.normalListener);
-
-        this.commandListener = (data) => {
+        this.commandListener = uni.$on('command', (data) => {
             if (this.conversation.con_id == data.msg_body.con_id) {
                 const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
                 if (data.msg_body.msg_type == 101) {
@@ -184,124 +171,36 @@ export default {
                     this.conversation.read_badge_count = cmdMessage.read_badge_count;
                 }
             }
-        };
-        uni.$on('command', this.commandListener);
+        });
     },
-
     onUnload() {
-        if (this.normalListener) {
-            uni.$off('normal', this.normalListener);
-        }
-        if (this.commandListener) {
-            uni.$off('command', this.commandListener);
-        }
+        uni.$off('normal', this.normalListener);
+        uni.$off('command', this.commandListener);
     },
-
     methods: {
-        async fillSenderInfos(messages) {
-            if (!Array.isArray(messages) || messages.length === 0) return;
-
-            const senders = [];
-            const missingSet = new Set();
-
-            for (const message of messages) {
-                if (!message) continue;
-                if (Number(message.sender_type) !== 1 && Number(message.sender_type) !== 2) continue;
-
-                if (message.nick_name || message.avatar_uri) {
-                    const key = `${Number(message.sender_type)}:${String(message.sender_id)}`;
-                    this.senderInfoMap.set(key, {
-                        nick_name: message.nick_name || '',
-                        avatar_uri: message.avatar_uri || ''
-                    });
-                    continue;
-                }
-
-                const key = `${Number(message.sender_type)}:${String(message.sender_id)}`;
-                if (!this.senderInfoMap.has(key) && !missingSet.has(key)) {
-                    missingSet.add(key);
-                    senders.push({
-                        sender_type: message.sender_type,
-                        sender_id: message.sender_id
-                    });
-                }
-            }
-
-            if (senders.length > 0 && typeof DB.getMemberInfosBySenders === 'function') {
-                try {
-                    const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, senders);
-                    if (Array.isArray(infos)) {
-                        for (const info of infos) {
-                            const key = `${Number(info.sender_type)}:${String(info.sender_id)}`;
-                            this.senderInfoMap.set(key, {
-                                nick_name: info.nick_name || '',
-                                avatar_uri: info.avatar_uri || ''
-                            });
-                        }
-                    }
-                } catch (err) {
-                    console.error('getMemberInfosBySenders failed:', err);
-                }
-            }
-
-            for (const message of messages) {
-                if (!message) continue;
-                if (Number(message.sender_type) !== 1 && Number(message.sender_type) !== 2) continue;
-
-                const key = `${Number(message.sender_type)}:${String(message.sender_id)}`;
-                const cached = this.senderInfoMap.get(key);
-                if (cached) {
-                    if (!message.nick_name) {
-                        message.nick_name = cached.nick_name || '';
-                    }
-                    if (!message.avatar_uri) {
-                        message.avatar_uri = cached.avatar_uri || '';
-                    }
-                }
-            }
-        },
-
-        isSelfMessage(message) {
-            return !!message && Number(message.sender_type) === 1 && String(message.sender_id) === String(this.userId);
-        },
-
-        isOtherSenderMessage(message) {
-            return !!message && (Number(message.sender_type) === 1 || Number(message.sender_type) === 2) && !this.isSelfMessage(message);
-        },
-
-        compareBigIntLike(a, b) {
-            const aa = BigInt(a || 0);
-            const bb = BigInt(b || 0);
-            if (aa === bb) return 0;
-            return aa > bb ? 1 : -1;
-        },
-
+        // 返回上一页
         goBack() {
             uni.navigateBack();
         },
-
+        // 跳转到设置页面
         goToSettings() {
             uni.navigateTo({
                 url: `/pages/im/setting?conId=${this.conversation.con_id}&conType=${this.conversation.con_type}`
             });
         },
-
         async sendMessage() {
             if (this.inputText.trim() === '') return;
-
             const token = getApp().globalData.token;
             const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
-            const sendingText = this.inputText;
-
+			//todo:新建私聊什么时候获得con_short_id，一些使用short的地方是否会有问题
             const data = {
                 con_short_id: BigInt(this.conversation.con_short_id),
                 con_id: this.conversation.con_id,
                 con_type: this.conversation.con_type,
                 client_msg_id: clientMsgId,
                 msg_type: 1,
-                msg_content: sendingText
+                msg_content: this.inputText
             };
-
             const dataJson = JSONbig.stringify(data);
             let res = await uni.request({
                 url: 'http://127.0.0.1:3000/api/im/send_message',
@@ -311,55 +210,26 @@ export default {
                     'Authorization': `Bearer ${token}`
                 },
                 data: dataJson,
-                dataType: 'string'
+                dataType: 'string',
             });
-
             if (res.statusCode === 200) {
                 res = JSONbig.parse(res.data);
                 if (res.code === 1000) {
-                    const selfKey = `1:${String(this.userId)}`;
-                    let selfInfo = this.senderInfoMap.get(selfKey) || {};
-
-                    if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
-                        try {
-                            const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, [{ sender_type: 1, sender_id: this.userId }]);
-                            if (Array.isArray(infos) && infos.length > 0) {
-                                selfInfo = {
-                                    nick_name: infos[0].nick_name || '',
-                                    avatar_uri: infos[0].avatar_uri || ''
-                                };
-                                this.senderInfoMap.set(selfKey, selfInfo);
-                            }
-                        } catch (err) {
-                            console.error('get self member info failed:', err);
-                        }
+                    if (this.messages.length == 0 || this.messages[this.messages.length - 1].client_msg_id < clientMsgId) {
+                        this.messages.push({
+                            sender_id: this.userId,
+                            sender_type: 1,
+                            con_short_id: this.conversation.con_short_id,
+                            con_id: this.conversation.con_id,
+                            con_type: this.conversation.con_type,
+                            client_msg_id: clientMsgId,
+                            msg_id: res.data.msg_id,
+                            msg_type: 1,
+                            msg_content: this.inputText,
+                            create_time: Date.now() / 1000,
+                            status: -1
+                        });
                     }
-
-                    const optimisticMessage = {
-                        sender_id: this.userId,
-                        sender_type: 1,
-                        con_short_id: this.conversation.con_short_id,
-                        con_id: this.conversation.con_id,
-                        con_type: this.conversation.con_type,
-                        client_msg_id: clientMsgId,
-                        msg_id: res.data.msg_id,
-                        msg_type: 1,
-                        msg_content: sendingText,
-                        create_time: Date.now() / 1000,
-                        status: -1,
-                        nick_name: selfInfo.nick_name || '',
-                        avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
-                    };
-
-                    this.senderInfoMap.set(selfKey, {
-                        nick_name: optimisticMessage.nick_name || '',
-                        avatar_uri: optimisticMessage.avatar_uri || ''
-                    });
-
-                    if (this.messages.length === 0 || this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0) {
-                        this.messages.push(optimisticMessage);
-                    }
-
                     this.inputText = '';
                     this.scrollToBottom();
                 } else {
@@ -369,43 +239,35 @@ export default {
                 uni.showToast({ title: '网络错误', icon: 'none' });
             }
         },
-
         goToUserProfile(message) {
-            if (Number(message.sender_type) !== 1) return;
+            if (message.sender_type != 1) return;
             uni.navigateTo({
                 url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
             });
         },
-
         scrollToBottom() {
             this.$nextTick(() => {
                 if (this.messages.length > 0) {
-                    this.scrollIntoViewId = 'message-' + String(this.messages[this.messages.length - 1].msg_id);
+                    this.scrollIntoViewId = 'message-' + this.messages[this.messages.length - 1].msg_id;
                 }
             });
         },
-
         async onScroll(e) {
             if (e.detail.scrollTop == 0 && this.hasMore) {
                 this.isLoading = true;
-
                 let res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
-                await this.fillSenderInfos(res);
-
                 let newMessages = res.reverse();
                 if (res.length > 0) {
                     if (this.conIndex != newMessages[res.length - 1].con_index) {
-                        console.error('TODO:getByConversation');
+                        console.error("TODO:getByConversation");
                     }
                     this.conIndex = newMessages[0].con_index - 1;
                 }
-
                 if (this.conIndex <= this.conversation.min_index) {
                     this.hasMore = false;
                 } else if (res.length < 20) {
                     res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - res.length);
                     if (res.length > 0) {
-                        await this.fillSenderInfos(res);
                         res.reverse();
                         newMessages = res.concat(newMessages);
                         this.conIndex = newMessages[0].con_index - 1;
@@ -414,64 +276,61 @@ export default {
                         this.hasMore = false;
                     }
                 }
-
-                const firstMsgId = this.messages.length > 0 ? this.messages[0].msg_id : '';
-
+                const firstMsgId = this.messages[0].msg_id;
                 this.$nextTick(() => {
                     this.messages = newMessages.concat(this.messages);
-                    if (firstMsgId) {
-                        this.scrollIntoViewId = 'message-' + String(firstMsgId);
-                    }
+                    this.scrollIntoViewId = 'message-' + firstMsgId;
                     this.isLoading = false;
                 });
             }
         },
-
         transformContent(message) {
-            if (Number(message.sender_type) == 3) {
+            if (message.sender_type == 3) {
                 try {
                     const data = JSON.parse(message.msg_content);
                     const operator = data.operator || '未知用户';
                     switch (data.type) {
-                        case 1:
+                        case 1: // Add_Member - 添加成员
                             if (Array.isArray(data.content) && data.content.length > 0) {
+                                // 提取成员昵称
                                 const memberNames = data.content.join('、');
                                 return `${operator} 邀请 ${memberNames} 加入了群聊`;
                             }
+                            // 如果没有content，说明是操作者自己加入
                             return `${operator} 加入了群聊`;
-                        case 2:
+                        case 2: // Remove_Member - 移除成员
                             if (Array.isArray(data.content) && data.content.length > 0) {
                                 const memberNames = data.content.join('、');
                                 return `${operator} 将 ${memberNames} 移出了群聊`;
                             }
+                            // 如果没有content，说明是操作者自己退出
                             return `${operator} 退出了群聊`;
-                        case 3:
+                        case 3: // Modify_Name - 修改群名
                             return `${operator} 修改群名为 "${data.content}"`;
-                        case 4:
-                            return `${operator} 修改群资料为 "${data.content}"`;
+                        case 4: // Modify_Description - 修改群资料
+                            return `${operator} 修改群资料为 "${data.content}"`;    
                         default:
+                            // 未知类型，返回原始内容
                             console.warn('未知的群聊消息类型:', data.type);
                             return message.msg_content;
                     }
                 } catch (e) {
+                    // JSON解析失败，返回原始内容
                     console.error('解析群聊消息失败:', e, message.msg_content);
                     return message.msg_content;
                 }
             }
             return message.msg_content;
         },
-
         formatTime(timestamp) {
-            const now = Date.now() / 1000;
-            const diff = now - Number(timestamp);
-            if (diff < 60) return '刚刚';
-            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
-            if (diff < 604800) return Math.floor(diff / 86400) + '天前';
             const date = new Date(Number(timestamp) * 1000);
-            return `${date.getMonth() + 1}/${date.getDate()}`;
-		},
-
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1);
+            const day = String(date.getDate());
+            const hour = String(date.getHours()).padStart(2, '0');
+            const minute = String(date.getMinutes()).padStart(2, '0');
+            return `${year}年${month}月${day}日 ${hour}:${minute}`;
+        },
         shouldShowTime(index) {
             try {
                 if (index === 0) return true;
@@ -481,7 +340,6 @@ export default {
                 return timeDiff > 5;
             } catch (err) {
                 console.log(err);
-                return false;
             }
         }
     }
@@ -496,6 +354,7 @@ export default {
     background: #f0f2f5;
 }
 
+/* 顶部导航栏 */
 .chat-header {
     display: flex;
     align-items: center;
@@ -542,6 +401,7 @@ export default {
     font-weight: 600;
 }
 
+/* 修复右边头像与文字对齐 */
 .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -572,9 +432,7 @@ export default {
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
 }
 
 .loading-text {
@@ -637,37 +495,18 @@ export default {
 
 .message-content {
     flex: 1 1 auto;
+    max-width: 70%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    min-height: 36px;
 }
 
-.message-content-left {
+.message-right .message-content {
+    align-items: flex-end; /* 让右气泡整体靠右 */
     max-width: calc(100% - 96px);
-    align-items: flex-start;
-}
-
-.message-content-right {
-    max-width: calc(100% - 96px);
-    align-items: flex-end;
-}
-
-.sender-name {
-    font-size: 12px;
-    line-height: 1.2;
-    color: #999;
-    margin: 0 0 2px 6px;
-}
-
-.sender-name-right {
-    margin: 0 6px 2px 0;
-    text-align: right;
-    align-self: flex-end;
 }
 
 .bubble {
-    padding: 8px 16px;
+    padding: 12px 16px;
     border-radius: 18px;
     word-break: break-word;
     position: relative;
@@ -690,7 +529,7 @@ export default {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #fff;
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    text-align: right;
+    text-align: right; /* 右侧气泡文本右对齐 */
 }
 
 .message-status {

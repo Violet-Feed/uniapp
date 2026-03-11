@@ -234,7 +234,7 @@ export default {
                         member_count
                     } = res.data.con_core_info;
                     const user_con_index = Number.MAX_SAFE_INTEGER;
-                    const conValues = `(${con_short_id}, '${con_id}', ${con_type}, '群聊', '/static/conv_avatar.png', '', '', ${owner_id}, ${create_time},0,0,0,0, ',', ${member_count},0,0,0, ${user_con_index}, '')`;
+                    const conValues = `(${con_short_id}, '${con_id}', ${con_type}, '群聊', '/static/conv_avatar.png', '/static/conv_avatar.png', '', ${owner_id}, ${create_time},0,0,0,0, '', '', ${member_count},0,0,0, ${user_con_index}, '', 0)`;
                     DB.insertConversation(conValues)
                     .then(()=>{
                         uni.showToast({

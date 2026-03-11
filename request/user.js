@@ -137,7 +137,7 @@ export const getUserInfos = async (payload) => {
 	const data = {
 		user_ids: payload.userIds
 	}
-	return httpRequestBackData("/user/get_user_infos")
+	return httpRequestBackData("/user/get_user_infos",data)
 }
 
 export const searchUsers = async (keyword,page) => {

@@ -148,7 +148,6 @@ export default {
         group: Number(this.group),
         page: this.page
       }
-
       const res = await getNoticeList(payload)
       const list = res && Array.isArray(res.notices) ? res.notices : []
 

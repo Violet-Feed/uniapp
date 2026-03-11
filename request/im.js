@@ -1,11 +1,11 @@
 import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite_new.js';
+import DB from '@/utils/sqlite.js';
 import file from '@/utils/file';
 import {
 	getUserProfile
 } from '@/request/user.js';
 import { httpRequestBackData, httpRequestBackBool } from '@/request/common.js';
-export const getMessageByUser = async() => {
+export const getMessageByUser_old = async() => {
 	const {
 		token,
 		userId
@@ -237,7 +237,8 @@ export const getMessageByConversation = async (conShortId, conIndex, limit) => {
 			const msgBodies = res.data.msg_bodies;
 			const msgValues = msgBodies.map((msg) => {
 				const {
-					user_id,
+					sender_id,
+					sender_type,
 					con_short_id,
 					con_id,
 					con_type,
@@ -249,7 +250,7 @@ export const getMessageByConversation = async (conShortId, conIndex, limit) => {
 					extra,
 					con_index
 				} = msg;
-				return `(${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
+				return `(${sender_id}, ${sender_type}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
 			}).join(',');
 			DB.insertMessage(msgValues).catch((err) => {
 				console.error("insertMessage err", err);
@@ -305,14 +306,14 @@ export const getConversationInfo = async (conShortId) => {
 	}
 }
 
-export const getCoversationMembers = async (payload) => {
+export const getConversationMembers = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId
 	};
 	return httpRequestBackData("/im/get_conversation_members",data);
 };
 
-export const addCoversationMembers = async (payload) => {
+export const addConversationMembers = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId,
 		con_id: payload.conId,
@@ -389,14 +390,25 @@ export const markNoticeRead = async (payload) => {
 	return httpRequestBackBool("/notice/mark_notice_read",data);
 };
 
-
+export const getAgentByIds = async (payload) => {
+	const data = {
+		agent_ids: payload.agentIds
+	};
+	return httpRequestBackBool("/im/get_agent_by_ids",data);
+};
+export const getConversationAgents = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId
+	};
+	return httpRequestBackBool("/im/get_conversation_agents",data);
+};
 import {
   ensureUsersCached,
   ensureAgentsCached,
   enqueueGroupRosters
 } from "@/utils/im-cache.js";
 
-export const getMessageByUser_new = async () => {
+export const getMessageByUser = async () => {
   const { userId } = getApp().globalData;
   const PAGE_LIMIT = 100;
 
@@ -425,7 +437,7 @@ export const getMessageByUser_new = async () => {
 
     const privateUserIds = [];
     const privateAgentIds = [];
-    const groupConShortIds = [];
+    const groupConIds = [];
     const peerMap = new Map(); // con_id -> peer_id(BigInt)
 
     for (const con of cons) {
@@ -442,7 +454,7 @@ export const getMessageByUser_new = async () => {
         privateAgentIds.push(peerId);
         peerMap.set(conInfo.con_id, peerId);
       } else if (conInfo.con_type === 2) {
-        groupConShortIds.push(conInfo.con_short_id);
+        groupConIds.push(conInfo.con_id);
       }
     }
 
@@ -485,7 +497,7 @@ export const getMessageByUser_new = async () => {
         con_short_id: conInfo.con_short_id,
         con_id: conInfo.con_id,
         con_type: conInfo.con_type,
-        name: core.name || "",
+        name: core.name || "群聊",
         avatar_uri: core.avatar_uri || "",
         local_avatar_uri: "",
         description: core.description || "",
@@ -510,6 +522,6 @@ export const getMessageByUser_new = async () => {
     await DB.insertConversation(conRows);
     await DB.insertMessage(msgRows);
 
-    enqueueGroupRosters(groupConShortIds);
+    enqueueGroupRosters(groupConIds);
   }
 };

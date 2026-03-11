@@ -7,16 +7,14 @@
 // 5) enqueueEntityAvatars：统一触发 user / agent / conv 头像处理
 //
 // 约定：
-// - 所有 ID 都是 BigInt
+// - user_id / agent_id / con_short_id 是 BigInt
+// - con_id 是 string
+// - 除必须调用后端 short_id 接口时，内部统一以 con_id 流通
 // - 所有接口成功直接返回 data，失败返回 undefined
-// - getUserInfos(ids) -> { user_infos: [{ user_id, username, avatar }] }
-// - getAgentByIds(ids) -> [{ agent_id, agent_name, avatar_uri, description, owner_id }] 或 { agents/list: [...] }
-// - getConversationMembers(conShortId) -> { members: [...] }
-// - getConversationAgents(conShortId) -> [{ agent_id, agent_name, avatar_uri, description, owner_id }] 或 { agents/list: [...] }
 
-import DB from "@/utils/sqlite_new.js";
+import DB from "@/utils/sqlite.js";
+import { getUserInfos } from "@/request/user";
 import {
-  getUserInfos,
   getConversationMembers,
   getAgentByIds,
   getConversationAgents
@@ -71,6 +69,12 @@ function normalizeMembers(resp) {
   return resp.members || resp.list || [];
 }
 
+/* ------------------------------ 文件名安全处理 ------------------------------ */
+
+function safeFileId(id) {
+  return String(id).replace(/[^\w.-]/g, "_");
+}
+
 /* ------------------------------ PNG 下载 ------------------------------ */
 
 async function ensureAvatarDirOnce() {
@@ -86,7 +90,7 @@ async function ensureAvatarDirOnce() {
 
 async function downloadPng(id, url, prefix = "") {
   await ensureAvatarDirOnce();
-  const filePath = `${AVATAR_DIR}${prefix}${id.toString()}.png`;
+  const filePath = `${AVATAR_DIR}${prefix}${safeFileId(id)}.png`;
   try {
     const dl = await uni.downloadFile({ url, filePath });
     if (dl.statusCode === 200) return filePath;
@@ -99,7 +103,10 @@ async function downloadPng(id, url, prefix = "") {
 const avatarQueue = createQueue({
   concurrency: 4,
   worker: async (task) => {
-    // task: { type: "user" | "agent" | "conv", id: BigInt }
+    // task:
+    // - { type: "user", id: BigInt }
+    // - { type: "agent", id: BigInt }
+    // - { type: "conv", id: string(con_id) }
     if (!task || !task.type || task.id === null || task.id === undefined) return;
 
     if (task.type === "user") {
@@ -147,7 +154,7 @@ const avatarQueue = createQueue({
     }
 
     if (task.type === "conv") {
-      const row = await DB.getConversationByShortId(task.id);
+      const row = await DB.getConversationById(task.id);
       if (!row) return;
 
       const avatarUri = row.avatar_uri || "/static/conv_avatar.png";
@@ -188,8 +195,8 @@ export async function ensureUsersCached(userIds) {
     if (!existSet.has(id)) missing.push(id);
   }
   if (missing.length === 0) return;
-
-  const resp = await getUserInfos(missing);
+  
+  const resp = await getUserInfos({ userIds: missing });
   if (!resp) return;
 
   const infos = resp.user_infos || [];
@@ -231,7 +238,7 @@ export async function ensureAgentsCached(agentIds) {
   }
   if (missing.length === 0) return;
 
-  const resp = await getAgentByIds(missing);
+  const resp = await getAgentByIds({ agentIds: missing });
   if (!resp) return;
 
   const infos = normalizeAgentList(resp);
@@ -260,12 +267,11 @@ export async function ensureAgentsCached(agentIds) {
   enqueueEntityAvatars("agent", upserts.map(x => x.agent_id));
 }
 
-/* ------------------------------ profileRefreshQueue：用户 / AI TTL 刷新（已合并） ------------------------------ */
+/* ------------------------------ profileRefreshQueue：用户 / AI TTL 刷新 ------------------------------ */
 
 const profileRefreshQueue = createQueue({
   concurrency: 2,
   worker: async (task) => {
-    // task: { type: "user" | "agent", ids: BigInt[], ttlMs: number }
     const { type, ids, ttlMs } = task || {};
     if (!type || !ids || ids.length === 0) return;
 
@@ -291,7 +297,7 @@ const profileRefreshQueue = createQueue({
 
       if (refreshIds.length === 0) return;
 
-      const resp = await getUserInfos(refreshIds);
+      const resp = await getUserInfos({ userIds: refreshIds });
       if (!resp) return;
 
       const infos = resp.user_infos || [];
@@ -319,7 +325,7 @@ const profileRefreshQueue = createQueue({
 
         upserts.push({
           user_id: uid,
-          username: nu.username || old.username || "",
+          username: nu.username || old.username || "用户",
           avatar_uri: newAvatar,
           local_avatar_uri: oldLocal,
           modify_time: now
@@ -356,7 +362,7 @@ const profileRefreshQueue = createQueue({
 
       if (refreshIds.length === 0) return;
 
-      const resp = await getAgentByIds(refreshIds);
+      const resp = await getAgentByIds({ agentIds: refreshIds });
       if (!resp) return;
 
       const infos = normalizeAgentList(resp);
@@ -384,7 +390,7 @@ const profileRefreshQueue = createQueue({
 
         upserts.push({
           agent_id: aid,
-          agent_name: na.agent_name || old.agent_name || "",
+          agent_name: na.agent_name || old.agent_name || "AI",
           avatar_uri: newAvatar,
           local_avatar_uri: oldLocal,
           description: na.description || old.description || "",
@@ -417,14 +423,18 @@ export function enqueueProfileRefresh(type, ids, ttlMs) {
 
 const rosterQueue = createQueue({
   concurrency: 2,
-  worker: async (conShortId) => {
-    const userCnt = await DB.getMemberCount(conShortId);
+  worker: async (conId) => {
+    const userCnt = await DB.getMemberCount(conId);
     if (userCnt !== 0) return;
 
     const now = Date.now();
 
-    // -------- 普通用户成员：只补 user 表里没有的 --------
-    const memberResp = await getConversationMembers(conShortId);
+    const conv = await DB.getConversationById(conId);
+    if (!conv) return;
+
+    const conShortId = conv.con_short_id;
+
+    const memberResp = await getConversationMembers({ conShortId: conShortId });
     if (memberResp) {
       const members = normalizeMembers(memberResp);
       if (Array.isArray(members) && members.length > 0) {
@@ -445,6 +455,7 @@ const rosterQueue = createQueue({
 
           memberRows.push({
             con_short_id: conShortId,
+            con_id: conId,
             member_id: uid,
             member_type: 1,
             nick_name: m.nick_name || "用户",
@@ -472,8 +483,7 @@ const rosterQueue = createQueue({
       }
     }
 
-    // -------- AI 成员：只补 agent 表里没有的 --------
-    const agentResp = await getConversationAgents(conShortId);
+    const agentResp = await getConversationAgents({ conShortId });
     if (agentResp) {
       const agents = normalizeAgentList(agentResp);
       if (Array.isArray(agents) && agents.length > 0) {
@@ -494,6 +504,7 @@ const rosterQueue = createQueue({
 
           memberRows.push({
             con_short_id: conShortId,
+            con_id: conId,
             member_id: aid,
             member_type: 2,
             nick_name: a.agent_name || "AI",
@@ -523,13 +534,12 @@ const rosterQueue = createQueue({
       }
     }
 
-    // -------- 群头像：首次群补全时顺手下载 --------
-    enqueueEntityAvatars("conv", [conShortId]);
+    enqueueEntityAvatars("conv", [conId]);
   }
 });
 
-export function enqueueGroupRosters(conShortIds) {
-  const ids = Array.isArray(conShortIds) ? conShortIds : [conShortIds];
+export function enqueueGroupRosters(conIds) {
+  const ids = Array.isArray(conIds) ? conIds : [conIds];
   if (!ids || ids.length === 0) return;
   rosterQueue.enqueueMany(ids);
 }
