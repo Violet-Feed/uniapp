@@ -8,7 +8,7 @@
             <view class="header-center">
                 <text class="chat-title">{{ chatName }}</text>
             </view>
-            <view class="header-right" @click="goToSettings">
+            <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2">
                 <text class="settings-icon">⋮</text>
             </view>
         </view>
@@ -37,7 +37,7 @@
 						<view class="message-content message-content-right">
 							<text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
 							<view class="bubble bubble-right">
-								<text class="bubble-text">{{ transformContent(message) }}</text>
+								<text class="bubble-text">{{ message.msg_content }}</text>
 							</view>
 						</view>
 						<view class="avatar-box" @click="goToUserProfile(message)">
@@ -53,7 +53,7 @@
                         <view class="message-content message-content-left">
                             <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
                             <view class="bubble bubble-left">
-                                <text class="bubble-text">{{ transformContent(message) }}</text>
+                                <text class="bubble-text">{{ message.msg_content }}</text>
                             </view>
                         </view>
                     </view>
@@ -61,7 +61,7 @@
                     <!-- 系统消息 -->
                     <view class="message message-center" v-else>
                         <view class="system-message">
-                            <text class="system-text">{{ transformContent(message) }}</text>
+                            <text class="system-text">{{ message.msg_content }}</text>
                         </view>
                     </view>
                 </view>
@@ -171,6 +171,17 @@ export default {
                     }
                 }
             }
+			
+			let maxConIndex = 0n;
+			for (let i = this.messages.length - 1; i >= 0; i--) {
+				if (this.messages[i].con_index) {
+					maxConIndex = BigInt(this.messages[i].con_index);
+					break;
+				}
+			}
+			if (msg.con_index && BigInt(msg.con_index) <= maxConIndex) {
+				return;
+			}
 
             this.messages.push(msg);
         };
@@ -372,6 +383,12 @@ export default {
 
         goToUserProfile(message) {
             if (Number(message.sender_type) !== 1) return;
+            if (String(message.sender_id) === String(this.userId)) {
+                uni.navigateTo({
+                    url: '/pages/user/my_profile_copy'
+                });
+                return;
+            }
             uni.navigateTo({
                 url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
             });
@@ -425,40 +442,6 @@ export default {
                     this.isLoading = false;
                 });
             }
-        },
-
-        transformContent(message) {
-            if (Number(message.sender_type) == 3) {
-                try {
-                    const data = JSON.parse(message.msg_content);
-                    const operator = data.operator || '未知用户';
-                    switch (data.type) {
-                        case 1:
-                            if (Array.isArray(data.content) && data.content.length > 0) {
-                                const memberNames = data.content.join('、');
-                                return `${operator} 邀请 ${memberNames} 加入了群聊`;
-                            }
-                            return `${operator} 加入了群聊`;
-                        case 2:
-                            if (Array.isArray(data.content) && data.content.length > 0) {
-                                const memberNames = data.content.join('、');
-                                return `${operator} 将 ${memberNames} 移出了群聊`;
-                            }
-                            return `${operator} 退出了群聊`;
-                        case 3:
-                            return `${operator} 修改群名为 "${data.content}"`;
-                        case 4:
-                            return `${operator} 修改群资料为 "${data.content}"`;
-                        default:
-                            console.warn('未知的群聊消息类型:', data.type);
-                            return message.msg_content;
-                    }
-                } catch (e) {
-                    console.error('解析群聊消息失败:', e, message.msg_content);
-                    return message.msg_content;
-                }
-            }
-            return message.msg_content;
         },
 
         formatTime(timestamp) {

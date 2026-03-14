@@ -146,14 +146,12 @@ export default {
                     break;
                 }
             }
-			console.log(JSONbig.stringify(data))
-			console.log(index)
             if (index !== -1) {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             } else {
                 DB.getConversationById(data.msg_body.con_id).then((res) => {
-                    this.conversationList = res.concat(this.conversationList);
+                    this.conversationList.unshift(res);
                 });
             }
         });

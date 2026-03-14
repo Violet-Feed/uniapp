@@ -88,6 +88,7 @@
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js'
 import { getFriendList } from '@/request/action.js';
+import { createConversation } from '@/request/im';
 
 export default {
     data() {
@@ -193,65 +194,31 @@ export default {
         },
 
         async createConversation() {
-            const selectedUserIds = this.userList.filter(user => user.selected).map(user => user.user_id);
-            if(selectedUserIds.length==0){
-                uni.showToast({
-                    title: '请至少选择一位好友',
-                    icon: 'none'
-                });
-                return;
-            }
-            const {
-                token,
-                userId
-            } = getApp().globalData;
-            selectedUserIds.push(userId);
-            const data = {
-                con_type: 2,
-                members: selectedUserIds
-            };
-            const dataJson = JSONbig.stringify(data);
-            let res = await uni.request({
-                url: 'http://127.0.0.1:3000/api/im/create_conversation',
-                method: 'POST',
-                header: {
-                    'content-type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                data: dataJson,
-                dataType: 'string',
+          const selectedUserIds = this.userList
+            .filter(user => user.selected)
+            .map(user => user.user_id);
+          if (selectedUserIds.length === 0) {
+            uni.showToast({
+              title: "请至少选择一位好友",
+              icon: "none"
             });
-            console.log(res);
-            if (res.statusCode === 200) {
-                res = JSONbig.parse(res.data);
-                if (res.code === 1000) {
-                    const {
-                        con_short_id,
-                        con_id,
-                        con_type,
-                        owner_id,
-                        create_time,
-                        member_count
-                    } = res.data.con_core_info;
-                    const user_con_index = Number.MAX_SAFE_INTEGER;
-                    const conValues = `(${con_short_id}, '${con_id}', ${con_type}, '群聊', '/static/conv_avatar.png', '/static/conv_avatar.png', '', ${owner_id}, ${create_time},0,0,0,0, '', '', ${member_count},0,0,0, ${user_con_index}, '', 0)`;
-                    DB.insertConversation(conValues)
-                    .then(()=>{
-                        uni.showToast({
-                            title: '创建成功',
-                            icon: 'success'
-                        });
-                        setTimeout(() => {
-                            uni.redirectTo({
-                                url: `/pages/im/conversation?conId=${con_id}&name=群聊&conType=${con_type}`
-                            });
-                        }, 200);
-                    })
-                    .catch((err) => {
-                        console.error("insertConversation err", err);
-                    })
-                }
-            }
+            return;
+          }
+        
+          const res = await createConversation({
+            members: selectedUserIds
+          });
+          if (!res) return;
+        
+          uni.showToast({
+            title: "创建成功",
+            icon: "success"
+          });
+          setTimeout(() => {
+            uni.redirectTo({
+              url: `/pages/im/conversation?conId=${res.con_id}&name=群聊&conType=${res.con_type}`
+            });
+          }, 200);
         }
     }
 };

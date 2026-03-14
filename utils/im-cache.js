@@ -458,7 +458,7 @@ const rosterQueue = createQueue({
             con_id: conId,
             member_id: uid,
             member_type: 1,
-            nick_name: m.nick_name || "用户",
+            nick_name: m.nick_name || "",
             privilege: m.privilege ?? 0,
             create_time: m.create_time ?? 0,
             status: m.status ?? 0,

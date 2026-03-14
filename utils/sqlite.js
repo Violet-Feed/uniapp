@@ -669,14 +669,14 @@ async function pullUserMembers(conId) {
       mem.con_id,
       CAST(mem.member_id AS TEXT) AS user_id,
       mem.member_type,
-      mem.nick_name,
+
+      COALESCE(NULLIF(mem.nick_name, ''), u.username, '') AS nick_name,
+
       mem.privilege,
       mem.create_time,
       mem.status,
       mem.extra,
-      u.username AS user_name,
       COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri) AS avatar_uri,
-      u.local_avatar_uri,
       u.modify_time
     FROM ${memberTable} mem
     LEFT JOIN ${userTable} u
@@ -703,14 +703,14 @@ async function pullAgentMembers(conId) {
       mem.con_id,
       CAST(mem.member_id AS TEXT) AS agent_id,
       mem.member_type,
-      mem.nick_name,
+
+      COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '') AS nick_name,
+
       mem.privilege,
       mem.create_time,
       mem.status,
       mem.extra,
-      a.agent_name,
       COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri) AS avatar_uri,
-      a.local_avatar_uri,
       a.description,
       CAST(a.owner_id AS TEXT) AS owner_id,
       a.modify_time
@@ -758,17 +758,17 @@ async function getMemberInfosBySenders(conId, senders) {
       CAST(i.sender_id AS TEXT) AS sender_id,
       CAST(mem.con_short_id AS TEXT) AS con_short_id,
       mem.con_id,
-      mem.nick_name,
+
+      CASE
+        WHEN i.sender_type = 1 THEN COALESCE(NULLIF(mem.nick_name, ''), u.username, '')
+        WHEN i.sender_type = 2 THEN COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '')
+        ELSE ''
+      END AS nick_name,
+
       mem.privilege,
       mem.create_time,
       mem.status,
       mem.extra,
-
-      CASE
-        WHEN i.sender_type = 1 THEN u.username
-        WHEN i.sender_type = 2 THEN a.agent_name
-        ELSE ''
-      END AS name,
 
       CASE
         WHEN i.sender_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri)
@@ -976,6 +976,26 @@ async function deleteMessage(msgId) {
   return execSql(sql);
 }
 
+async function deleteMembersByIds(conId, memberType, memberIds) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { memberTable } = getTablesByUser(loginUserId);
+
+  if (!Array.isArray(memberIds) || memberIds.length === 0) return;
+
+  const uniq = Array.from(new Set(memberIds.map(v => String(v))));
+  const inList = uniq.map(v => sqlValue(v)).join(",");
+
+  const sql = `
+    DELETE FROM ${memberTable}
+    WHERE con_id = ${sqlValue(conId)}
+      AND member_type = ${sqlValue(memberType)}
+      AND CAST(member_id AS TEXT) IN (${inList});
+  `;
+  return execSql(sql);
+}
+
 /* ----------------------------- 导出 ----------------------------- */
 
 export default {
@@ -1008,5 +1028,6 @@ export default {
   updateAgentLocalAvatar,
 
   deleteConversation,
-  deleteMessage
+  deleteMessage,
+  deleteMembersByIds
 };

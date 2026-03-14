@@ -5,305 +5,83 @@ import {
 	getUserProfile
 } from '@/request/user.js';
 import { httpRequestBackData, httpRequestBackBool } from '@/request/common.js';
-export const getMessageByUser_old = async() => {
-	const {
-		token,
-		userId
-	} = getApp().globalData;
-	let hasMore=true;
-	while(hasMore==true){
-		hasMore=false;
-		const userConIndex=getApp().globalData.userConIndex;
-		const data = {
-			user_con_index: userConIndex+1,
-			limit: Number.MAX_SAFE_INTEGER,
-		};
-		const dataJson = JSONbig.stringify(data);
-		let res = await uni.request({
-			url: 'http://127.0.0.1:3000/api/im/get_message_by_user',
-			method: 'POST',
-			header: {
-				'content-type': 'application/json',
-				'Authorization': `Bearer ${token}`
-			},
-			data: dataJson,
-			dataType: 'string',
-		});
-		if (res.statusCode === 200) {
-			res = JSONbig.parse(res.data);
-			console.log(res);
-			if (res.code === 1000) {
-				if (res.data.cons.length!=0) {
-					const msgValuesArray = [];
-					const conValuesArray = [];
-					for (const con of res.data.cons) {
-						const conInfo = con.con_info;
-						const msgBodies = con.msg_bodies;
-						for (const msg of msgBodies) {
-							const {
-								user_id,
-								con_short_id,
-								con_id,
-								con_type,
-								client_msg_id,
-								msg_id,
-								msg_type,
-								msg_content,
-								create_time,
-								extra,
-								con_index
-							} = msg;
-							const msgValue =
-								`( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content.replace(/'/g, "''")}', ${create_time}, '${extra.replace(/'/g, "''")}', ${con_index})`;
-							msgValuesArray.push(msgValue);
-						}
-						const last_message=msgBodies[0].msg_content;
-						if (conInfo.con_type === 1) {
-							const parts = conInfo.con_id.split(':');
-							let targetId;
-							if (parts[0] == userId) {
-								targetId = BigInt(parts[1]);
-							} else {
-								targetId = BigInt(parts[0]);
-							}
-							const userProfile = await getUserProfile(targetId,false,false);
-							let targetUsername = userProfile.user_info.username;
-							let targetAvatar = userProfile.user_info.avatar;
-							if (targetAvatar === "") {
-								targetAvatar = "/static/user_avatar.png";
-							} else {
-								// file.download(targetAvatar);
-							}
-							conInfo.con_core_info.name = targetUsername;
-							conInfo.con_core_info.avatar_uri = targetAvatar;
-						} else if(conInfo.con_type === 2){
-							if (conInfo.con_core_info.name === "") {
-								conInfo.con_core_info.name = "群聊";
-							}
-							if (conInfo.con_core_info.avatar_uri === "") {
-								conInfo.con_core_info.avatar_uri = "/static/conv_avatar.png";
-							} else {
-								// file.download(conInfo.avatar_uri);
-							}
-						} else if(conInfo.con_type === 4){
-							conInfo.con_core_info.name = "AI";
-							conInfo.con_core_info.avatar_uri = "/static/ai.png";
-						}
-						const {
-							con_short_id,
-							con_id,
-							con_type,
-							user_con_index,
-							badge_count
-						} = conInfo;
-						const {
-							name,
-							avatar_uri,
-							description,
-							notice,
-							owner_id,
-							create_time,
-							status,
-							extra: coreExtra,
-							member_count
-						} = conInfo.con_core_info;
-						const {
-							min_index,
-							top_time_stamp,
-							push_status,
-							read_index_end,
-							read_badge_count,
-							extra: settingExtra
-						} = conInfo.con_setting_info;
-						const extra = `${coreExtra},${settingExtra}`;
-						const conValue =
-							`(${con_short_id}, '${con_id}', ${con_type}, '${name.replace(/'/g, "''")}', '${avatar_uri}', '${description.replace(/'/g, "''")}', '${notice.replace(/'/g, "''")}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra.replace(/'/g, "''")}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index}, '${last_message.replace(/'/g, "''")}')`;
-						conValuesArray.push(conValue);
-					}
-					const conValues = conValuesArray.join(',');
-					const msgValues = msgValuesArray.join(',');
-					DB.insertConversation(conValues).catch((err) => {
-						console.error("insertConversation err", err);
-					})
-					DB.insertMessage(msgValues).catch((err) => {
-						console.error("insertMessage err", err);
-					})
-					uni.setStorageSync('user_con_index_'+userId, res.data.user_con_index);
-					getApp().globalData.userConIndex = res.data.user_con_index;
-				}
-				hasMore=res.data.has_more;
-			} else {
-				uni.showToast({
-					title: '服务器错误',
-					icon: 'none'
-				})
-			}
-		} else {
-			uni.showToast({
-				title: '网络错误',
-				icon: 'none'
-			});
-		}
-	}
-};
 
+export const getCommandByUser = async () => {
+  const { userId } = getApp().globalData;
+  let hasMore = true;
+  while (hasMore) {
+    hasMore = false;
+    const userCmdIndex = getApp().globalData.userCmdIndex;
+    const res = await httpRequestBackData("/im/get_command_by_user", {
+      user_cmd_index: userCmdIndex + 1,
+      limit: Number.MAX_SAFE_INTEGER
+    });
+    if (!res) return undefined;
 
-export const getCommandByUser = async() => {
-	const {
-		token,
-		userId
-	} = getApp().globalData;
-	let hasMore=true;
-	while(hasMore==true){
-		hasMore=false;
-		const userCmdIndex=getApp().globalData.userCmdIndex;
-		const data = {
-			user_cmd_index: userCmdIndex+1,
-			limit: Number.MAX_SAFE_INTEGER,
-		};
-		const dataJson = JSONbig.stringify(data);
-		let res = await uni.request({
-			url: 'http://127.0.0.1:3000/api/im/get_command_by_user',
-			method: 'POST',
-			header: {
-				'content-type': 'application/json',
-				'Authorization': `Bearer ${token}`
-			},
-			data: dataJson,
-			dataType: 'string',
-		});
-		if (res.statusCode === 200) {
-			res = JSONbig.parse(res.data);
-			console.log(res);
-			if (res.code === 1000) {
-				if (res.data.msg_bodies.length!=0) {
-					for(const msg of res.data.msg_bodies){
-						const cmdMessage=JSONbig.parse(msg.msg_content);
-						if(msg.msg_type==101){
-							const map=new Map();
-							map.set("read_index_end",cmdMessage.read_index_end)
-							map.set("read_badge_count",cmdMessage.read_badge_count)
-							DB.updateConversation(msg.con_short_id,map).catch((err) => {
-								console.log('updateConversation err', err);
-							});
-						}else if(msg.msg_type==102){
-							
-						}
-					}
-					uni.setStorageSync('user_cmd_index_'+userId, res.data.user_cmd_index);
-					getApp().globalData.userCmdIndex = res.data.user_cmd_index;
-				}
-				hasMore=res.data.has_more;
-			} else {
-				uni.showToast({
-					title: '服务器错误',
-					icon: 'none'
-				})
-			}
-		} else {
-			uni.showToast({
-				title: '网络错误',
-				icon: 'none'
-			});
-		}
-	}
+    const msgBodies = res.msg_bodies || [];
+    if (msgBodies.length !== 0) {
+      for (const msg of msgBodies) {
+        const cmdMessage = JSONbig.parse(msg.msg_content);
+        if (msg.msg_type == 101) {
+          const map = new Map();
+          map.set("read_index_end", cmdMessage.read_index_end);
+          map.set("read_badge_count", cmdMessage.read_badge_count);
+          await DB.updateConversation(msg.con_id, map).catch((err) => {
+            console.log("updateConversation err", err);
+          });
+        } else if (msg.msg_type == 102) {
+
+        }
+      }
+      uni.setStorageSync("user_cmd_index_" + userId, res.user_cmd_index);
+      getApp().globalData.userCmdIndex = res.user_cmd_index;
+    }
+    hasMore = !!res.has_more;
+  }
 };
 
 export const getMessageByConversation = async (conShortId, conIndex, limit) => {
-	const {
-		token
-	} = getApp().globalData;
-	const data={
-		con_short_id: BigInt(conShortId),
-		con_index: conIndex,
-		limit: limit,
-	}
-	const dataJson=JSONbig.stringify(data);
-	console.log(dataJson);
-	var res = await uni.request({
-		url: 'http://127.0.0.1:3000/api/im/get_message_by_conversation',
-		method: 'POST',
-		header: {
-			'content-type': 'application/json',
-			'Authorization': `Bearer ${token}`
-		},
-		data: dataJson,
-		dataType: 'string',
-	});
-	if (res.statusCode === 200) {
-		res = JSONbig.parse(res.data);
-		console.log(res);
-		if (res.code === 1000) {
-			const msgBodies = res.data.msg_bodies;
-			const msgValues = msgBodies.map((msg) => {
-				const {
-					sender_id,
-					sender_type,
-					con_short_id,
-					con_id,
-					con_type,
-					client_msg_id,
-					msg_id,
-					msg_type,
-					msg_content,
-					create_time,
-					extra,
-					con_index
-				} = msg;
-				return `(${sender_id}, ${sender_type}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content}', ${create_time}, '${extra}', ${con_index})`;
-			}).join(',');
-			DB.insertMessage(msgValues).catch((err) => {
-				console.error("insertMessage err", err);
-			});
-			return msgBodies;
-		} else {
-			uni.showToast({
-				title: '服务器错误',
-				icon: 'none'
-			})
-		}
-	} else {
-		uni.showToast({
-			title: '网络错误',
-			icon: 'none'
-		});
-	}
+  const res = await httpRequestBackData("/im/get_message_by_conversation", {
+    con_short_id: BigInt(conShortId),
+    con_index: conIndex,
+    limit
+  });
+  if (!res) return undefined;
+
+  const msgBodies = res.msg_bodies || [];
+  if (msgBodies.length === 0) return msgBodies;
+
+  const msgRows = [];
+  for (let i = 0; i < msgBodies.length; i++) {
+    const msg = msgBodies[i];
+    msg.msg_content = await transformContent(msg);
+  
+    msgRows.push({
+      sender_id: msg.sender_id,
+      sender_type: msg.sender_type,
+      con_short_id: msg.con_short_id,
+      con_id: msg.con_id,
+      con_type: msg.con_type,
+      client_msg_id: msg.client_msg_id,
+      msg_id: msg.msg_id,
+      msg_type: msg.msg_type,
+      msg_content: msg.msg_content || "",
+      create_time: msg.create_time,
+      extra: msg.extra || "",
+      con_index: msg.con_index
+    });
+  }
+
+  await DB.insertMessage(msgRows);
+
+  return msgBodies;
 };
 
 export const getConversationInfo = async (conShortId) => {
-	const {
-		token
-	} = getApp().globalData;
 	const data={
 		con_short_id: BigInt(conShortId),
 	}
-	const dataJson=JSONbig.stringify(data);
-	var res = await uni.request({
-		url: 'http://127.0.0.1:3000/api/im/get_conversation_info',
-		method: 'POST',
-		header: {
-			'content-type': 'application/json',
-			'Authorization': `Bearer ${token}`
-		},
-		data: dataJson,
-		dataType: 'string',
-	});
-	if (res.statusCode === 200) {
-		res = JSONbig.parse(res.data);
-		if (res.code === 1000) {
-			return res.data.con_info;
-		} else {
-			uni.showToast({
-				title: '服务器错误',
-				icon: 'none'
-			})
-		}
-	} else {
-		uni.showToast({
-			title: '网络错误',
-			icon: 'none'
-		});
-	}
+	return httpRequestBackData("/im/get_conversation_info",data);
 }
 
 export const getConversationMembers = async (payload) => {
@@ -323,41 +101,12 @@ export const addConversationMembers = async (payload) => {
 };
 
 export const markRead = async (conShortId, readIndex, readCount) => {
-	const {
-		token
-	} = getApp().globalData;
 	const data={
 		con_short_id: BigInt(conShortId),
 		read_con_index: readIndex,
 		read_badge_count: readCount,
 	}
-	const dataJson=JSONbig.stringify(data);
-	var res = await uni.request({
-		url: 'http://127.0.0.1:3000/api/im/mark_read',
-		method: 'POST',
-		header: {
-			'content-type': 'application/json',
-			'Authorization': `Bearer ${token}`
-		},
-		data: dataJson,
-		dataType: 'string',
-	});
-	if (res.statusCode === 200) {
-		res = JSONbig.parse(res.data);
-		if (res.code === 1000) {
-
-		} else {
-			uni.showToast({
-				title: '服务器错误',
-				icon: 'none'
-			})
-		}
-	} else {
-		uni.showToast({
-			title: '网络错误',
-			icon: 'none'
-		});
-	}
+	return httpRequestBackBool("/im/mark_read",data);
 };
 
 export const getNoitceCount = async (payload) => {
@@ -478,7 +227,7 @@ export const getMessageByUser = async () => {
           client_msg_id: msg.client_msg_id,
           msg_id: msg.msg_id,
           msg_type: msg.msg_type,
-          msg_content: msg.msg_content || "",
+          msg_content: (await transformContent(msg)) || "",
           create_time: msg.create_time,
           extra: msg.extra || "",
           con_index: msg.con_index
@@ -525,3 +274,109 @@ export const getMessageByUser = async () => {
     enqueueGroupRosters(groupConIds);
   }
 };
+
+export const createConversation = async (payload) => {
+  const { userId } = getApp().globalData;
+  const members = [...payload.members, userId];
+  const res = await httpRequestBackData("/im/create_conversation", {
+    con_type: 2,
+    members
+  });
+  if (!res) return undefined;
+
+  const {
+    con_short_id,
+    con_id,
+    con_type,
+    owner_id,
+    create_time,
+    member_count
+  } = res.con_core_info;
+  const userConIndex = Number.MAX_SAFE_INTEGER;
+  await DB.insertConversation([{
+    con_short_id,
+    con_id,
+    con_type,
+    name: "群聊",
+    avatar_uri: "/static/conv_avatar.png",
+    local_avatar_uri: "/static/conv_avatar.png",
+    description: "",
+    owner_id,
+    create_time,
+    status: 0,
+    min_index: 0,
+    top_timestamp: 0,
+    push_status: 0,
+    core_extra: "",
+    setting_extra: "",
+    member_count,
+    badge_count: 0,
+    read_index_end: 0,
+    read_badge_count: 0,
+    user_con_index: userConIndex,
+    last_message: "",
+    peer_id: 0
+  }]);
+  return {
+    con_short_id,
+    con_id,
+    con_type
+  };
+};
+
+export const transformContent = async (message) => {
+	if(message.msg_type!=100) return message.msg_content;
+	try {
+		const data = JSONbig.parse(message.msg_content);
+		const senders = [];
+		if (data.operator !== undefined && data.operator !== null && String(data.operator) !== '') {
+			senders.push({
+				sender_type: 1,
+				sender_id: data.operator
+			});
+		}
+		if (Array.isArray(data.content)) {
+			for (const senderId of data.content) {
+				if (senderId === undefined || senderId === null || String(senderId) === '') continue;
+				senders.push({
+					sender_type: 1,
+					sender_id: senderId
+				});
+			}
+		}
+		const nameMap = new Map();
+		if (senders.length > 0) {
+			const infos = await DB.getMemberInfosBySenders(message.con_id, senders);
+			if (Array.isArray(infos)) {
+				for (const info of infos) {
+					nameMap.set(String(info.sender_id), info.nick_name || '');
+				}
+			}
+		}
+		const operator = nameMap.get(String(data.operator)) || '用户';
+		switch (data.type) {
+			case 1:
+				if (Array.isArray(data.content) && data.content.length > 0) {
+					const memberNames = data.content.map(id => nameMap.get(String(id)) || '用户');
+					return `${operator} 邀请 ${memberNames.join('、')} 加入了群聊`;
+				}
+				return `${operator} 加入了群聊`;
+			case 2:
+				if (Array.isArray(data.content) && data.content.length > 0) {
+					const memberNames = data.content.map(id => nameMap.get(String(id)) || '用户');
+					return `${operator} 将 ${memberNames.join('、')} 移出了群聊`;
+				}
+				return `${operator} 退出了群聊`;
+			case 3:
+				return `${operator} 修改群名为 "${data.content}"`;
+			case 4:
+				return `${operator} 修改群资料为 "${data.content}"`;
+			default:
+				console.warn('未知的群聊消息类型:', data.type);
+				return message.msg_content;
+		}
+	} catch (e) {
+		console.error('解析群聊消息失败:', e, message.msg_content);
+		return message.msg_content;
+	}
+}

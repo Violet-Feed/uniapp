@@ -4,13 +4,14 @@ import {
 	encodePacketType,
 	encodeConnectPacket,
 	decodeConnectPacket,
-	decodeNormalPacket,
-	decodeCommandPacket,
+	decodeMessagePacket,
 	decodeMaterialPacket,
 	decodeNoticePacket
 } from '@/proto_gen/packet.js';
 import {
-	getConversationInfo
+	getConversationInfo,
+	getConversationMembers,
+	transformContent
 } from '@/request/im.js'
 import {
   ensureUsersCached,
@@ -77,14 +78,10 @@ class Socket {
 					}
 					if (packetType == encodePacketType.Heartbeat) {
 
-					} else if (packetType == encodePacketType.Normal) {
-						const data = decodeNormalPacket(dataByte);
+					} else if (packetType == encodePacketType.Message) {
+						const data = decodeMessagePacket(dataByte);
 						console.log(JSONbig.stringify(data));
-						this.handleNormalPacket(data);
-					} else if (packetType == encodePacketType.Command) {
-						const data = decodeCommandPacket(dataByte);
-						console.log(JSONbig.stringify(data));
-						this.handleCommandPacket(data);
+						this.handleMessagePacket(data);
 					} else if (packetType == encodePacketType.Material) {
 						const data = decodeMaterialPacket(dataByte);
 						console.log(JSONbig.stringify(data));
@@ -175,101 +172,16 @@ class Socket {
 		};
 	}
 	
-	handleNormalPacket_old(data){
-		if(data.pre_user_con_index==undefined){
-			data.pre_user_con_index=0;
+	handleMessagePacket = async (data) => {
+		const msgType=data.msg_body.msg_type;
+		if(msgType==undefined||msgType==0) return;
+		if(msgType>=100) await this.handleCommandPacket(data);
+		if(msgType==100){
+			data.msg_body.msg_content=await transformContent(data.msg_body);
 		}
-		if(data.badge_count==undefined){
-			data.badge_count=0;
-		}
-		if(data.msg_body.extra==undefined){
-			data.msg_body.extra=''
-		}
-		if (data.pre_user_con_index != getApp().globalData.userConIndex) {
-			console.error("TODO:getByUser")
-		}
-		uni.setStorageSync('user_con_index_'+this.userId, Number(data.user_con_index));
-		getApp().globalData.userConIndex = data.user_con_index;
-		DB.getConversationById(data.msg_body.con_id).then((res) => {
-			if (res.length > 0) {
-				const map=new Map();
-				map.set("badge_count",data.badge_count);
-				map.set("user_con_index",data.user_con_index);
-				map.set("last_message",data.msg_body.msg_content);
-				DB.updateConversation(data.msg_body.con_short_id, map)
-				.then(()=>{
-					uni.$emit('normal', data);
-				})
-				.catch((err) => {
-					console.log('updateConversation err', err);
-				});
-			} else {
-				getConversationInfo(data.msg_body.con_short_id)
-				.then((conInfo)=>{
-					const {
-						con_short_id,
-						con_id,
-						con_type,
-						user_con_index,
-						badge_count
-					} = conInfo;
-					const {
-						name,
-						avatar_uri,
-						description,
-						notice,
-						owner_id,
-						create_time,
-						status,
-						extra: coreExtra,
-						member_count
-					} = conInfo.con_core_info;
-					const {
-						min_index,
-						top_time_stamp,
-						push_status,
-						read_index_end,
-						read_badge_count,
-						extra: settingExtra
-					} = conInfo.con_setting_info;
-					const extra = `${coreExtra},${settingExtra}`;
-					const conValue =
-						`(${con_short_id}, '${con_id}', ${con_type}, '${name.replace(/'/g, "''")}', '${avatar_uri}', '${description.replace(/'/g, "''")}', '${notice.replace(/'/g, "''")}', ${owner_id}, ${create_time}, ${status}, ${min_index}, ${top_time_stamp}, ${push_status}, '${extra.replace(/'/g, "''")}', ${member_count}, ${badge_count}, ${read_index_end}, ${read_badge_count}, ${user_con_index}, '${data.msg_body.msg_content.replace(/'/g, "''")}')`;
-					DB.insertConversation(conValue)
-					.then(()=>{
-						uni.$emit('normal', data);
-					})
-					.catch((err) => {
-						console.log('insertConversation err', err);
-					})
-				})
-			}
-		})
-		const {
-			user_id,
-			con_short_id,
-			con_id,
-			con_type,
-			client_msg_id,
-			msg_id,
-			msg_type,
-			msg_content,
-			create_time,
-			extra,
-			con_index
-		} = data.msg_body;
-		const msgValue =
-			`( ${user_id}, ${con_short_id}, '${con_id}', ${con_type}, ${client_msg_id}, ${msg_id}, ${msg_type}, '${msg_content.replace(/'/g, "''")}', ${create_time}, '${extra.replace(/'/g, "''")}', ${con_index})`;
-		DB.insertMessage(msgValue).catch((err) => {
-			console.log('insertMessage err', err);
-		});
-		if(data.msg_body.msg_type==5){
-			//TODO:插入成员表/修改会话表
-		}
+		if(msgType<=100) await this.handleNormalPacket(data);
 	}
 
-
-	// ------------------------ socket: handleNormalPacket_new ------------------------
 	handleNormalPacket = async (data) => {
 	  try {
 		if (data.pre_user_con_index === undefined) data.pre_user_con_index = 0;
@@ -313,7 +225,8 @@ class Socket {
 		  await DB.updateConversation(m.con_id, map);
 		  uni.$emit("normal", data);
 		} else {
-		  const conInfo = await getConversationInfo(m.con_short_id);
+		  const res = await getConversationInfo(m.con_short_id);
+		  const conInfo = res.con_info;
 		  if (!conInfo) return;
 
 		  let peerId = null;
@@ -353,12 +266,11 @@ class Socket {
 
 		  const core = conInfo.con_core_info || {};
 		  const setting = conInfo.con_setting_info || {};
-
 		  await DB.insertConversation([{
 			con_short_id: conInfo.con_short_id,
 			con_id: conInfo.con_id,
 			con_type: conInfo.con_type,
-			name: core.name || "",
+			name: core.name || "群聊",
 			avatar_uri: core.avatar_uri || "",
 			local_avatar_uri: "",
 			description: core.description || "",
@@ -374,41 +286,143 @@ class Socket {
 			badge_count: data.badge_count,
 			read_index_end: setting.read_index_end ?? 0,
 			read_badge_count: setting.read_badge_count ?? 0,
-			user_con_index: Number(conInfo.user_con_index ?? newUserConIndex),
+			user_con_index: newUserConIndex,
 			last_message: m.msg_content || "",
 			peer_id: peerId
 		  }]);
 
 		  uni.$emit("normal", data);
 		}
-
-		if (m.msg_type == 100) {
-		  // TODO
-		}
 	  } catch (err) {
-		console.error("handleNormalPacket_new failed:", err, data);
+		console.error("handleNormalPacket failed:", err, data);
 	  }
 	};
 	
-	handleCommandPacket(data){
-		if (data.user_cmd_index-1n != getApp().globalData.userCmdIndex) {
-			console.error("TODO:getByUser")
-		}
-		uni.setStorageSync('user_cmd_index_'+this.userId, Number(data.user_cmd_index));
-		getApp().globalData.userCmdIndex = data.user_cmd_index;
-		uni.$emit('command', data);
-		const cmdMessage=JSONbig.parse(data.msg_body.msg_content);
-		if(data.msg_body.msg_type==101){
-			const map=new Map();
-			map.set("read_index_end",cmdMessage.read_index_end)
-			map.set("read_badge_count",cmdMessage.read_badge_count)
-			DB.updateConversation(data.msg_body.con_short_id,map).catch((err) => {
-				console.log('updateConversation err', err);
-			});
-		}else if(data.msg_body.msg_type==102){
-			
-		}
-	}
+	handleCommandPacket = async (data) => {
+	  try {
+	    if (data.user_cmd_index - 1n != getApp().globalData.userCmdIndex) {
+	      console.error("TODO:getByUser");
+	    }
+	    uni.setStorageSync("user_cmd_index_" + this.userId, Number(data.user_cmd_index));
+	    getApp().globalData.userCmdIndex = data.user_cmd_index;
+	    uni.$emit("command", data);
+	    const msg = data.msg_body;
+	    const conId = msg.con_id;
+	    const conShortId = msg.con_short_id;
+	    if (msg.msg_type == 100) {
+		  const cmdMessage = JSONbig.parse(msg.msg_content);
+	      switch (cmdMessage.type) {
+	        case 1: {
+	          const addedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
+	          if (addedIds.length === 0) break;
+	          const senderInputs = addedIds.map(id => ({
+	            sender_type: 1,
+	            sender_id: id
+	          }));
+	          const existedMembers = await DB.getMemberInfosBySenders(conId, senderInputs);
+	          const existedSet = new Set(
+	            (existedMembers || [])
+	              .filter(row => row.con_id)
+	              .map(row => row.sender_id.toString())
+	          );
+	          const memberResp = await getConversationMembers({ conShortId });
+	          if (memberResp) {
+	            const members = Array.isArray(memberResp)
+	              ? memberResp
+	              : (memberResp.members || memberResp.list || []);
+	            if (Array.isArray(members) && members.length > 0) {
+	              const addedSet = new Set(addedIds.map(id => id.toString()));
+	              const targetMembers = members.filter(m =>
+	                m &&
+	                m.user_id !== null &&
+	                m.user_id !== undefined &&
+	                addedSet.has(m.user_id.toString()) &&
+	                !existedSet.has(m.user_id.toString())
+	              );
+	              if (targetMembers.length > 0) {
+	                const targetUserIds = targetMembers.map(m => m.user_id);
+	                const oldUsers = await DB.getUsersByIds(targetUserIds);
+	                const oldUserSet = new Set((oldUsers || []).map(u => u.user_id.toString()));
+	                const memberRows = [];
+	                const userRows = [];
+	                const now = Date.now();
+	                for (const m of targetMembers) {
+	                  const uid = m.user_id;
+	                  memberRows.push({
+	                    con_short_id: conShortId,
+	                    con_id: conId,
+	                    member_id: uid,
+	                    member_type: 1,
+	                    nick_name: m.nick_name || "",
+	                    privilege: m.privilege ?? 0,
+	                    create_time: m.create_time ?? 0,
+	                    status: m.status ?? 0,
+	                    extra: m.extra || ""
+	                  });
+	                  if (!oldUserSet.has(uid.toString())) {
+	                    userRows.push({
+	                      user_id: uid,
+	                      username: m.username || "用户",
+	                      avatar_uri: m.avatar || "/static/user_avatar.png",
+	                      local_avatar_uri: "",
+	                      modify_time: now
+	                    });
+	                  }
+	                }
+	                if (memberRows.length > 0) {
+	                  await DB.upsertMembers(memberRows);
+	                }
+	                if (userRows.length > 0) {
+	                  await DB.upsertUsers(userRows);
+	                }
+	              }
+	            }
+	          }
+	          const memberCount = await DB.getMemberCount(conId);
+	          const map = new Map();
+	          map.set("member_count", memberCount);
+	          await DB.updateConversation(conId, map);
+	          break;
+	        }
+	
+	        case 2: {
+	          const removedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
+	          if (removedIds.length === 0) break;
+	          await DB.deleteMembersByIds(conId, 1, removedIds);
+	          const memberCount = await DB.getMemberCount(conId);
+	          const map = new Map();
+	          map.set("member_count", memberCount);
+	          await DB.updateConversation(conId, map);
+	          break;
+	        }
+	        case 3: {
+	          const map = new Map();
+	          map.set("name", cmdMessage.content || "群聊");
+	          await DB.updateConversation(conId, map);
+	          break;
+	        }
+	        case 4: {
+	          const map = new Map();
+	          map.set("description", cmdMessage.content || "");
+	          await DB.updateConversation(conId, map);
+	          break;
+	        }
+	        default:
+	          console.warn("未知的群聊命令类型:", cmdMessage.type);
+	          break;
+	      }
+	    } else if (msg.msg_type == 101) {
+	      const map = new Map();
+	      map.set("read_index_end", cmdMessage.read_index_end);
+	      map.set("read_badge_count", cmdMessage.read_badge_count);
+	      await DB.updateConversation(conId, map);
+	    } else if (msg.msg_type == 102) {
+	
+	    }
+	  } catch (err) {
+	    console.error("handleCommandPacket failed:", err, data);
+	  }
+	};
 	
 	handleMaterialPacket(data){
 		uni.$emit('material', data);
