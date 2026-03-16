@@ -138,18 +138,19 @@ export const markNoticeRead = async (payload) => {
 	};
 	return httpRequestBackBool("/notice/mark_notice_read",data);
 };
-
-export const getAgentByIds = async (payload) => {
+export const addConversationAgents = async (payload) => {
 	const data = {
+		con_short_id: payload.conShortId,
+		con_id: payload.conId,
 		agent_ids: payload.agentIds
 	};
-	return httpRequestBackBool("/im/get_agent_by_ids",data);
+	return httpRequestBackBool("/im/add_conversation_agents",data);
 };
 export const getConversationAgents = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId
 	};
-	return httpRequestBackBool("/im/get_conversation_agents",data);
+	return httpRequestBackData("/im/get_conversation_agents",data);
 };
 import {
   ensureUsersCached,

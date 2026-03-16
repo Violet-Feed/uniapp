@@ -83,7 +83,7 @@ export const httpRequestBackBool = async (url, data) => {
 	return false;
 }
 
-export const uploadImage = async (filePath, type, name) => {
+export const uploadImage = async (filePath, type) => {
 	const token = getApp().globalData.token;
 	console.log('upload',filePath, type);
 	return new Promise((resolve) => {
@@ -95,8 +95,7 @@ export const uploadImage = async (filePath, type, name) => {
 				'Authorization': `Bearer ${token}`,
 			},
 			formData: {
-				type: type,
-				name: name
+				type: type
 			},
 			success: (res) => {
 				if (res.statusCode === 200) {

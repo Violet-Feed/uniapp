@@ -16,9 +16,9 @@ import DB from "@/utils/sqlite.js";
 import { getUserInfos } from "@/request/user";
 import {
   getConversationMembers,
-  getAgentByIds,
   getConversationAgents
 } from "@/request/im.js";
+import { getAgentsByIds } from "@/request/agent";
 
 const AVATAR_DIR = "_doc/avatar/";
 

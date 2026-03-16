@@ -181,7 +181,7 @@ export default {
 
 		goToAddMember() {
 			uni.navigateTo({
-				url: `/pages/group/add_member?conId=${this.conId}&conType=${this.conType}`
+				url: `/pages/im/add_member?conId=${this.conId}&conShortId=${this.conShortId}`
 			});
 		},
 
@@ -253,13 +253,13 @@ export default {
 
 		goToAiMember() {
 			uni.navigateTo({
-				url: `/pages/group/ai_member?conId=${this.conId}&conType=${this.conType}`
+				url: `/pages/agent/agent_member?conId=${this.conId}&conShortId=${this.conShortId}`
 			});
 		},
 
 		goToSearchMessages() {
 			uni.navigateTo({
-				url: `/pages/chat/search_messages?conId=${this.conId}&conType=${this.conType}`
+				url: `/pages/im/search_messages?conId=${this.conId}&conType=${this.conType}`
 			});
 		},
 

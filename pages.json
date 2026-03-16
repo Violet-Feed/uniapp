@@ -69,10 +69,28 @@
 			}
 		},
 		{
+			"path": "pages/im/add_member",
+			"style": {
+				"navigationBarTitleText": "添加成员"
+			}
+		},
+		{
 			"path" : "pages/im/create",
 			"style" : 
 			{
 				"navigationBarTitleText" : "创建群聊"
+			}
+		},
+		{
+			"path": "pages/agent/agent_member",
+			"style": {
+				"navigationBarTitleText": "智能体成员"
+			}
+		},
+		{
+			"path": "pages/agent/add_agent_member",
+			"style": {
+				"navigationBarTitleText": "添加智能体成员"
 			}
 		},
 		{
@@ -88,9 +106,22 @@
 			}
 		},
 		{
-			"path": "pages/im/agent",
+			"path": "pages/agent/agent_list",
 			"style": {
 				"navigationBarTitleText": "管理智能体"
+			}
+		},
+		{
+			"path": "pages/agent/agent_detail",
+			"style": {
+				"navigationBarTitleText": "智能体详情"
+			}
+		},
+		{
+			"path": "pages/agent/agent_create",
+			"style": {
+				"navigationBarTitleText": "创建智能体",
+				"enablePullDownRefresh": false
 			}
 		},
 		{

@@ -228,7 +228,7 @@ export default {
 
         goToAgentPage() {
             this.showDropdown = false;
-            uni.navigateTo({ url: '/pages/im/agent' });
+            uni.navigateTo({ url: '/pages/agent/agent_list' });
         },
 
         openChat(conversation) {

@@ -366,7 +366,7 @@ export default {
           uni.showLoading({ title: '上传中...' })
           try {
             // 这里的 '/file/upload' 要和后端控制器路径对应
-            const uploadRes = await uploadImage(localPath, 'material_source', '')
+            const uploadRes = await uploadImage(localPath, 'material_source')
             if (!uploadRes || !uploadRes.source_url) {
               this.uploadedImage = ''
               uni.showToast({
