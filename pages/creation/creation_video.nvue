@@ -803,6 +803,13 @@ export default {
     goToUserPage(userId) {
       const targetId = userId || this.creation.author.user_id
       if (!targetId) return
+	  const currentUserId = getApp().globalData.userId;
+	  if (String(targetId) === String(currentUserId)) {
+	  	uni.navigateTo({
+	  		url: '/pages/user/my_profile_copy'
+	  	});
+	  	return;
+	  }
       uni.navigateTo({
         url: `/pages/user/user_profile?userId=${targetId}`
       })

@@ -200,7 +200,7 @@ export default {
 
 			const me = String(getApp().globalData.userId || '')
 			if (me && uid === me) {
-				uni.navigateTo({ url: '/pages/user/my_profile' })
+				uni.navigateTo({ url: '/pages/user/my_profile_copy' })
 				return
 			}
 

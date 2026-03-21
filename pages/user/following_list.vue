@@ -205,7 +205,7 @@ export default {
       // 若点击自己，跳转我的主页
       const me = String(getApp().globalData.userId || '')
       if (me && uid === me) {
-        uni.navigateTo({ url: '/pages/user/my_profile' })
+        uni.navigateTo({ url: '/pages/user/my_profile_copy' })
         return
       }
 

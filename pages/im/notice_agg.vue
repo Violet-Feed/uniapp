@@ -210,6 +210,13 @@ export default {
     goToUser(userId) {
       const uid = encodeURIComponent(String(userId || ''))
       if (!uid) return
+	  const currentUserId = getApp().globalData.userId;
+	  if (String(uid) === String(currentUserId)) {
+	  	uni.navigateTo({
+	  		url: '/pages/user/my_profile_copy'
+	  	});
+	  	return;
+	  }
       uni.navigateTo({
         url: `/pages/user/user_profile?userId=${uid}`
       })
