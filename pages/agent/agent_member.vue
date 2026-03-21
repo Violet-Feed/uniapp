@@ -57,7 +57,6 @@ export default {
 	data() {
 		return {
 			conId: '',
-			conShortId: '',
 			agents: [],
 			loading: false,
 			firstShowDone: false,
@@ -65,9 +64,7 @@ export default {
 		};
 	},
 	onLoad(option) {
-		this.conId = option?.conId ? decodeURIComponent(option.conId) : '';
-		this.conShortId = option?.conShortId ? decodeURIComponent(option.conShortId) : '';
-
+		this.conId = option?.conId ? option.conId : '';
 		if (!this.conId) {
 			uni.navigateBack();
 			return;
@@ -121,7 +118,7 @@ export default {
 
 		goAddAgentMember() {
 			uni.navigateTo({
-				url: `/pages/agent/add_agent_member?conId=${encodeURIComponent(this.conId)}&conShortId=${encodeURIComponent(this.conShortId)}`
+				url: `/pages/agent/add_agent_member?conId=${this.conId}`
 			});
 		},
 

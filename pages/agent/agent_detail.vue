@@ -5,9 +5,7 @@
 				<text class="nav-action">返回</text>
 			</view>
 			<view class="nav-title">智能体详情</view>
-			<view class="nav-right" @click="editDetail">
-				<text class="nav-action nav-action-primary">编辑</text>
-			</view>
+			<view class="nav-right"></view>
 		</view>
 
 		<view class="page-body">
@@ -29,6 +27,12 @@
 					<view class="profile-main">
 						<text class="agent-name">{{ agent.agent_name || '未命名智能体' }}</text>
 						<text class="agent-time">创建时间：{{ formatTime(agent.create_time) }}</text>
+					</view>
+				</view>
+
+				<view class="action-card">
+					<view class="primary-btn" @click="goPrivateChat">
+						<text class="primary-btn-text">私聊</text>
 					</view>
 				</view>
 
@@ -142,17 +146,24 @@ export default {
 			this.loading = false;
 			uni.stopPullDownRefresh();
 		},
-		
-		async editDetail() {
-			
-		},
 
 		getCurrentUserId() {
 			const globalData = getApp().globalData || {};
-			return String(
-				globalData.userId ||
-				''
-			);
+			return String(globalData.userId || '');
+		},
+
+		goPrivateChat() {
+			const currentUserId = this.getCurrentUserId();
+			const agentId = this.agent?.agent_id ? String(this.agent.agent_id) : '';
+			const agentName = this.agent?.agent_name || '';
+
+			if (!currentUserId || !agentId) return;
+
+			const conId = `ai:${currentUserId}:${agentId}`;
+
+			uni.navigateTo({
+				url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=4&name=${agentName}`
+			});
 		},
 
 		goOwnerProfile() {
@@ -238,16 +249,12 @@ export default {
 	color: #4e5969;
 }
 
-.nav-action-primary {
-	color: #4f7cff;
-	font-weight: 600;
-}
-
 .page-body {
 	padding: 24rpx;
 }
 
 .profile-card,
+.action-card,
 .section-card {
 	background: #ffffff;
 	border-radius: 20rpx;
@@ -289,6 +296,21 @@ export default {
 	font-size: 24rpx;
 	line-height: 1.6;
 	color: #7a8599;
+}
+
+.primary-btn {
+	height: 88rpx;
+	border-radius: 18rpx;
+	background: #4f7cff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.primary-btn-text {
+	font-size: 30rpx;
+	font-weight: 600;
+	color: #ffffff;
 }
 
 .section-title {

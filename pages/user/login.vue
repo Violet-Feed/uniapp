@@ -74,7 +74,6 @@
 
 <script>
 import JSONbig from 'json-bigint';
-import file from '@/utils/file.js';
 import DB from '@/utils/sqlite.js';
 import { init } from '@/utils/init.js';
 import { login } from '@/request/user.js';

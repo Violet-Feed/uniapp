@@ -77,7 +77,7 @@ export default {
 	data() {
 		return {
 			conId: '',
-			conShortId: '',
+			conShortId: 0,
 			agents: [],
 			page: 1,
 			loading: false,
@@ -89,15 +89,20 @@ export default {
 			defaultAvatar: '/static/ai.png'
 		};
 	},
-	onLoad(option) {
-		this.conId = option?.conId ? decodeURIComponent(option.conId) : '';
-		this.conShortId = option?.conShortId ? decodeURIComponent(option.conShortId) : '';
-
-		if (!this.conId || !this.conShortId) {
+	async onLoad(option) {
+		this.conId = option?.conId ? option.conId : '';
+		if (!this.conId) {
 			uni.navigateBack();
 			return;
 		}
-
+		let res = await DB.getConversationById(this.conId);
+		const conversation = Array.isArray(res) ? res[0] : res;
+		if (conversation) {
+			this.conShortId = conversation.con_short_id;
+		} else {
+			uni.navigateBack();
+			return;
+		}
 		this.refreshList();
 	},
 	onPullDownRefresh() {
@@ -237,7 +242,6 @@ export default {
 			}
 
 			this.submitting = true;
-
 			const res = await addConversationAgents({
 				conShortId: this.conShortId,
 				conId: this.conId,

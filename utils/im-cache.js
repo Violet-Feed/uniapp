@@ -90,12 +90,23 @@ async function ensureAvatarDirOnce() {
 
 async function downloadPng(id, url, prefix = "") {
   await ensureAvatarDirOnce();
-  const filePath = `${AVATAR_DIR}${prefix}${safeFileId(id)}.png`;
-  try {
-    const dl = await uni.downloadFile({ url, filePath });
-    if (dl.statusCode === 200) return filePath;
-  } catch (_) {}
-  return "";
+  return new Promise((resolve) => {
+      const target = `${AVATAR_DIR}${prefix}${safeFileId(id)}.png`;
+      const task = plus.downloader.createDownload(
+        url,
+        { filename: target },
+        (d, status) => {
+          if (status === 200) {
+            console.log("download avatar success:", d.filename);
+            resolve(d.filename); // 这里才是真正落盘后的路径
+          } else {
+            console.error("download avatar failed, status =", status);
+            resolve("");
+          }
+        }
+      );
+      task.start();
+    });
 }
 
 /* ------------------------------ avatarQueue：统一处理 user / agent / conv 头像 ------------------------------ */
@@ -166,6 +177,8 @@ const avatarQueue = createQueue({
         }
         return;
       }
+	  
+	  if (avatarUri == oldLocal) return;
 
       const localPath = await downloadPng(task.id, avatarUri, "conv_");
       if (localPath) {
@@ -238,7 +251,7 @@ export async function ensureAgentsCached(agentIds) {
   }
   if (missing.length === 0) return;
 
-  const resp = await getAgentByIds({ agentIds: missing });
+  const resp = await getAgentsByIds({ agentIds: missing });
   if (!resp) return;
 
   const infos = normalizeAgentList(resp);
@@ -362,7 +375,7 @@ const profileRefreshQueue = createQueue({
 
       if (refreshIds.length === 0) return;
 
-      const resp = await getAgentByIds({ agentIds: refreshIds });
+      const resp = await getAgentsByIds({ agentIds: refreshIds });
       if (!resp) return;
 
       const infos = normalizeAgentList(resp);

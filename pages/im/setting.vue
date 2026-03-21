@@ -253,7 +253,7 @@ export default {
 
 		goToAiMember() {
 			uni.navigateTo({
-				url: `/pages/agent/agent_member?conId=${this.conId}&conShortId=${this.conShortId}`
+				url: `/pages/agent/agent_member?conId=${this.conId}`
 			});
 		},
 

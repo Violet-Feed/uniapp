@@ -83,7 +83,7 @@
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-import { getMessageByConversation } from '@/request/im.js';
+import { sendMessage, getMessageByConversation } from '@/request/im.js';
 
 export default {
     data() {
@@ -304,93 +304,75 @@ export default {
             const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
             const sendingText = this.inputText;
 
-            const data = {
-                con_short_id: BigInt(this.conversation.con_short_id),
-                con_id: this.conversation.con_id,
-                con_type: this.conversation.con_type,
-                client_msg_id: clientMsgId,
-                msg_type: 1,
-                msg_content: sendingText
+            const payload = {
+                conShortId: BigInt(this.conversation.con_short_id),
+                conId: this.conversation.con_id,
+                conType: this.conversation.con_type,
+                clientMsgId: clientMsgId,
+                msgType: 1,
+                msgContent: sendingText
             };
+            let res = await sendMessage(payload);
+			if (res) {
+				const selfKey = `1:${String(this.userId)}`;
+				let selfInfo = this.senderInfoMap.get(selfKey) || {};
+				if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
+					try {
+						const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, [{ sender_type: 1, sender_id: this.userId }]);
+						if (Array.isArray(infos) && infos.length > 0) {
+							selfInfo = {
+								nick_name: infos[0].nick_name || '',
+								avatar_uri: infos[0].avatar_uri || ''
+							};
+							this.senderInfoMap.set(selfKey, selfInfo);
+						}
+					} catch (err) {
+						console.error('get self member info failed:', err);
+					}
+				}
+				const optimisticMessage = {
+					sender_id: this.userId,
+					sender_type: 1,
+					con_short_id: this.conversation.con_short_id,
+					con_id: this.conversation.con_id,
+					con_type: this.conversation.con_type,
+					client_msg_id: clientMsgId,
+					msg_id: res.msg_id,
+					msg_type: 1,
+					msg_content: sendingText,
+					create_time: Date.now() / 1000,
+					status: -1,
+					nick_name: selfInfo.nick_name || '',
+					avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
+				};
+				this.senderInfoMap.set(selfKey, {
+					nick_name: optimisticMessage.nick_name || '',
+					avatar_uri: optimisticMessage.avatar_uri || ''
+				});
+				if (this.messages.length === 0 || this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0) {
+					this.messages.push(optimisticMessage);
+				}
 
-            const dataJson = JSONbig.stringify(data);
-            let res = await uni.request({
-                url: 'http://127.0.0.1:3000/api/im/send_message',
-                method: 'POST',
-                header: {
-                    'content-type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                data: dataJson,
-                dataType: 'string'
-            });
-
-            if (res.statusCode === 200) {
-                res = JSONbig.parse(res.data);
-                if (res.code === 1000) {
-                    const selfKey = `1:${String(this.userId)}`;
-                    let selfInfo = this.senderInfoMap.get(selfKey) || {};
-
-                    if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
-                        try {
-                            const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, [{ sender_type: 1, sender_id: this.userId }]);
-                            if (Array.isArray(infos) && infos.length > 0) {
-                                selfInfo = {
-                                    nick_name: infos[0].nick_name || '',
-                                    avatar_uri: infos[0].avatar_uri || ''
-                                };
-                                this.senderInfoMap.set(selfKey, selfInfo);
-                            }
-                        } catch (err) {
-                            console.error('get self member info failed:', err);
-                        }
-                    }
-
-                    const optimisticMessage = {
-                        sender_id: this.userId,
-                        sender_type: 1,
-                        con_short_id: this.conversation.con_short_id,
-                        con_id: this.conversation.con_id,
-                        con_type: this.conversation.con_type,
-                        client_msg_id: clientMsgId,
-                        msg_id: res.data.msg_id,
-                        msg_type: 1,
-                        msg_content: sendingText,
-                        create_time: Date.now() / 1000,
-                        status: -1,
-                        nick_name: selfInfo.nick_name || '',
-                        avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
-                    };
-
-                    this.senderInfoMap.set(selfKey, {
-                        nick_name: optimisticMessage.nick_name || '',
-                        avatar_uri: optimisticMessage.avatar_uri || ''
-                    });
-
-                    if (this.messages.length === 0 || this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0) {
-                        this.messages.push(optimisticMessage);
-                    }
-
-                    this.inputText = '';
-                    this.scrollToBottom();
-                } else {
-                    uni.showToast({ title: '服务器错误', icon: 'none' });
-                }
-            } else {
-                uni.showToast({ title: '网络错误', icon: 'none' });
-            }
+				this.inputText = '';
+				this.scrollToBottom();
+			}
         },
 
         goToUserProfile(message) {
-            if (Number(message.sender_type) !== 1) return;
-            if (String(message.sender_id) === String(this.userId)) {
-                uni.navigateTo({
-                    url: '/pages/user/my_profile_copy'
-                });
-                return;
-            }
+            if (Number(message.sender_type) == 1) {
+				if (String(message.sender_id) === String(this.userId)) {
+				    uni.navigateTo({
+				        url: '/pages/user/my_profile_copy'
+				    });
+				    return;
+				}
+				uni.navigateTo({
+				    url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
+				});
+				return;
+			}
             uni.navigateTo({
-                url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
+                url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(message.sender_id)}`
             });
         },
 

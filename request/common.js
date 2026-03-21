@@ -2,7 +2,7 @@ import JSONbig from 'json-bigint';
 export const httpRequestBackData = async (url, data) => {
 	const token = getApp().globalData.token;
 	const dataJson = JSONbig.stringify(data);
-	console.log(url,dataJson);
+	console.log(url,"request",data);
 	let res = await uni.request({
 		url: 'http://127.0.0.1:3000/api'+url,
 		method: 'POST',
@@ -15,7 +15,7 @@ export const httpRequestBackData = async (url, data) => {
 	});
 	if (res.statusCode === 200) {
 		res = JSONbig.parse(res.data);
-		console.log(url,res);
+		console.log(url,"response",res);
 		if (res.code === 1000) {
 			return res.data;
 		}else {

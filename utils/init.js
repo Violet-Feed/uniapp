@@ -7,7 +7,6 @@ import {
 import {
 	getUserProfile
 } from '@/request/user.js';
-import file from '@/utils/file.js';
 import { ensureUsersCached } from '@/utils/im-cache';
 export const init = async () => {
 	const app = getApp();
@@ -30,7 +29,6 @@ export const init = async () => {
 			//app.globalData.userConIndex=uni.setStorageSync('user_con_index_'+userId,0);
 			app.globalData.userConIndex=uni.getStorageSync('user_con_index_'+userId);
 			app.globalData.userCmdIndex=uni.getStorageSync('user_cmd_index_'+userId);
-			//download(avatar,userId);
 			const socket=new Socket();
 			app.globalData.socket=socket;
 			socket.start();

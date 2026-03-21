@@ -11,7 +11,8 @@ import {
 import {
 	getConversationInfo,
 	getConversationMembers,
-	transformContent
+	transformContent,
+	handleCommandMessage
 } from '@/request/im.js'
 import {
   ensureUsersCached,
@@ -187,18 +188,14 @@ class Socket {
 		if (data.pre_user_con_index === undefined) data.pre_user_con_index = 0;
 		if (data.badge_count === undefined) data.badge_count = 0;
 		if (data.msg_body?.extra === undefined) data.msg_body.extra = "";
-
 		const newUserConIndex = Number(data.user_con_index);
-
 		if (data.pre_user_con_index != getApp().globalData.userConIndex) {
 		  console.error("TODO:getByUser");
 		}
-
 		uni.setStorageSync("user_con_index_" + this.userId, newUserConIndex);
 		getApp().globalData.userConIndex = newUserConIndex;
 
 		const m = data.msg_body;
-
 		await DB.insertMessage([{
 		  sender_id: m.sender_id,
 		  sender_type: m.sender_type,
@@ -216,7 +213,6 @@ class Socket {
 
 		const conId = m.con_id;
 		const existing = await DB.getConversationById(conId);
-
 		if (existing) {
 		  const map = new Map();
 		  map.set("badge_count", data.badge_count);
@@ -228,37 +224,28 @@ class Socket {
 		  const res = await getConversationInfo(m.con_short_id);
 		  const conInfo = res.con_info;
 		  if (!conInfo) return;
-
 		  let peerId = null;
-
 		  if (conInfo.con_type === 1) {
 			const parts = String(conInfo.con_id).split(":");
 			const selfIdStr = String(this.userId);
 			peerId = (parts[0] === selfIdStr) ? BigInt(parts[1]) : BigInt(parts[0]);
-
 			await ensureUsersCached([peerId]);
-
 			const rows = await DB.getUsersByIds([peerId]);
 			const u = rows && rows[0] ? rows[0] : null;
-
 			conInfo.con_core_info = conInfo.con_core_info || {};
 			conInfo.con_core_info.name = u?.username || conInfo.con_core_info.name || "用户";
 			conInfo.con_core_info.avatar_uri = u?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/user_avatar.png";
 		  } else if (conInfo.con_type === 4) {
 			const parts = String(conInfo.con_id).split(":");
 			peerId = BigInt(parts[2]);
-
 			await ensureAgentsCached([peerId]);
-
 			const rows = await DB.getAgentsByIds([peerId]);
 			const a = rows && rows[0] ? rows[0] : null;
-
 			conInfo.con_core_info = conInfo.con_core_info || {};
 			conInfo.con_core_info.name = a?.agent_name || conInfo.con_core_info.name || "AI";
 			conInfo.con_core_info.avatar_uri = a?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/ai.png";
 		  } else if (conInfo.con_type === 2) {
 			enqueueGroupRosters([conInfo.con_id]);
-
 			conInfo.con_core_info = conInfo.con_core_info || {};
 			if (!conInfo.con_core_info.name) conInfo.con_core_info.name = "群聊";
 			if (!conInfo.con_core_info.avatar_uri) conInfo.con_core_info.avatar_uri = "/static/conv_avatar.png";
@@ -290,7 +277,7 @@ class Socket {
 			last_message: m.msg_content || "",
 			peer_id: peerId
 		  }]);
-
+		  
 		  uni.$emit("normal", data);
 		}
 	  } catch (err) {
@@ -306,119 +293,7 @@ class Socket {
 	    uni.setStorageSync("user_cmd_index_" + this.userId, Number(data.user_cmd_index));
 	    getApp().globalData.userCmdIndex = data.user_cmd_index;
 	    uni.$emit("command", data);
-	    const msg = data.msg_body;
-	    const conId = msg.con_id;
-	    const conShortId = msg.con_short_id;
-	    if (msg.msg_type == 100) {
-		  const cmdMessage = JSONbig.parse(msg.msg_content);
-	      switch (cmdMessage.type) {
-	        case 1: {
-	          const addedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
-	          if (addedIds.length === 0) break;
-	          const senderInputs = addedIds.map(id => ({
-	            sender_type: 1,
-	            sender_id: id
-	          }));
-	          const existedMembers = await DB.getMemberInfosBySenders(conId, senderInputs);
-	          const existedSet = new Set(
-	            (existedMembers || [])
-	              .filter(row => row.con_id)
-	              .map(row => row.sender_id.toString())
-	          );
-	          const memberResp = await getConversationMembers({ conShortId });
-	          if (memberResp) {
-	            const members = Array.isArray(memberResp)
-	              ? memberResp
-	              : (memberResp.members || memberResp.list || []);
-	            if (Array.isArray(members) && members.length > 0) {
-	              const addedSet = new Set(addedIds.map(id => id.toString()));
-	              const targetMembers = members.filter(m =>
-	                m &&
-	                m.user_id !== null &&
-	                m.user_id !== undefined &&
-	                addedSet.has(m.user_id.toString()) &&
-	                !existedSet.has(m.user_id.toString())
-	              );
-	              if (targetMembers.length > 0) {
-	                const targetUserIds = targetMembers.map(m => m.user_id);
-	                const oldUsers = await DB.getUsersByIds(targetUserIds);
-	                const oldUserSet = new Set((oldUsers || []).map(u => u.user_id.toString()));
-	                const memberRows = [];
-	                const userRows = [];
-	                const now = Date.now();
-	                for (const m of targetMembers) {
-	                  const uid = m.user_id;
-	                  memberRows.push({
-	                    con_short_id: conShortId,
-	                    con_id: conId,
-	                    member_id: uid,
-	                    member_type: 1,
-	                    nick_name: m.nick_name || "",
-	                    privilege: m.privilege ?? 0,
-	                    create_time: m.create_time ?? 0,
-	                    status: m.status ?? 0,
-	                    extra: m.extra || ""
-	                  });
-	                  if (!oldUserSet.has(uid.toString())) {
-	                    userRows.push({
-	                      user_id: uid,
-	                      username: m.username || "用户",
-	                      avatar_uri: m.avatar || "/static/user_avatar.png",
-	                      local_avatar_uri: "",
-	                      modify_time: now
-	                    });
-	                  }
-	                }
-	                if (memberRows.length > 0) {
-	                  await DB.upsertMembers(memberRows);
-	                }
-	                if (userRows.length > 0) {
-	                  await DB.upsertUsers(userRows);
-	                }
-	              }
-	            }
-	          }
-	          const memberCount = await DB.getMemberCount(conId);
-	          const map = new Map();
-	          map.set("member_count", memberCount);
-	          await DB.updateConversation(conId, map);
-	          break;
-	        }
-	
-	        case 2: {
-	          const removedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
-	          if (removedIds.length === 0) break;
-	          await DB.deleteMembersByIds(conId, 1, removedIds);
-	          const memberCount = await DB.getMemberCount(conId);
-	          const map = new Map();
-	          map.set("member_count", memberCount);
-	          await DB.updateConversation(conId, map);
-	          break;
-	        }
-	        case 3: {
-	          const map = new Map();
-	          map.set("name", cmdMessage.content || "群聊");
-	          await DB.updateConversation(conId, map);
-	          break;
-	        }
-	        case 4: {
-	          const map = new Map();
-	          map.set("description", cmdMessage.content || "");
-	          await DB.updateConversation(conId, map);
-	          break;
-	        }
-	        default:
-	          console.warn("未知的群聊命令类型:", cmdMessage.type);
-	          break;
-	      }
-	    } else if (msg.msg_type == 101) {
-	      const map = new Map();
-	      map.set("read_index_end", cmdMessage.read_index_end);
-	      map.set("read_badge_count", cmdMessage.read_badge_count);
-	      await DB.updateConversation(conId, map);
-	    } else if (msg.msg_type == 102) {
-	
-	    }
+	    await handleCommandMessage(data.msg_body);
 	  } catch (err) {
 	    console.error("handleCommandPacket failed:", err, data);
 	  }
