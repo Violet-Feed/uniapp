@@ -1,5 +1,5 @@
 import JSONbig from 'json-bigint';
-import { httpRequestBackData } from '@/request/common.js';
+import { httpRequestBackBool, httpRequestBackData } from '@/request/common.js';
 export const login = async (username,password) => {
 	const data = {
 		username: username,
@@ -101,6 +101,14 @@ export const getUserInfos = async (payload) => {
 		user_ids: payload.userIds
 	}
 	return httpRequestBackData("/user/get_user_infos",data)
+}
+
+export const updateUserInfo = async (payload) => {
+	const data = {
+		type: payload.type,
+		value: payload.value
+	}
+	return httpRequestBackBool("/user/update_user_info",data)
 }
 
 export const searchUsers = async (keyword,page) => {

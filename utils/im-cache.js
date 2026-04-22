@@ -97,7 +97,7 @@ async function downloadPng(id, url, prefix = "") {
         { filename: target },
         (d, status) => {
           if (status === 200) {
-            console.log("download avatar success:", d.filename);
+            console.log("download avatar success", d.filename);
             resolve(d.filename); // 这里才是真正落盘后的路径
           } else {
             console.error("download avatar failed, status =", status);

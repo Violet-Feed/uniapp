@@ -51,6 +51,12 @@
 			}
 		},
 		{
+			"path": "pages/workspace/edit_creation",
+			"style": {
+				"navigationBarTitleText": "编辑创作"
+			}
+		},
+		{
 			"path": "pages/im/home",
 			"style": {
 				"navigationBarTitleText":"消息"
@@ -125,6 +131,12 @@
 			}
 		},
 		{
+			"path": "pages/agent/edit_agent",
+			"style": {
+				"navigationBarTitleText": "编辑智能体"
+			}
+		},
+		{
 			"path": "pages/user/my_profile",
 			"style": {
 				"navigationBarTitleText":"我的"
@@ -140,6 +152,12 @@
 			"path": "pages/user/user_profile",
 			"style": {
 				"navigationBarTitleText":"用户个人页"
+			}
+		},
+		{
+			"path": "pages/user/edit_profile",
+			"style": {
+				"navigationBarTitleText": "编辑资料"
 			}
 		},
 		{

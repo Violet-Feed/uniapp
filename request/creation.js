@@ -8,6 +8,13 @@ export const createMaterial = async (payload) => {
 	return httpRequestBackData("/aigc/create_material",data);
 }
 
+export const deleteMaterial = async (payload) => {
+	const data = {
+		material_id: payload.materialId
+	};
+	return httpRequestBackBool("/aigc/delete_material",data);
+}
+
 export const getMaterialByUser = async (page) => {
 	const data = {
 		page: page
@@ -25,6 +32,23 @@ export const createCreation = async (payload) => {
 		category: payload.category
 	};
 	return httpRequestBackBool("/aigc/create_creation",data);
+}
+
+export const deleteCreation = async (payload) => {
+	const data = {
+		creation_id: payload.creationId
+	};
+	return httpRequestBackBool("/aigc/delete_creation",data);
+}
+
+export const updateCreation = async (payload) => {
+	const data = {
+		creation_id: payload.creationId,
+		title: payload.title,
+		content: payload.content,
+		category: payload.category
+	};
+	return httpRequestBackBool("/aigc/update_creation",data);
 }
 
 export const getCreationById = async (creationId) => {

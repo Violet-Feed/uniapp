@@ -273,7 +273,7 @@ import {
   createComment,
   createReply,
   getCommentList,
-  getCommentCount,
+  getActionInfo,
   diggComment,
   cancelDiggComment,
   getReplyList,
@@ -369,7 +369,7 @@ export default {
       uni.showLoading({ title: '加载中...' })
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
-      const ok3 = await this.fetchCommentCount()
+      const ok3 = await this.fetchActionInfo()
       const ok4 = await this.fetchComments(true)
       if (!ok1 || !ok3 || !ok4) {
         uni.showToast({ title: '加载失败', icon: 'none' })
@@ -396,10 +396,6 @@ export default {
       this.creation.coverImage = cover
       this.creation.images = cover ? [cover] : []
 
-      this.creation.likes = res.creation.digg_count || 0
-      this.creation.comments = res.creation.comment_count || 0
-      this.creation.shares = res.creation.share_count || 0
-      this.isLiked = !!res.creation.is_digg
       return true
     },
 
@@ -421,15 +417,18 @@ export default {
       return true
     },
 
-    async fetchCommentCount() {
+    async fetchActionInfo() {
       if (!this.creationId) return false
       const payload = {
         entityType: 'creation',
         entityId: BigInt(this.creationId)
       }
-      const res = await getCommentCount(payload)
-      if (!res || typeof res.comment_count !== 'number') return false
+      const res = await getActionInfo(payload)
+      if (!res) return false
+	  this.creation.likes = res.digg_count
+	  this.isLiked = res.is_digg
       this.creation.comments = res.comment_count
+	  this.creation.shares = res.forward_count
       return true
     },
 

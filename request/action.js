@@ -96,12 +96,12 @@ export const getReplyList = async (payload) => {
 	return httpRequestBackData("/action/get_reply_list",data);
 }
 
-export const getCommentCount = async (payload) => {
+export const getActionInfo = async (payload) => {
 	const data = {
 		entity_type: payload.entityType,
 		entity_id: payload.entityId
 	};
-	return httpRequestBackData("/action/get_comment_count",data);
+	return httpRequestBackData("/action/get_action_info",data);
 }
 
 export const diggComment = async (payload) => {
@@ -116,4 +116,13 @@ export const cancelDiggComment = async (payload) => {
 		comment_id: payload.commentId
 	};
 	return httpRequestBackBool("/action/cancel_digg_comment",data);
+}
+
+export const forward = async (payload) => {
+	const data = {
+		entity_type: payload.entityType,
+		entity_id: payload.entityId,
+		con_short_id: payload.conShortId
+	};
+	return httpRequestBackBool("/action/forward",data);
 }

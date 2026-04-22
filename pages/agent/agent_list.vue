@@ -25,6 +25,7 @@
 					v-for="item in agents"
 					:key="item.agent_id"
 					@click="goDetail(item)"
+					@longpress="showAgentOptions(item)"
 				>
 					<image
 						class="avatar"
@@ -58,7 +59,7 @@
 </template>
 
 <script>
-import { getAgentsByUser } from '@/request/agent.js';
+import { getAgentsByUser, deleteAgent } from '@/request/agent.js';
 
 export default {
 	data() {
@@ -96,19 +97,23 @@ export default {
 			this.page = 1;
 			this.finished = false;
 
-			const res = await getAgentsByUser({ page: 1 });
-			const list = this.normalizeAgents(res?.agents);
+			try {
+				const res = await getAgentsByUser({ page: 1 });
+				if (res === undefined) return;
 
-			if (res === undefined) {
+				const list = this.normalizeAgents(res?.agents);
+				this.agents = list;
+				this.finished = list.length === 0;
+			} catch (e) {
+				console.error('刷新智能体列表失败：', e);
+				uni.showToast({
+					title: '加载失败',
+					icon: 'none'
+				});
+			} finally {
 				this.loading = false;
 				uni.stopPullDownRefresh();
-				return;
 			}
-
-			this.agents = list;
-			this.finished = list.length === 0;
-			this.loading = false;
-			uni.stopPullDownRefresh();
 		},
 
 		async loadMore() {
@@ -117,23 +122,28 @@ export default {
 			this.loadingMore = true;
 			const nextPage = this.page + 1;
 
-			const res = await getAgentsByUser({ page: nextPage });
-			if (res === undefined) {
+			try {
+				const res = await getAgentsByUser({ page: nextPage });
+				if (res === undefined) return;
+
+				const list = this.normalizeAgents(res?.agents);
+
+				if (list.length === 0) {
+					this.finished = true;
+					return;
+				}
+
+				this.agents = this.mergeAgents(this.agents, list);
+				this.page = nextPage;
+			} catch (e) {
+				console.error('加载更多智能体失败：', e);
+				uni.showToast({
+					title: '加载失败',
+					icon: 'none'
+				});
+			} finally {
 				this.loadingMore = false;
-				return;
 			}
-
-			const list = this.normalizeAgents(res?.agents);
-
-			if (list.length === 0) {
-				this.finished = true;
-				this.loadingMore = false;
-				return;
-			}
-
-			this.agents = this.mergeAgents(this.agents, list);
-			this.page = nextPage;
-			this.loadingMore = false;
 		},
 
 		normalizeAgents(list) {
@@ -143,6 +153,7 @@ export default {
 				agent_name: item?.agent_name || '',
 				avatar_uri: item?.avatar_uri || '',
 				description: item?.description || '',
+				personality: item?.personality || '',
 				create_time: item?.create_time || 0
 			}));
 		},
@@ -175,6 +186,60 @@ export default {
 			if (!item?.agent_id) return;
 			uni.navigateTo({
 				url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(item.agent_id)}`
+			});
+		},
+
+		showAgentOptions(item) {
+			if (!item?.agent_id) return;
+
+			uni.showActionSheet({
+				itemList: ['编辑', '删除'],
+				success: (res) => {
+					if (res.tapIndex === 0) {
+						this.goEdit(item);
+					} else if (res.tapIndex === 1) {
+						this.confirmDelete(item);
+					}
+				}
+			});
+		},
+
+		goEdit(item) {
+			uni.navigateTo({
+				url: `/pages/agent/edit_agent?agentId=${encodeURIComponent(item.agent_id)}`
+			});
+		},
+
+		confirmDelete(item) {
+			uni.showModal({
+				title: '提示',
+				content: '确定要删除这个智能体吗？',
+				success: async (res) => {
+					if (!res.confirm) return;
+
+					try {
+						const ok = await deleteAgent({
+							agentId: item.agent_id
+						});
+
+						if (!ok) {
+							throw new Error('deleteAgent 返回失败');
+						}
+
+						this.agents = this.agents.filter(agent => agent.agent_id !== item.agent_id);
+
+						uni.showToast({
+							title: '删除成功',
+							icon: 'success'
+						});
+					} catch (e) {
+						console.error('删除智能体失败：', e);
+						uni.showToast({
+							title: '删除失败',
+							icon: 'none'
+						});
+					}
+				}
 			});
 		},
 

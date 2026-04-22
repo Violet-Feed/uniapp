@@ -32,6 +32,7 @@
             <image
               class="avatar-img"
               :src="creation.author.avatar || defaultAvatar"
+			  mode="aspectFill"
             />
           </view>
         </view>
@@ -372,7 +373,7 @@ import {
   createComment,
   createReply,
   getCommentList,
-  getCommentCount,
+  getActionInfo,
   diggComment,
   cancelDiggComment,
   getReplyList,
@@ -494,7 +495,7 @@ export default {
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
       // 进入视频页面时就加载评论数量
-      const ok3 = await this.fetchCommentCount()
+      const ok3 = await this.fetchActionInfo()
       if (!ok1 || !ok2 || !ok3) {
         uni.showToast({ title: '加载失败', icon: 'none' })
       }
@@ -521,11 +522,6 @@ export default {
       this.creation.coverImage = cover
       this.creation.videoUrl = isVideo ? (c.material_url || '') : ''
 
-      this.creation.likes = c.digg_count || 0
-      this.creation.comments = c.comment_count || 0
-      this.creation.shares = c.share_count || 0
-      this.isLiked = !!c.is_digg
-
       return true
     },
 
@@ -547,15 +543,18 @@ export default {
       return true
     },
 
-    async fetchCommentCount() {
+    async fetchActionInfo() {
       if (!this.creationId) return false
       const payload = {
         entityType: 'creation',
         entityId: BigInt(this.creationId)
       }
-      const res = await getCommentCount(payload)
-      if (!res || typeof res.comment_count !== 'number') return false
+      const res = await getActionInfo(payload)
+      if (!res) return false
+      this.creation.likes = res.digg_count
+      this.isLiked = res.is_digg
       this.creation.comments = res.comment_count
+      this.creation.shares = res.forward_count
       return true
     },
 

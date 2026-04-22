@@ -32,8 +32,8 @@ export const init = async () => {
 			const socket=new Socket();
 			app.globalData.socket=socket;
 			socket.start();
-			getCommandByUser();
-			getMessageByUser();
+			await getCommandByUser();
+			await getMessageByUser();
 		}
 	} else {
 		uni.reLaunch({

@@ -24,6 +24,7 @@
 					class="agent-card"
 					v-for="item in agents"
 					:key="item.agent_id"
+					@click="goDetail(item)"
 				>
 					<image
 						class="avatar"
@@ -119,6 +120,13 @@ export default {
 		goAddAgentMember() {
 			uni.navigateTo({
 				url: `/pages/agent/add_agent_member?conId=${this.conId}`
+			});
+		},
+		
+		goDetail(item) {
+			if (!item?.agent_id) return;
+			uni.navigateTo({
+				url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(item.agent_id)}`
 			});
 		},
 

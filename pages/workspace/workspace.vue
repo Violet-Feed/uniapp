@@ -10,6 +10,7 @@
           v-for="(material, index) in materials"
           :key="`material-${material.material_id || index}`"
           @click="goToMaterialDetail(material)"
+          @longpress="showMaterialOptions(material, index)"
         >
           <!-- status = 1 生成中 -->
           <view
@@ -143,6 +144,7 @@
 <script>
 import { getMaterialByUser, createMaterial } from '@/request/creation.js'
 import { uploadImage } from '@/request/common.js'
+import { deleteMaterial } from '@/request/creation.js'
 
 export default {
   data() {
@@ -309,13 +311,15 @@ export default {
 
       const idStr = String(data.material_id)
       const idx = this.materials.findIndex(m => String(m.material_id) === idStr)
-	  let createTime = data.create_time
-	  if (typeof createTime === 'bigint') {
-	    createTime = Number(createTime)
-	  }
-	  if (!createTime) {
-	    createTime = Date.now()
-	  }
+
+      let createTime = data.create_time
+      if (typeof createTime === 'bigint') {
+        createTime = Number(createTime)
+      }
+      if (!createTime) {
+        createTime = Date.now()
+      }
+
       const status = data.status != null ? data.status : 1
 
       if (idx !== -1) {
@@ -365,7 +369,6 @@ export default {
 
           uni.showLoading({ title: '上传中...' })
           try {
-            // 这里的 '/file/upload' 要和后端控制器路径对应
             const uploadRes = await uploadImage(localPath, 'material_source')
             if (!uploadRes || !uploadRes.source_url) {
               this.uploadedImage = ''
@@ -398,6 +401,70 @@ export default {
       this.uploadedSourceUrl = ''
     },
 
+    showMaterialOptions(material, index) {
+      if (!material) return
+
+      uni.showActionSheet({
+        itemList: ['删除'],
+        success: (res) => {
+          if (res.tapIndex === 0) {
+            this.confirmDeleteMaterial(material, index)
+          }
+        }
+      })
+    },
+
+    confirmDeleteMaterial(material, index) {
+      const status = Number(material.status)
+
+      if (status === 1) {
+        uni.showToast({
+          title: '素材生成中，暂时不能删除',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!material.material_id) {
+        uni.showToast({
+          title: '素材ID无效',
+          icon: 'none'
+        })
+        return
+      }
+
+      uni.showModal({
+        title: '提示',
+        content: '确定要删除这个素材吗？',
+        success: async (res) => {
+          if (!res.confirm) return
+
+          try {
+            const ok = await deleteMaterial({
+              materialId: material.material_id
+            })
+
+            if (!ok) {
+              throw new Error('deleteMaterial 返回失败')
+            }
+
+            this.materials.splice(index, 1)
+
+            uni.showToast({
+              title: '删除成功',
+              icon: 'success'
+            })
+          } catch (err) {
+            console.error('删除素材失败：', err)
+            uni.showToast({
+              title: '删除失败',
+              icon: 'none'
+            })
+          }
+        }
+      })
+    },
+
     // 调用 createMaterial，不再上传图片
     async handleGenerate() {
       if (!this.canGenerate || this.generating) {
@@ -410,7 +477,6 @@ export default {
         return
       }
 
-      // 如果用户选了图片，但还没拿到 source_url，则不允许生成
       if (this.uploadedImage && !this.uploadedSourceUrl) {
         uni.showToast({
           title: '图片上传中，请稍后重试',
@@ -435,7 +501,9 @@ export default {
         status: 1,
         uiStatus: 'generating',
         displayTitle:
-          this.prompt.length > 20 ? this.prompt.substring(0, 20) + '...' : this.prompt || '未命名作品',
+          this.prompt.length > 20
+            ? this.prompt.substring(0, 20) + '...'
+            : this.prompt || '未命名作品',
         displayTime: this.formatRelativeTime(now)
       }
       this.materials.unshift(localMaterial)
@@ -535,7 +603,6 @@ export default {
 </script>
 
 <style scoped>
-/* 样式不变，沿用你之前那份 */
 .container {
   padding: 0;
   margin: 0;

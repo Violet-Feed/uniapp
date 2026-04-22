@@ -83,7 +83,7 @@
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-import { sendMessage, getMessageByConversation } from '@/request/im.js';
+import { sendMessage, getMessageByConversation,markRead } from '@/request/im.js';
 
 export default {
     data() {
@@ -140,6 +140,9 @@ export default {
                     this.hasMore = false;
                 }
             }
+			if (this.conversation.badge_count - this.conversation.read_badge_count > 0) {
+				markRead(this.conversation.con_short_id, this.messages[this.messages.length-1].con_index, this.conversation.badge_count);
+			}
         }
 
         setTimeout(() => this.scrollToBottom(), 100);

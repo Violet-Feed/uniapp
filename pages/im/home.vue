@@ -30,7 +30,7 @@
                 <!-- 固定通知会话：关注通知 -->
                 <view class="conversation-item notice-item" @click="openNotice(NOTICE_GROUP.FOLLOW)">
                     <view class="avatar-wrapper">
-                        <image class="avatar" src="/static/conv_avatar.png" mode="aspectFill"></image>
+                        <image class="avatar" src="/static/notice.png" mode="aspectFill"></image>
                         <view class="unread-badge" v-if="followNoticeCount > 0">
                             {{ followNoticeCount > 99 ? '99+' : followNoticeCount }}
                         </view>
@@ -45,7 +45,7 @@
                 <!-- 固定通知会话：互动通知 -->
                 <view class="conversation-item notice-item" @click="openNotice(NOTICE_GROUP.ACTION)">
                     <view class="avatar-wrapper">
-                        <image class="avatar" src="/static/conv_avatar.png" mode="aspectFill"></image>
+                        <image class="avatar" src="/static/notice.png" mode="aspectFill"></image>
                         <view class="unread-badge" v-if="actionNoticeCount > 0">
                             {{ actionNoticeCount > 99 ? '99+' : actionNoticeCount }}
                         </view>

@@ -1,3 +1,5 @@
+# Violet客户端
+
 ```bash
 adb -s 127.0.0.1:5555 reverse tcp:3000 tcp:3000
 
@@ -28,6 +30,3 @@ const low = part0 | (part1 << 28n);
 const high = (part1 >> 4n) | (part2 << 24n);
 return (high << 32n) | low;
 ```
-
-TODO:
-- 新私聊未在消息tab显示

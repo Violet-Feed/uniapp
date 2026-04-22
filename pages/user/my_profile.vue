@@ -172,23 +172,15 @@
 					<text class="menu-title">设置</text>
 					<text class="menu-close" @click="showSetting = false">✕</text>
 				</view>
+
 				<view class="menu-list">
 					<view class="menu-item" @click="goToEditProfile">
 						<text class="menu-icon">✏️</text>
 						<text class="menu-text">编辑资料</text>
 						<text class="menu-arrow">›</text>
 					</view>
-					<view class="menu-item" @click="goToAccountSetting">
-						<text class="menu-icon">👤</text>
-						<text class="menu-text">账号设置</text>
-						<text class="menu-arrow">›</text>
-					</view>
-					<view class="menu-item" @click="goToPrivacySetting">
-						<text class="menu-icon">🔒</text>
-						<text class="menu-text">隐私设置</text>
-						<text class="menu-arrow">›</text>
-					</view>
 				</view>
+
 				<view class="logout-btn" @click="logout">
 					<text class="logout-text">退出登录</text>
 				</view>
@@ -198,10 +190,13 @@
 </template>
 
 <script>
-import { getCreationsByUser, getCreationsByDigg } from '@/request/creation.js'
+import {
+	getCreationsByUser,
+	getCreationsByDigg,
+	deleteCreation
+} from '@/request/creation.js'
 import { digg, cancelDigg } from '@/request/action.js'
 import { getUserProfile } from '@/request/user.js'
-import JSONbig from 'json-bigint'
 
 export default {
 	data() {
@@ -228,18 +223,23 @@ export default {
 			defaultImage: '/static/images/default.png',
 			defaultAvatar: '/static/user_avatar.png',
 
-			showSetting: false
+			showSetting: false,
+			pageReady: false
 		}
 	},
-	onLoad() {
-		// 先拿 userId
+
+	async onLoad() {
 		this.userId = getApp().globalData.userId
-		// 拉取用户资料（成功则覆盖；失败则回退 globalData）
-		this.loadUserProfile()
-		// 初始化加载作品列表第一页
-		this.loadUserWorks(true)
+		await this.initPage()
 	},
-	// 上拉到底部加载更多
+
+	onShow() {
+		// 从编辑资料/编辑作品页返回后刷新
+		if (this.pageReady) {
+			this.refreshCurrentTab()
+		}
+	},
+
 	onReachBottom() {
 		if (this.activeTab === 'works') {
 			this.loadUserWorks(false)
@@ -247,10 +247,9 @@ export default {
 			this.loadUserLikes(false)
 		}
 	},
-	// 下拉刷新：重新拉用户资料 + 刷新当前 tab 列表
+
 	onPullDownRefresh() {
-		const tasks = []
-		tasks.push(this.loadUserProfile())
+		const tasks = [this.loadUserProfile()]
 
 		if (this.activeTab === 'works') {
 			tasks.push(this.loadUserWorks(true))
@@ -258,30 +257,60 @@ export default {
 			tasks.push(this.loadUserLikes(true))
 		}
 
-		Promise.all(tasks)
-			.finally(() => {
-				uni.stopPullDownRefresh()
-			})
+		Promise.all(tasks).finally(() => {
+			uni.stopPullDownRefresh()
+		})
 	},
+
 	methods: {
+		async initPage() {
+			await Promise.all([
+				this.loadUserProfile(),
+				this.loadUserWorks(true)
+			])
+			this.pageReady = true
+		},
+
+		refreshCurrentTab() {
+			this.loadUserProfile()
+			if (this.activeTab === 'works') {
+				this.loadUserWorks(true)
+			} else {
+				this.loadUserLikes(true)
+			}
+		},
+
 		/* ====== 用户资料 ====== */
 		async loadUserProfile() {
-			const uid = this.userId || getApp().globalData.userId
-			const res = await getUserProfile(uid, true, true)
+			try {
+				const uid = this.userId || getApp().globalData.userId
+				const res = await getUserProfile(uid, true, true)
 
-			if (res) {
-				this.username = (res.user_info && res.user_info.username) ? res.user_info.username : ''
-				this.avatar = (res.user_info && res.user_info.avatar) ? res.user_info.avatar : '/static/user_avatar.png'
-				this.followingCount = res.following_count || 0
-				this.followerCount = res.follower_count || 0
-				this.friendCount = res.friend_count || 0
-				return
+				if (res) {
+					this.username =
+						res.user_info && res.user_info.username
+							? res.user_info.username
+							: ''
+					this.avatar =
+						res.user_info && res.user_info.avatar
+							? res.user_info.avatar
+							: '/static/user_avatar.png'
+					this.followingCount = res.following_count || 0
+					this.followerCount = res.follower_count || 0
+					this.friendCount = res.friend_count || 0
+
+					getApp().globalData.username = this.username
+					getApp().globalData.avatar = this.avatar
+					return
+				}
+			} catch (e) {
+				console.error('加载用户资料失败：', e)
 			}
 
-			// 请求失败（undefined）回退 globalData
+			// 请求失败回退 globalData
 			this.userId = getApp().globalData.userId
-			this.username = getApp().globalData.username
-			this.avatar = getApp().globalData.avatar
+			this.username = getApp().globalData.username || ''
+			this.avatar = getApp().globalData.avatar || this.defaultAvatar
 		},
 
 		/* ====== 加载作品列表 ====== */
@@ -297,7 +326,9 @@ export default {
 
 				const list = Array.isArray(res)
 					? res
-					: (res && Array.isArray(res.creations) ? res.creations : [])
+					: res && Array.isArray(res.creations)
+						? res.creations
+						: []
 
 				if (!list || list.length === 0) {
 					if (reset) {
@@ -312,6 +343,8 @@ export default {
 					creation_id: item.creation_id,
 					cover: item.cover_url || item.material_url || this.defaultImage,
 					title: item.title || '未命名作品',
+					content: item.content || '',
+					category: item.category || '',
 					user_id: item.user_id,
 					username: item.username || this.username || '未知作者',
 					avatar: item.avatar || this.avatar || this.defaultAvatar,
@@ -352,7 +385,9 @@ export default {
 
 				const list = Array.isArray(res)
 					? res
-					: (res && Array.isArray(res.creations) ? res.creations : [])
+					: res && Array.isArray(res.creations)
+						? res.creations
+						: []
 
 				if (!list || list.length === 0) {
 					if (reset) {
@@ -368,6 +403,8 @@ export default {
 					creation_id: item.creation_id,
 					cover: item.cover_url || item.material_url || this.defaultImage,
 					title: item.title || '未命名作品',
+					content: item.content || '',
+					category: item.category || '',
 					user_id: item.user_id,
 					username: item.username || '未知作者',
 					avatar: item.avatar || this.defaultAvatar,
@@ -427,6 +464,7 @@ export default {
 				}
 			} catch (e) {
 				console.error('点赞操作失败：', e)
+				uni.showToast({ title: '操作失败', icon: 'none' })
 			} finally {
 				item._digging = false
 			}
@@ -459,8 +497,8 @@ export default {
 
 			const creationId = encodeURIComponent(work.creation_id)
 			const userId = encodeURIComponent(work.user_id || this.userId || '')
-
 			const isVideo = Number(work.material_type) === 2
+
 			const basePath = isVideo
 				? '/pages/creation/creation_video'
 				: '/pages/creation/creation_image'
@@ -471,23 +509,56 @@ export default {
 		},
 
 		showWorkOptions(work) {
+			if (!work || !work.creation_id) return
+
 			uni.showActionSheet({
-				itemList: ['编辑', '删除', '分享'],
+				itemList: ['编辑', '删除'],
 				success: (res) => {
 					if (res.tapIndex === 0) {
-						console.log('编辑作品', work.creation_id)
+						this.goToEditCreation(work)
 					} else if (res.tapIndex === 1) {
-						uni.showModal({
-							title: '提示',
-							content: '确定要删除这个作品吗？',
-							success: (res2) => {
-								if (res2.confirm) {
-									console.log('删除作品', work.creation_id)
-								}
-							}
+						this.confirmDeleteWork(work)
+					}
+				}
+			})
+		},
+
+		goToEditCreation(work) {
+			uni.navigateTo({
+				url: `/pages/workspace/edit_creation?creationId=${encodeURIComponent(work.creation_id)}`
+			})
+		},
+
+		confirmDeleteWork(work) {
+			uni.showModal({
+				title: '提示',
+				content: '确定要删除这个作品吗？',
+				success: async (res) => {
+					if (!res.confirm) return
+
+					try {
+						const ok = await deleteCreation({
+							creationId: work.creation_id
 						})
-					} else if (res.tapIndex === 2) {
-						console.log('分享作品', work.creation_id)
+
+						if (!ok) {
+							throw new Error('deleteCreation 返回失败')
+						}
+
+						this.worksList = this.worksList.filter(
+							item => item.creation_id !== work.creation_id
+						)
+
+						uni.showToast({
+							title: '删除成功',
+							icon: 'success'
+						})
+					} catch (e) {
+						console.error('删除作品失败：', e)
+						uni.showToast({
+							title: '删除失败',
+							icon: 'none'
+						})
 					}
 				}
 			})
@@ -495,17 +566,9 @@ export default {
 
 		goToEditProfile() {
 			this.showSetting = false
-			uni.showToast({ title: '编辑资料功能开发中', icon: 'none' })
-		},
-
-		goToAccountSetting() {
-			this.showSetting = false
-			uni.showToast({ title: '账号设置功能开发中', icon: 'none' })
-		},
-
-		goToPrivacySetting() {
-			this.showSetting = false
-			uni.showToast({ title: '隐私设置功能开发中', icon: 'none' })
+			uni.navigateTo({
+				url: '/pages/user/edit_profile'
+			})
 		},
 
 		logout() {
@@ -539,7 +602,6 @@ export default {
 </script>
 
 <style scoped>
-/* 样式保持不变，仅删除了 tab-count 的显示，不需要改 CSS */
 .user-profile-container {
 	min-height: 100vh;
 	background: #f8f9fa;
@@ -675,8 +737,14 @@ export default {
 }
 
 @keyframes slideIn {
-	from { width: 0; opacity: 0; }
-	to { width: 32px; opacity: 1; }
+	from {
+		width: 0;
+		opacity: 0;
+	}
+	to {
+		width: 32px;
+		opacity: 1;
+	}
 }
 
 /* ==================== 内容列表 ==================== */
@@ -841,8 +909,15 @@ export default {
 	animation: spin 1s linear infinite;
 }
 
+.loading-text {
+	font-size: 13px;
+	color: #999;
+}
+
 @keyframes spin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 /* ==================== 设置菜单 ==================== */
@@ -860,8 +935,12 @@ export default {
 }
 
 @keyframes fadeIn {
-	from { opacity: 0; }
-	to { opacity: 1; }
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
 }
 
 .setting-menu {
@@ -873,8 +952,12 @@ export default {
 }
 
 @keyframes slideUp {
-	from { transform: translateY(100%); }
-	to { transform: translateY(0); }
+	from {
+		transform: translateY(100%);
+	}
+	to {
+		transform: translateY(0);
+	}
 }
 
 .menu-header {

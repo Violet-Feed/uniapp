@@ -66,7 +66,6 @@
 						v-for="(work, index) in worksList"
 						:key="work.creation_id || index"
 						@click="goToWorkDetail(work)"
-						@longpress="showWorkOptions(work)"
 					>
 						<view class="image-wrapper">
 							<image
@@ -404,27 +403,6 @@ export default {
 			const basePath = isVideo ? '/pages/creation/creation_video' : '/pages/creation/creation_image'
 
 			uni.navigateTo({ url: `${basePath}?creationId=${creationId}&userId=${userId}` })
-		},
-
-		showWorkOptions(work) {
-			uni.showActionSheet({
-				itemList: ['编辑', '删除', '分享'],
-				success: (res) => {
-					if (res.tapIndex === 0) {
-						console.log('编辑作品', work.creation_id)
-					} else if (res.tapIndex === 1) {
-						uni.showModal({
-							title: '提示',
-							content: '确定要删除这个作品吗？',
-							success: (res2) => {
-								if (res2.confirm) console.log('删除作品', work.creation_id)
-							}
-						})
-					} else if (res.tapIndex === 2) {
-						console.log('分享作品', work.creation_id)
-					}
-				}
-			})
 		},
 
 		formatNumber(num) {
