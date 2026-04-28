@@ -217,7 +217,7 @@ class Socket {
 		  const map = new Map();
 		  map.set("badge_count", data.badge_count);
 		  map.set("user_con_index", newUserConIndex);
-		  map.set("last_message", m.msg_content || "");
+		  map.set("last_message_id", m.msg_id || "");
 		  await DB.updateConversation(m.con_id, map);
 		  uni.$emit("normal", data);
 		} else {
@@ -274,7 +274,8 @@ class Socket {
 			read_index_end: setting.read_index_end ?? 0,
 			read_badge_count: setting.read_badge_count ?? 0,
 			user_con_index: newUserConIndex,
-			last_message: m.msg_content || "",
+			is_member: conInfo.is_member ?? 1,
+			last_message_id: m.msg_id ?? 0,
 			peer_id: peerId
 		  }]);
 		  

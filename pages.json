@@ -65,7 +65,8 @@
 		{
 			"path": "pages/im/conversation",
 			"style": {
-				"navigationBarTitleText":"聊天窗口"
+				"navigationBarTitleText":"聊天窗口",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
@@ -78,6 +79,12 @@
 			"path": "pages/im/add_member",
 			"style": {
 				"navigationBarTitleText": "添加成员"
+			}
+		},
+		{
+			"path": "pages/im/remove_member",
+			"style": {
+				"navigationBarTitleText": "移出成员"
 			}
 		},
 		{

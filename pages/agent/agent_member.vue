@@ -25,6 +25,7 @@
 					v-for="item in agents"
 					:key="item.agent_id"
 					@click="goDetail(item)"
+					@longpress.stop="showRemoveAction(item)"
 				>
 					<image
 						class="avatar"
@@ -40,10 +41,6 @@
 						<text class="agent-desc">
 							{{ item.description || '暂无描述' }}
 						</text>
-
-						<view class="agent-bottom">
-							<text class="meta-text">{{ formatTime(item.create_time) }}</text>
-						</view>
 					</view>
 				</view>
 			</view>
@@ -53,26 +50,37 @@
 
 <script>
 import DB from '@/utils/sqlite.js';
+import { removeConversationAgent } from '@/request/im.js';
 
 export default {
 	data() {
 		return {
 			conId: '',
+			conShortId: 0,
 			agents: [],
 			loading: false,
+			removingAgentId: '',
 			firstShowDone: false,
 			defaultAvatar: '/static/ai.png'
 		};
 	},
-	onLoad(option) {
+
+	async onLoad(option) {
 		this.conId = option?.conId ? option.conId : '';
 		if (!this.conId) {
 			uni.navigateBack();
 			return;
 		}
 
+		const res = await DB.getConversationById(this.conId);
+		const conversation = Array.isArray(res) ? res[0] : res;
+		if (conversation) {
+			this.conShortId = conversation.con_short_id;
+		}
+
 		this.refreshList();
 	},
+
 	onShow() {
 		if (this.firstShowDone) {
 			this.refreshList();
@@ -80,9 +88,11 @@ export default {
 		}
 		this.firstShowDone = true;
 	},
+
 	onPullDownRefresh() {
 		this.refreshList();
 	},
+
 	methods: {
 		async refreshList() {
 			if (this.loading || !this.conId) {
@@ -108,9 +118,58 @@ export default {
 				agent_id: item?.agent_id ? String(item.agent_id) : '',
 				nick_name: item?.nick_name || '',
 				avatar_uri: item?.avatar_uri || '',
-				description: item?.description || '',
-				create_time: item?.create_time || 0
-			}));
+				description: item?.description || ''
+			})).filter(item => !!item.agent_id);
+		},
+
+		showRemoveAction(item) {
+			const agentId = item?.agent_id ? String(item.agent_id) : '';
+			if (!agentId || this.removingAgentId) return;
+
+			uni.showActionSheet({
+				itemList: ['移出群聊'],
+				success: res => {
+					if (res.tapIndex === 0) {
+						this.confirmRemoveAgent(item);
+					}
+				}
+			});
+		},
+
+		confirmRemoveAgent(item) {
+			const name = item?.nick_name || '该智能体';
+
+			uni.showModal({
+				title: '移出群聊',
+				content: `确定将「${name}」移出群聊吗？`,
+				confirmText: '移出',
+				confirmColor: '#ff4d4f',
+				success: res => {
+					if (res.confirm) {
+						this.removeAgent(item);
+					}
+				}
+			});
+		},
+
+		async removeAgent(item) {
+			const agentId = item?.agent_id ? String(item.agent_id) : '';
+			const conShortId = this.conShortId || item?.con_short_id;
+
+			if (!agentId || !conShortId || this.removingAgentId) return;
+
+			this.removingAgentId = agentId;
+
+			const res = await removeConversationAgent({
+				conShortId,
+				agentId
+			});
+
+			this.removingAgentId = '';
+
+			if (!res) return;
+
+			this.agents = this.agents.filter(agent => String(agent.agent_id) !== agentId);
 		},
 
 		goBack() {
@@ -122,31 +181,12 @@ export default {
 				url: `/pages/agent/add_agent_member?conId=${this.conId}`
 			});
 		},
-		
+
 		goDetail(item) {
 			if (!item?.agent_id) return;
 			uni.navigateTo({
 				url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(item.agent_id)}`
 			});
-		},
-
-		formatTime(timestamp) {
-			if (!timestamp) return '-';
-
-			let value = Number(timestamp);
-			if (!Number.isFinite(value)) return '-';
-			if (value < 1e12) value *= 1000;
-
-			const date = new Date(value);
-			if (Number.isNaN(date.getTime())) return '-';
-
-			const y = date.getFullYear();
-			const m = String(date.getMonth() + 1).padStart(2, '0');
-			const d = String(date.getDate()).padStart(2, '0');
-			const hh = String(date.getHours()).padStart(2, '0');
-			const mm = String(date.getMinutes()).padStart(2, '0');
-
-			return `${y}-${m}-${d} ${hh}:${mm}`;
 		}
 	}
 };
@@ -206,7 +246,7 @@ export default {
 
 .agent-card {
 	display: flex;
-	align-items: stretch;
+	align-items: center;
 	padding: 24rpx;
 	margin-bottom: 20rpx;
 	background: #ffffff;
@@ -229,11 +269,10 @@ export default {
 	margin-left: 20rpx;
 	display: flex;
 	flex-direction: column;
-	justify-content: space-between;
+	justify-content: center;
 }
 
-.agent-top,
-.agent-bottom {
+.agent-top {
 	display: flex;
 	align-items: center;
 }
@@ -243,21 +282,19 @@ export default {
 	font-weight: 600;
 	color: #1f2329;
 	line-height: 1.4;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .agent-desc {
+	margin-top: 8rpx;
 	font-size: 26rpx;
 	line-height: 1.5;
 	color: #4e5969;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.meta-text {
-	font-size: 22rpx;
-	color: #a0a7b4;
-	line-height: 1.4;
 }
 
 .state-box {

@@ -2,7 +2,8 @@ import JSONbig from 'json-bigint';
 import Socket from '@/utils/socket.js';
 import {
 	getMessageByUser,
-	getCommandByUser
+	getCommandByUser,
+	getInitInfo
 } from '@/request/im.js';
 import {
 	getUserProfile
@@ -32,7 +33,11 @@ export const init = async () => {
 			const socket=new Socket();
 			app.globalData.socket=socket;
 			socket.start();
-			await getCommandByUser();
+			if (app.globalData.userCmdIndex == "") {
+				await getInitInfo();
+			} else {
+				await getCommandByUser();
+			}
 			await getMessageByUser();
 		}
 	} else {

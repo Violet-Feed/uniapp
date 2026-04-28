@@ -8,6 +8,14 @@ import {
   enqueueEntityAvatars
 } from "@/utils/im-cache.js";
 
+export const getInitInfo = async () => {
+	const { userId } = getApp().globalData;
+	const res = await httpRequestBackData("/im/get_init_info", {});
+	if (!res) return;
+	uni.setStorageSync("user_cmd_index_" + userId, res.user_cmd_index);
+	getApp().globalData.userCmdIndex = res.user_cmd_index;
+};
+
 export const sendMessage = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId,
@@ -22,7 +30,7 @@ export const sendMessage = async (payload) => {
 
 export const getMessageByUser = async () => {
   const { userId } = getApp().globalData;
-  const PAGE_LIMIT = 100;
+  const PAGE_LIMIT = 50;
 
   let hasMore = true;
 
@@ -64,7 +72,7 @@ export const getMessageByUser = async () => {
     }
     await ensureUsersCached(privateUserIds);
     await ensureAgentsCached(privateAgentIds);
-
+	//todo:处理extra
     const msgRows = [];
     const conRows = [];
     for (const con of cons) {
@@ -89,7 +97,7 @@ export const getMessageByUser = async () => {
 
       const core = conInfo.con_core_info || {};
       const setting = conInfo.con_setting_info || {};
-      const last_message = msgBodies[0]?(await transformContent(msgBodies[0])) : "";
+      const last_message_id = msgBodies[0]? msgBodies[0].msg_id : 0;
       const peer_id =
         (conInfo.con_type === 1 || conInfo.con_type === 4)
           ? (peerMap.get(conInfo.con_id) || null)
@@ -115,7 +123,8 @@ export const getMessageByUser = async () => {
         read_index_end: setting.read_index_end ?? 0,
         read_badge_count: setting.read_badge_count ?? 0,
         user_con_index: Number(conInfo.user_con_index ?? 0),
-        last_message,
+		is_member: conInfo.is_member ?? 1,
+        last_message_id,
         peer_id
       });
     }
@@ -128,13 +137,14 @@ export const getMessageByUser = async () => {
 
 export const getCommandByUser = async () => {
   const { userId } = getApp().globalData;
+  const PAGE_LIMIT = 200;
   let hasMore = true;
   while (hasMore) {
     hasMore = false;
     const userCmdIndex = getApp().globalData.userCmdIndex;
     const res = await httpRequestBackData("/im/get_command_by_user", {
       user_cmd_index: userCmdIndex + 1,
-      limit: Number.MAX_SAFE_INTEGER
+      limit: PAGE_LIMIT
     });
     if (!res) return undefined;
     const msgBodies = res.msg_bodies || [];
@@ -161,6 +171,7 @@ export const getMessageByConversation = async (conShortId, conIndex, limit) => {
   if (msgBodies.length === 0) return msgBodies;
   const msgRows = [];
   for (let i = 0; i < msgBodies.length; i++) {
+	//todo:处理extra
     const msg = msgBodies[i];
     msg.msg_content = await transformContent(msg);
     msgRows.push({
@@ -190,6 +201,14 @@ export const markRead = async (conShortId, readIndex, readCount) => {
 		read_badge_count: readCount,
 	}
 	return httpRequestBackBool("/im/mark_read",data);
+};
+
+export const recallMessage = async (payload) => {
+	const data={
+		con_short_id: payload.conShortId,
+		msg_id: payload.msg_id
+	}
+	return httpRequestBackBool("/im/recall_message",data);
 };
 
 export const createConversation = async (payload) => {
@@ -230,7 +249,8 @@ export const createConversation = async (payload) => {
     read_index_end: 0,
     read_badge_count: 0,
     user_con_index: userConIndex,
-    last_message: "",
+	is_member: 1,
+    last_message_id: 0,
     peer_id: 0
   }]);
   return {
@@ -247,6 +267,40 @@ export const getConversationInfo = async (conShortId) => {
 	return httpRequestBackData("/im/get_conversation_info",data);
 }
 
+export const updateConversationCore = async (payload) => {
+	const data={
+		con_short_id: payload.conShortId,
+		type: payload.type,
+		value: payload.value
+	}
+	return httpRequestBackBool("/im/update_conversation_core",data);
+}
+
+export const updateConversationSetting = async (payload) => {
+	const data={
+		con_short_id: payload.conShortId,
+		type: payload.type,
+		value: payload.value
+	}
+	return httpRequestBackBool("/im/update_conversation_setting",data);
+}
+
+export const updateConversationMember = async (payload) => {
+	const data={
+		con_short_id: payload.conShortId,
+		type: payload.type,
+		value: payload.value
+	}
+	return httpRequestBackBool("/im/update_conversation_member",data);
+}
+
+export const deleteConversation = async (payload) => {
+	const data={
+		con_short_id: payload.conShortId
+	}
+	return httpRequestBackBool("/im/delete_conversation",data);
+}
+
 export const getConversationMembers = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId
@@ -257,10 +311,17 @@ export const getConversationMembers = async (payload) => {
 export const addConversationMembers = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId,
-		con_id: payload.conId,
 		members: payload.members
 	};
 	return httpRequestBackBool("/im/add_conversation_members",data);
+};
+
+export const removeConversationMember = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId,
+		member: payload.member
+	};
+	return httpRequestBackBool("/im/remove_conversation_member",data);
 };
 
 export const getConversationAgents = async (payload) => {
@@ -273,10 +334,17 @@ export const getConversationAgents = async (payload) => {
 export const addConversationAgents = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId,
-		con_id: payload.conId,
 		agent_ids: payload.agentIds
 	};
 	return httpRequestBackBool("/im/add_conversation_agents",data);
+};
+
+export const removeConversationAgent = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId,
+		agent_id: payload.agentId
+	};
+	return httpRequestBackBool("/im/remove_conversation_agent",data);
 };
 
 export const transformContent = async (message) => {
@@ -284,15 +352,24 @@ export const transformContent = async (message) => {
 	try {
 		const data = JSONbig.parse(message.msg_content);
 		const senders = [];
+
 		if (data.operator !== undefined && data.operator !== null && String(data.operator) !== '') {
 			senders.push({
 				sender_type: 1,
 				sender_id: data.operator
 			});
 		}
+
+		let contentIds = [];
 		if (Array.isArray(data.content)) {
+			contentIds = data.content;
+		} else if ((data.type == 2 || data.type == 8) && data.content !== undefined && data.content !== null && String(data.content) !== '') {
+			contentIds = [data.content];
+		}
+
+		if (contentIds.length > 0) {
 			const contentSenderType = data.type == 7 || data.type == 8 ? 2 : 1;
-			for (const senderId of data.content) {
+			for (const senderId of contentIds) {
 				if (senderId === undefined || senderId === null || String(senderId) === '') continue;
 				senders.push({
 					sender_type: contentSenderType,
@@ -300,6 +377,7 @@ export const transformContent = async (message) => {
 				});
 			}
 		}
+
 		const nameMap = new Map();
 		if (senders.length > 0) {
 			const infos = await DB.getMemberInfosBySenders(message.con_id, senders);
@@ -309,20 +387,22 @@ export const transformContent = async (message) => {
 				}
 			}
 		}
+
 		const operator = nameMap.get(`1_${data.operator}`) || '用户';
 		switch (data.type) {
 			case 1:
-				if (Array.isArray(data.content) && data.content.length > 0) {
-					const memberNames = data.content.map(id => nameMap.get(`1_${id}`) || '用户');
+				if (contentIds.length > 0) {
+					const memberNames = contentIds.map(id => nameMap.get(`1_${id}`) || '用户');
 					return `${operator} 邀请 ${memberNames.join('、')} 加入了群聊`;
 				}
-				return `${operator} 加入了群聊`;
 			case 2:
-				if (Array.isArray(data.content) && data.content.length > 0) {
-					const memberNames = data.content.map(id => nameMap.get(`1_${id}`) || '用户');
+				if (contentIds.length > 0) {
+					if (Number(data.operator) == Number(contentIds[0])) {
+						return `${operator} 退出了群聊`;
+					}
+					const memberNames = contentIds.map(id => nameMap.get(`1_${id}`) || '用户');
 					return `${operator} 将 ${memberNames.join('、')} 移出了群聊`;
 				}
-				return `${operator} 退出了群聊`;
 			case 3:
 				return `${operator} 修改群名为 "${data.content}"`;
 			case 4:
@@ -332,11 +412,11 @@ export const transformContent = async (message) => {
 			case 6:
 				return `${operator} 解散了群聊`;
 			case 7: {
-				const agentNames = data.content.map(id => nameMap.get(`2_${id}`) || 'AI');
+				const agentNames = contentIds.map(id => nameMap.get(`2_${id}`) || 'AI');
 				return `${operator} 将智能体 ${agentNames.join('、')} 添加进群聊`;
 			}
 			case 8: {
-				const agentNames = data.content.map(id => nameMap.get(`2_${id}`) || 'AI');
+				const agentNames = contentIds.map(id => nameMap.get(`2_${id}`) || 'AI');
 				return `${operator} 将智能体 ${agentNames.join('、')} 移出了群聊`;
 			}
 			default:
@@ -347,7 +427,7 @@ export const transformContent = async (message) => {
 		console.error('解析群聊消息失败:', e, message.msg_content);
 		return message.msg_content;
 	}
-}
+};
 
 export const handleCommandMessage = async (msg) => {
   const conId = msg.con_id;
@@ -418,16 +498,24 @@ export const handleCommandMessage = async (msg) => {
         const memberCount = await DB.getMemberCount(conId);
         const map = new Map();
         map.set("member_count", memberCount);
+		const selfUserId = getApp().globalData.userId;
+		if (addedIds.some(id => String(id) === String(selfUserId))) {
+		  map.set("is_member", 1);
+		}
         await DB.updateConversation(conId, map);
         break;
       }
       case 2: {
-        const removedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
-        if (removedIds.length === 0) break;
-        await DB.deleteMembersByIds(conId, 1, removedIds);
+        const removedId = cmdMessage.content;
+        if (removedId === null || removedId === undefined || removedId === '') break;
+        await DB.deleteMembersByIds(conId, 1, [removedId]);
         const memberCount = await DB.getMemberCount(conId);
         const map = new Map();
         map.set("member_count", memberCount);
+		const selfUserId = getApp().globalData.userId;
+		if (String(removedId) === String(selfUserId)) {
+		  map.set("is_member", 0);
+		}
         await DB.updateConversation(conId, map);
         break;
       }
@@ -518,9 +606,9 @@ export const handleCommandMessage = async (msg) => {
         break;
       }
       case 8: {
-        const removedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
-        if (removedIds.length === 0) break;
-        await DB.deleteMembersByIds(conId, 2, removedIds);
+        const removedId = cmdMessage.content;
+        if (removedId === null || removedId === undefined || removedId === '') break;
+        await DB.deleteMembersByIds(conId, 2, [removedId]);
         break;
       }
       default:
@@ -534,6 +622,39 @@ export const handleCommandMessage = async (msg) => {
     map.set("read_badge_count", cmdMessage.read_badge_count);
     await DB.updateConversation(conId, map);
   } else if (msg.msg_type == 102) {
+    const cmdMessage = JSONbig.parse(msg.msg_content);
+    const msgId = cmdMessage.msg_id;
+    if (msgId === null || msgId === undefined || msgId === '') return;
+    const extraMap = JSONbig.parse(cmdMessage.extra || '{}');
+	console.log(extraMap.is_recall)
+	console.log(typeof extraMap.is_recall)
+    const isRecall =
+      extraMap.is_recall === true ||
+      extraMap.is_recall === 'true' ||
+      extraMap.is_recall === 1 ||
+      extraMap.is_recall === '1';
+    if (isRecall) {
+      await DB.updateMessage(msgId, {
+		sender_type: 3,
+		//todo:查用户名
+        msg_content: '撤回了一条消息',
+        extra: cmdMessage.extra
+      });
+    }
+  } else if (msg.msg_type == 103) {
+  } else if (msg.msg_type == 104) {
+    const cmdMessage = JSONbig.parse(msg.msg_content);
+    switch (cmdMessage.type) {
+      case 1: {
+        const map = new Map();
+        map.set("nick_name", cmdMessage.content || "");
+        await DB.updateMember(conId, msg.sender_type, msg.sender_id, map);
+        break;
+      }
+      default:
+        console.warn("未知的成员命令类型:", cmdMessage.type);
+        break;
+    }
   }
 };
 

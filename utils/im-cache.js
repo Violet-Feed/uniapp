@@ -522,9 +522,9 @@ const rosterQueue = createQueue({
             member_type: 2,
             nick_name: a.agent_name || "AI",
             privilege: 0,
-            create_time: 0,
-            status: 0,
-            extra: ""
+            create_time: a.create_time ?? 0,
+            status: a.status ?? 0,
+            extra: a.extra || ""
           });
 
           if (!oldAgentSet.has(aid)) {

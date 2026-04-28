@@ -307,7 +307,7 @@ export default {
 
 .selected-list {
     display: inline-flex;
-    padding: 0 16px;
+    padding: 6px 16px 0;
     gap: 16px;
 }
 
@@ -320,6 +320,7 @@ export default {
 
 .selected-avatar-wrapper {
     position: relative;
+    overflow: visible;
 }
 
 .selected-avatar {
@@ -331,7 +332,7 @@ export default {
 
 .remove-badge {
     position: absolute;
-    top: -4px;
+    top: -2px;
     right: -4px;
     width: 18px;
     height: 18px;
@@ -341,6 +342,7 @@ export default {
     align-items: center;
     justify-content: center;
     border: 2px solid #fff;
+    box-sizing: border-box;
 }
 
 .remove-icon {

@@ -35,7 +35,12 @@
 							'select-circle-active': isSelectedAgent(item.agent_id),
 							'select-circle-disabled': isExistingAgent(item.agent_id)
 						}"
-					></view>
+					>
+						<text
+							v-if="isSelectedAgent(item.agent_id) || isExistingAgent(item.agent_id)"
+							class="select-check"
+						>✓</text>
+					</view>
 
 					<image
 						class="avatar"
@@ -51,10 +56,6 @@
 						<text class="agent-desc">
 							{{ item.description || '暂无描述' }}
 						</text>
-
-						<view class="agent-bottom">
-							<text class="meta-text">{{ formatTime(item.create_time) }}</text>
-						</view>
 					</view>
 				</view>
 
@@ -186,8 +187,7 @@ export default {
 				agent_id: item?.agent_id ? String(item.agent_id) : '',
 				agent_name: item?.agent_name || '',
 				avatar_uri: item?.avatar_uri || '',
-				description: item?.description || '',
-				create_time: item?.create_time || 0
+				description: item?.description || ''
 			}));
 		},
 
@@ -244,7 +244,6 @@ export default {
 			this.submitting = true;
 			const res = await addConversationAgents({
 				conShortId: this.conShortId,
-				conId: this.conId,
 				agentIds: newAgentIds
 			});
 
@@ -257,25 +256,6 @@ export default {
 
 		goBack() {
 			uni.navigateBack();
-		},
-
-		formatTime(timestamp) {
-			if (!timestamp) return '-';
-
-			let value = Number(timestamp);
-			if (!Number.isFinite(value)) return '-';
-			if (value < 1e12) value *= 1000;
-
-			const date = new Date(value);
-			if (Number.isNaN(date.getTime())) return '-';
-
-			const y = date.getFullYear();
-			const m = String(date.getMonth() + 1).padStart(2, '0');
-			const d = String(date.getDate()).padStart(2, '0');
-			const hh = String(date.getHours()).padStart(2, '0');
-			const mm = String(date.getMinutes()).padStart(2, '0');
-
-			return `${y}-${m}-${d} ${hh}:${mm}`;
 		}
 	}
 };
@@ -335,7 +315,7 @@ export default {
 
 .agent-card {
 	display: flex;
-	align-items: stretch;
+	align-items: center;
 	padding: 24rpx;
 	margin-bottom: 20rpx;
 	background: #ffffff;
@@ -354,9 +334,11 @@ export default {
 	border: 2rpx solid #c9ced6;
 	background: #ffffff;
 	flex-shrink: 0;
-	align-self: center;
 	margin-right: 20rpx;
 	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .select-circle-active {
@@ -367,6 +349,13 @@ export default {
 .select-circle-disabled {
 	background: #4f7cff;
 	border-color: #4f7cff;
+}
+
+.select-check {
+	font-size: 24rpx;
+	font-weight: 700;
+	color: #ffffff;
+	line-height: 1;
 }
 
 .avatar {
@@ -384,11 +373,10 @@ export default {
 	margin-left: 20rpx;
 	display: flex;
 	flex-direction: column;
-	justify-content: space-between;
+	justify-content: center;
 }
 
-.agent-top,
-.agent-bottom {
+.agent-top {
 	display: flex;
 	align-items: center;
 }
@@ -398,21 +386,19 @@ export default {
 	font-weight: 600;
 	color: #1f2329;
 	line-height: 1.4;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .agent-desc {
+	margin-top: 8rpx;
 	font-size: 26rpx;
 	line-height: 1.5;
 	color: #4e5969;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.meta-text {
-	font-size: 22rpx;
-	color: #a0a7b4;
-	line-height: 1.4;
 }
 
 .state-box,

@@ -8,7 +8,7 @@
             <view class="header-center">
                 <text class="chat-title">{{ chatName }}</text>
             </view>
-            <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2">
+            <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2 && canSendMessage">
                 <text class="settings-icon">⋮</text>
             </view>
         </view>
@@ -29,21 +29,30 @@
                         <text class="time-text">{{ formatTime(message.create_time) }}</text>
                     </view>
 
-					<!-- 我发送的消息 -->
-					<view class="message message-right" v-if="isSelfMessage(message)">
-						<view class="message-status">
-							<view class="status-loading" v-if="message.status == -1"></view>
-						</view>
-						<view class="message-content message-content-right">
-							<text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
-							<view class="bubble bubble-right">
-								<text class="bubble-text">{{ message.msg_content }}</text>
-							</view>
-						</view>
-						<view class="avatar-box" @click="goToUserProfile(message)">
-							<image class="avatar" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
-						</view>
-					</view>
+                    <!-- 我发送的消息 -->
+                    <view class="message message-right" v-if="isSelfMessage(message)">
+                        <view class="message-content message-content-right">
+                            <text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
+                            <view class="self-bubble-row">
+                                <view class="message-status">
+                                    <view class="status-loading" v-if="message.status == -1"></view>
+                                </view>
+                                <view
+                                    class="bubble bubble-right"
+                                    @touchstart="onMessageTouchStart"
+                                    @touchmove="onMessageTouchMove"
+                                    @touchend="onMessageTouchEnd"
+                                    @touchcancel="onMessageTouchEnd"
+                                    @longpress.stop="showMessageActions($event, message)"
+                                >
+                                    <text class="bubble-text">{{ message.msg_content }}</text>
+                                </view>
+                            </view>
+                        </view>
+                        <view class="avatar-box" @click="goToUserProfile(message)">
+                            <image class="avatar" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
+                        </view>
+                    </view>
 
                     <!-- 他人/AI 发送的消息 -->
                     <view class="message message-left" v-else-if="isOtherSenderMessage(message)">
@@ -52,7 +61,14 @@
                         </view>
                         <view class="message-content message-content-left">
                             <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
-                            <view class="bubble bubble-left">
+                            <view
+                                class="bubble bubble-left"
+                                @touchstart="onMessageTouchStart"
+                                @touchmove="onMessageTouchMove"
+                                @touchend="onMessageTouchEnd"
+                                @touchcancel="onMessageTouchEnd"
+                                @longpress.stop="showMessageActions($event, message)"
+                            >
                                 <text class="bubble-text">{{ message.msg_content }}</text>
                             </view>
                         </view>
@@ -60,7 +76,14 @@
 
                     <!-- 系统消息 -->
                     <view class="message message-center" v-else>
-                        <view class="system-message">
+                        <view
+                            class="system-message"
+                            @touchstart="onMessageTouchStart"
+                            @touchmove="onMessageTouchMove"
+                            @touchend="onMessageTouchEnd"
+                            @touchcancel="onMessageTouchEnd"
+                            @longpress.stop="showMessageActions($event, message)"
+                        >
                             <text class="system-text">{{ message.msg_content }}</text>
                         </view>
                     </view>
@@ -68,8 +91,24 @@
             </view>
         </scroll-view>
 
+        <!-- 长按消息操作菜单 -->
+        <view class="message-action-mask" v-if="messageAction.visible" @click="hideMessageActions">
+            <view
+                class="message-action-menu"
+                :style="{ left: messageAction.left + 'px', top: messageAction.top + 'px' }"
+                @click.stop
+            >
+                <view class="message-action-item" @click="copyMessage">复制</view>
+                <view
+                    class="message-action-item danger-action"
+                    v-if="canRecallMessage(messageAction.message)"
+                    @click="recallSelectedMessage"
+                >撤回</view>
+            </view>
+        </view>
+
         <!-- 输入栏 -->
-        <view class="input-bar">
+        <view class="input-bar" v-if="canSendMessage">
             <view class="input-wrapper">
                 <input class="input-field" v-model="inputText" placeholder="说点什么..." placeholder-class="input-placeholder" @confirm="sendMessage" confirm-type="send" />
             </view>
@@ -77,13 +116,17 @@
                 <text class="send-icon">➤</text>
             </view>
         </view>
+
+        <view class="disabled-input-bar" v-else>
+            <text class="disabled-input-text">无法在已退出的群聊中发送消息</text>
+        </view>
     </view>
 </template>
 
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-import { sendMessage, getMessageByConversation,markRead } from '@/request/im.js';
+import { sendMessage, getMessageByConversation, markRead, recallMessage } from '@/request/im.js';
 
 export default {
     data() {
@@ -102,8 +145,25 @@ export default {
             commandListener: null,
             chatName: '',
             userDefaultAvatar: '/static/user_avatar.png',
-            aiDefaultAvatar: '/static/ai.png'
+            aiDefaultAvatar: '/static/ai.png',
+            messageAction: {
+                visible: false,
+                left: 0,
+                top: 0,
+                message: null
+            },
+            messageTouch: {
+                startX: 0,
+                startY: 0,
+                moved: false
+            }
         };
+    },
+
+    computed: {
+        canSendMessage() {
+            return Number(this.conversation?.is_member ?? 1) !== 0;
+        }
     },
 
     async onLoad(options) {
@@ -140,9 +200,9 @@ export default {
                     this.hasMore = false;
                 }
             }
-			if (this.conversation.badge_count - this.conversation.read_badge_count > 0) {
-				markRead(this.conversation.con_short_id, this.messages[this.messages.length-1].con_index, this.conversation.badge_count);
-			}
+            if (this.conversation.badge_count - this.conversation.read_badge_count > 0) {
+                markRead(this.conversation.con_short_id, this.messages[this.messages.length - 1].con_index, this.conversation.badge_count);
+            }
         }
 
         setTimeout(() => this.scrollToBottom(), 100);
@@ -174,17 +234,17 @@ export default {
                     }
                 }
             }
-			
-			let maxConIndex = 0n;
-			for (let i = this.messages.length - 1; i >= 0; i--) {
-				if (this.messages[i].con_index) {
-					maxConIndex = BigInt(this.messages[i].con_index);
-					break;
-				}
-			}
-			if (msg.con_index && BigInt(msg.con_index) <= maxConIndex) {
-				return;
-			}
+
+            let maxConIndex = 0n;
+            for (let i = this.messages.length - 1; i >= 0; i--) {
+                if (this.messages[i].con_index) {
+                    maxConIndex = BigInt(this.messages[i].con_index);
+                    break;
+                }
+            }
+            if (msg.con_index && BigInt(msg.con_index) <= maxConIndex) {
+                return;
+            }
 
             this.messages.push(msg);
         };
@@ -196,6 +256,8 @@ export default {
                 if (data.msg_body.msg_type == 101) {
                     this.conversation.read_index_end = cmdMessage.read_index_end;
                     this.conversation.read_badge_count = cmdMessage.read_badge_count;
+                } else if (data.msg_body.msg_type == 102) {
+                    this.handleMessageUpdateCommand(cmdMessage);
                 }
             }
         };
@@ -301,6 +363,7 @@ export default {
         },
 
         async sendMessage() {
+            if (!this.canSendMessage) return;
             if (this.inputText.trim() === '') return;
 
             const token = getApp().globalData.token;
@@ -316,64 +379,64 @@ export default {
                 msgContent: sendingText
             };
             let res = await sendMessage(payload);
-			if (res) {
-				const selfKey = `1:${String(this.userId)}`;
-				let selfInfo = this.senderInfoMap.get(selfKey) || {};
-				if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
-					try {
-						const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, [{ sender_type: 1, sender_id: this.userId }]);
-						if (Array.isArray(infos) && infos.length > 0) {
-							selfInfo = {
-								nick_name: infos[0].nick_name || '',
-								avatar_uri: infos[0].avatar_uri || ''
-							};
-							this.senderInfoMap.set(selfKey, selfInfo);
-						}
-					} catch (err) {
-						console.error('get self member info failed:', err);
-					}
-				}
-				const optimisticMessage = {
-					sender_id: this.userId,
-					sender_type: 1,
-					con_short_id: this.conversation.con_short_id,
-					con_id: this.conversation.con_id,
-					con_type: this.conversation.con_type,
-					client_msg_id: clientMsgId,
-					msg_id: res.msg_id,
-					msg_type: 1,
-					msg_content: sendingText,
-					create_time: Date.now() / 1000,
-					status: -1,
-					nick_name: selfInfo.nick_name || '',
-					avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
-				};
-				this.senderInfoMap.set(selfKey, {
-					nick_name: optimisticMessage.nick_name || '',
-					avatar_uri: optimisticMessage.avatar_uri || ''
-				});
-				if (this.messages.length === 0 || this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0) {
-					this.messages.push(optimisticMessage);
-				}
+            if (res) {
+                const selfKey = `1:${String(this.userId)}`;
+                let selfInfo = this.senderInfoMap.get(selfKey) || {};
+                if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
+                    try {
+                        const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, [{ sender_type: 1, sender_id: this.userId }]);
+                        if (Array.isArray(infos) && infos.length > 0) {
+                            selfInfo = {
+                                nick_name: infos[0].nick_name || '',
+                                avatar_uri: infos[0].avatar_uri || ''
+                            };
+                            this.senderInfoMap.set(selfKey, selfInfo);
+                        }
+                    } catch (err) {
+                        console.error('get self member info failed:', err);
+                    }
+                }
+                const optimisticMessage = {
+                    sender_id: this.userId,
+                    sender_type: 1,
+                    con_short_id: this.conversation.con_short_id,
+                    con_id: this.conversation.con_id,
+                    con_type: this.conversation.con_type,
+                    client_msg_id: clientMsgId,
+                    msg_id: res.msg_id,
+                    msg_type: 1,
+                    msg_content: sendingText,
+                    create_time: Date.now() / 1000,
+                    status: -1,
+                    nick_name: selfInfo.nick_name || '',
+                    avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
+                };
+                this.senderInfoMap.set(selfKey, {
+                    nick_name: optimisticMessage.nick_name || '',
+                    avatar_uri: optimisticMessage.avatar_uri || ''
+                });
+                if (this.messages.length === 0 || this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0) {
+                    this.messages.push(optimisticMessage);
+                }
 
-				this.inputText = '';
-				this.scrollToBottom();
-			}
+                this.inputText = '';
+                this.scrollToBottom();
+            }
         },
 
         goToUserProfile(message) {
             if (Number(message.sender_type) == 1) {
-				if (String(message.sender_id) === String(this.userId)) {
-				    uni.navigateTo({
-				        url: '/pages/user/my_profile_copy'
-				    });
-				    return;
-				}
-				uni.navigateTo({
-				    url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
-				});
-				return;
-			}
+                if (String(message.sender_id) === String(this.userId)) {
+                    uni.navigateTo({
+                        url: '/pages/user/my_profile_copy'
+                    });
+                    return;
+                }
+                uni.navigateTo({
+                    url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
+                });
+                return;
+            }
             uni.navigateTo({
                 url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(message.sender_id)}`
             });
@@ -429,6 +492,185 @@ export default {
             }
         },
 
+        onMessageTouchStart(e) {
+            const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {};
+            this.messageTouch = {
+                startX: touch.clientX ?? touch.pageX ?? 0,
+                startY: touch.clientY ?? touch.pageY ?? 0,
+                moved: false
+            };
+        },
+
+        onMessageTouchMove(e) {
+            const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {};
+            const x = touch.clientX ?? touch.pageX ?? 0;
+            const y = touch.clientY ?? touch.pageY ?? 0;
+            const dx = Math.abs(x - this.messageTouch.startX);
+            const dy = Math.abs(y - this.messageTouch.startY);
+
+            if (dx > 8 || dy > 8) {
+                this.messageTouch.moved = true;
+            }
+        },
+
+        onMessageTouchEnd() {
+            setTimeout(() => {
+                this.messageTouch = {
+                    startX: 0,
+                    startY: 0,
+                    moved: false
+                };
+            }, 80);
+        },
+
+        showMessageActions(e, message) {
+            if (!message) return;
+            if (Number(message.sender_type) === 3 || Number(message.send_type) === 3) return;
+            if (this.messageTouch.moved) return;
+
+            const point = this.getLongPressPoint(e);
+            const canRecall = this.canRecallMessage(message);
+            const menuWidth = canRecall ? 128 : 72;
+            const menuHeight = 42;
+            const sys = uni.getSystemInfoSync();
+
+            let left = point.x - menuWidth / 2;
+            let top = point.y - menuHeight - 12;
+
+            left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
+            if (top < 64) top = point.y + 12;
+            top = Math.max(8, Math.min(top, sys.windowHeight - menuHeight - 8));
+
+            this.messageAction = {
+                visible: true,
+                left,
+                top,
+                message
+            };
+        },
+
+        getLongPressPoint(e) {
+            const touch =
+                e?.changedTouches?.[0] ||
+                e?.touches?.[0] ||
+                e?.detail ||
+                {};
+
+            const sys = uni.getSystemInfoSync();
+            const x = touch.clientX ?? touch.pageX ?? touch.x ?? sys.windowWidth / 2;
+            const y = touch.clientY ?? touch.pageY ?? touch.y ?? sys.windowHeight / 2;
+
+            return { x, y };
+        },
+
+        hideMessageActions() {
+            this.messageAction = {
+                visible: false,
+                left: 0,
+                top: 0,
+                message: null
+            };
+        },
+
+        canRecallMessage(message) {
+            if (!this.isSelfMessage(message)) return false;
+            if (!message?.msg_id) return false;
+            if (message.status == -1) return false;
+
+            let createTime = Number(message.create_time || 0);
+            if (!Number.isFinite(createTime) || createTime <= 0) return false;
+            if (createTime > 1e12) createTime = createTime / 1000;
+
+            const now = Date.now() / 1000;
+            return now - createTime <= 5 * 60;
+        },
+
+        copyMessage() {
+            const message = this.messageAction.message;
+            const text = message?.msg_content || '';
+
+            this.hideMessageActions();
+
+            uni.setClipboardData({
+                data: String(text),
+                success: () => {
+                    uni.showToast({
+                        title: '已复制',
+                        icon: 'none'
+                    });
+                }
+            });
+        },
+
+        async recallSelectedMessage() {
+            const message = this.messageAction.message;
+            if (!this.canRecallMessage(message)) {
+                this.hideMessageActions();
+                return;
+            }
+
+            const msgId = message.msg_id;
+            const index = this.findMessageIndexById(msgId);
+
+            this.hideMessageActions();
+
+            const ok = await recallMessage({
+                conShortId: this.conversation.con_short_id,
+                msg_id: msgId
+            });
+
+            if (!ok) return;
+
+            if (index !== -1) {
+                this.messages.splice(index, 1, {
+                    ...this.messages[index],
+                    status: -1
+                });
+            }
+        },
+
+        findMessageIndexById(msgId) {
+            return this.messages.findIndex(item => String(item.msg_id) === String(msgId));
+        },
+
+        handleMessageUpdateCommand(cmdMessage) {
+            const contentMap = typeof cmdMessage.content === 'string'
+                ? JSONbig.parse(cmdMessage.content || '{}')
+                : (cmdMessage.content || {});
+
+            const msgId = cmdMessage.msg_id ?? contentMap.msg_id;
+            if (msgId === null || msgId === undefined || msgId === '') return;
+
+            const extraRaw = cmdMessage.extra ?? contentMap.extra ?? '';
+            const extraMap = typeof extraRaw === 'string'
+                ? JSONbig.parse(extraRaw || '{}')
+                : (extraRaw || {});
+
+            const isRecall =
+                extraMap.is_recall === true ||
+                extraMap.is_recall === 'true' ||
+                extraMap.is_recall === 1 ||
+                extraMap.is_recall === '1';
+
+            if (!isRecall) return;
+
+            const index = this.findMessageIndexById(msgId);
+            if (index === -1) return;
+
+            const extraStr = typeof extraRaw === 'string'
+                ? extraRaw
+                : JSONbig.stringify(extraMap);
+
+            this.messages.splice(index, 1, {
+                ...this.messages[index],
+                sender_type: 3,
+                send_type: 3,
+                msg_content: '撤回了一条消息',
+                extra: extraStr,
+                status: 0
+            });
+        },
+
         formatTime(timestamp) {
             const now = Date.now() / 1000;
             const diff = now - Number(timestamp);
@@ -438,7 +680,7 @@ export default {
             if (diff < 604800) return Math.floor(diff / 86400) + '天前';
             const date = new Date(Number(timestamp) * 1000);
             return `${date.getMonth() + 1}/${date.getDate()}`;
-		},
+        },
 
         shouldShowTime(index) {
             try {
@@ -617,6 +859,7 @@ export default {
 }
 
 .message-content-right {
+    flex: 0 1 auto;
     max-width: calc(100% - 96px);
     align-items: flex-end;
 }
@@ -645,6 +888,7 @@ export default {
 .bubble-text {
     font-size: 15px;
     line-height: 1.5;
+    text-align: left;
 }
 
 .bubble-left {
@@ -658,13 +902,26 @@ export default {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #fff;
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    text-align: right;
+    text-align: left;
+}
+
+.self-bubble-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
 }
 
 .message-status {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
     display: flex;
     align-items: center;
+    justify-content: center;
     margin-right: 4px;
+    padding-top: 12px;
+    flex-shrink: 0;
+    box-sizing: content-box;
 }
 
 .status-loading {
@@ -689,6 +946,52 @@ export default {
     text-align: center;
 }
 
+.message-action-mask {
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    background: transparent;
+}
+
+.message-action-menu {
+    position: fixed;
+    height: 42px;
+    background: rgba(32, 32, 32, 0.96);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.message-action-item {
+    min-width: 64px;
+    height: 42px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.16);
+    box-sizing: border-box;
+}
+
+.message-action-item:last-child {
+    border-right: none;
+}
+
+.message-action-item:active {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.danger-action {
+    color: #ffb3b3;
+}
+
 .input-bar {
     display: flex;
     align-items: center;
@@ -697,6 +1000,21 @@ export default {
     border-top: 1px solid #e5e5e5;
     gap: 12px;
     flex-shrink: 0;
+}
+
+.disabled-input-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 16px;
+    background: #fff;
+    border-top: 1px solid #e5e5e5;
+    flex-shrink: 0;
+}
+
+.disabled-input-text {
+    font-size: 14px;
+    color: #999;
 }
 
 .input-wrapper {

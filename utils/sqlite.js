@@ -1,5 +1,6 @@
 // sqlite_new.js
 // BigInt-safe + sender_id/sender_type + agent table + member keeps both con_short_id and con_id
+// conversation: is_member + last_message_id; pullConversation resolves last_message and last_message_time from message by JOIN
 
 const dbName = 'violet';
 const dbPath = '_doc/db/violet.db';
@@ -183,7 +184,8 @@ async function createTable(userId) {
       read_index_end INTEGER,
       read_badge_count INTEGER,
       user_con_index INTEGER,
-      last_message TEXT,
+      is_member INTEGER DEFAULT 1,
+      last_message_id INTEGER,
       peer_id INTEGER
     );`,
     // con_short_id 已经是 INTEGER PRIMARY KEY，不需要额外索引
@@ -206,7 +208,6 @@ async function createTable(userId) {
       con_index INTEGER
     );`,
     `CREATE INDEX IF NOT EXISTS idx_${msgTable}_con_id_con_index ON ${msgTable} (con_id, con_index);`,
-    `CREATE INDEX IF NOT EXISTS idx_${msgTable}_sender ON ${msgTable} (sender_type, sender_id);`,
 
     // user
     `CREATE TABLE IF NOT EXISTS ${userTable} (
@@ -287,7 +288,8 @@ async function insertConversation(data) {
     'read_index_end',
     'read_badge_count',
     'user_con_index',
-    'last_message',
+    'is_member',
+    'last_message_id',
     'peer_id'
   ];
 
@@ -409,7 +411,7 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
-  const { conTable, userTable, agentTable } = getTablesByUser(loginUserId);
+  const { conTable, msgTable, userTable, agentTable } = getTablesByUser(loginUserId);
 
   const before = (beforeUserConIndex === null || beforeUserConIndex === undefined)
     ? INT64_MAX_STR
@@ -448,7 +450,10 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
       c.read_index_end,
       c.read_badge_count,
       c.user_con_index,
-      c.last_message,
+      c.is_member,
+      CAST(c.last_message_id AS TEXT) AS last_message_id,
+      COALESCE(m.msg_content, '') AS last_message,
+      m.create_time AS last_message_time,
       CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c
     LEFT JOIN ${userTable} u
@@ -457,20 +462,22 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
     LEFT JOIN ${agentTable} a
       ON c.con_type = 4
      AND a.agent_id = c.peer_id
+    LEFT JOIN ${msgTable} m
+      ON m.msg_id = c.last_message_id
     WHERE c.user_con_index <= ${sqlValue(before)}
     ORDER BY c.user_con_index DESC
     LIMIT ${Number(limit)};
   `;
 
   const rows = await selectSql(sql);
-  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_id']);
+  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'last_message_id', 'peer_id']);
 }
 
 async function getConversationById(conId) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
-  const { conTable, userTable, agentTable } = getTablesByUser(loginUserId);
+  const { conTable, msgTable, userTable, agentTable } = getTablesByUser(loginUserId);
 
   const sql = `
     SELECT
@@ -505,7 +512,10 @@ async function getConversationById(conId) {
       c.read_index_end,
       c.read_badge_count,
       c.user_con_index,
-      c.last_message,
+      c.is_member,
+      CAST(c.last_message_id AS TEXT) AS last_message_id,
+      COALESCE(m.msg_content, '') AS last_message,
+      m.create_time AS last_message_time,
       CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c
     LEFT JOIN ${userTable} u
@@ -514,19 +524,21 @@ async function getConversationById(conId) {
     LEFT JOIN ${agentTable} a
       ON c.con_type = 4
      AND a.agent_id = c.peer_id
+    LEFT JOIN ${msgTable} m
+      ON m.msg_id = c.last_message_id
     WHERE c.con_id = ${sqlValue(conId)}
     LIMIT 1;
   `;
 
   const rows = await selectSql(sql);
-  return firstRow(mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_id']));
+  return firstRow(mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'last_message_id', 'peer_id']));
 }
 
 async function getConversationByShortId(conShortId) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
-  const { conTable, userTable, agentTable } = getTablesByUser(loginUserId);
+  const { conTable, msgTable, userTable, agentTable } = getTablesByUser(loginUserId);
 
   const sql = `
     SELECT
@@ -561,7 +573,10 @@ async function getConversationByShortId(conShortId) {
       c.read_index_end,
       c.read_badge_count,
       c.user_con_index,
-      c.last_message,
+      c.is_member,
+      CAST(c.last_message_id AS TEXT) AS last_message_id,
+      COALESCE(m.msg_content, '') AS last_message,
+      m.create_time AS last_message_time,
       CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c
     LEFT JOIN ${userTable} u
@@ -570,12 +585,14 @@ async function getConversationByShortId(conShortId) {
     LEFT JOIN ${agentTable} a
       ON c.con_type = 4
      AND a.agent_id = c.peer_id
+    LEFT JOIN ${msgTable} m
+      ON m.msg_id = c.last_message_id
     WHERE c.con_short_id = ${sqlValue(conShortId)}
     LIMIT 1;
   `;
 
   const rows = await selectSql(sql);
-  return firstRow(mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'peer_id']));
+  return firstRow(mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'last_message_id', 'peer_id']));
 }
 
 /* ----------------------------- 拉取：Message ----------------------------- */
@@ -912,6 +929,26 @@ async function updateConversation(conId, data) {
   return execSql(sql);
 }
 
+async function updateMember(conId, memberType, memberId, data) {
+  await ensureOpen();
+
+  const userId = getLoginUserId();
+  const { memberTable } = getTablesByUser(userId);
+
+  const entries = toEntries(data);
+  if (entries.length === 0) return;
+
+  const setClause = entries.map(([k, v]) => `${k} = ${sqlValue(v)}`).join(', ');
+  const sql = `
+    UPDATE ${memberTable}
+    SET ${setClause}
+    WHERE con_id = ${sqlValue(conId)}
+      AND member_type = ${sqlValue(memberType)}
+      AND CAST(member_id AS TEXT) = ${sqlValue(String(memberId))};
+  `;
+  return execSql(sql);
+}
+
 async function updateMessage(msgId, data) {
   await ensureOpen();
 
@@ -985,7 +1022,7 @@ async function deleteMembersByIds(conId, memberType, memberIds) {
   if (!Array.isArray(memberIds) || memberIds.length === 0) return;
 
   const uniq = Array.from(new Set(memberIds.map(v => String(v))));
-  const inList = uniq.map(v => sqlValue(v)).join(",");
+  const inList = uniq.map(v => sqlValue(v)).join(',');
 
   const sql = `
     DELETE FROM ${memberTable}
@@ -1023,6 +1060,7 @@ export default {
   getMemberCount,
 
   updateConversation,
+  updateMember,
   updateMessage,
   updateUserLocalAvatar,
   updateAgentLocalAvatar,
