@@ -149,6 +149,7 @@ import {
 	updateConversationMember,
 	removeConversationMember
 } from '@/request/im.js';
+import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 
 export default {
 	data() {
@@ -220,7 +221,7 @@ export default {
 				this.members = Array.isArray(memberRes) ? memberRes : [];
 
 				const userId = getApp().globalData.userId;
-				const selfInfos = await DB.getMemberInfosBySenders(this.conId, [
+				const selfInfos = await getMemberInfosBySendersEnsure(this.conId, this.conShortId, [
 					{ sender_type: 1, sender_id: userId }
 				]);
 

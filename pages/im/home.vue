@@ -29,6 +29,16 @@
             <view class="conversation-list">
                 <!-- 固定通知入口 -->
                 <view class="notice-row">
+                    <view class="notice-card" @click="openNotice(NOTICE_GROUP.SYSTEM)">
+                        <view class="notice-avatar-wrapper">
+                            <image class="notice-avatar" src="/static/notice.png" mode="aspectFill"></image>
+                            <view class="unread-badge" v-if="systemNoticeCount > 0">
+                                {{ systemNoticeCount > 99 ? '99+' : systemNoticeCount }}
+                            </view>
+                        </view>
+                        <text class="notice-name">系统通知</text>
+                    </view>
+
                     <view class="notice-card" @click="openNotice(NOTICE_GROUP.FOLLOW)">
                         <view class="notice-avatar-wrapper">
                             <image class="notice-avatar" src="/static/notice.png" mode="aspectFill"></image>
@@ -60,7 +70,7 @@
                     @touchmove="onConversationTouchMove"
                     @touchend="onConversationTouchEnd"
                     @touchcancel="onConversationTouchEnd"
-                    @longpress.stop="showDeleteConversationAction(conversation)"
+                    @longpress.stop="showDeleteConversationAction($event, conversation)"
                 >
                     <view class="avatar-wrapper">
                         <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
@@ -95,13 +105,27 @@
                 </view>
             </view>
         </scroll-view>
+
+        <!-- 长按会话操作菜单 -->
+        <view class="conversation-action-mask" v-if="conversationAction.visible" @click="hideConversationAction">
+            <view
+                class="conversation-action-menu"
+                :style="{ left: conversationAction.left + 'px', top: conversationAction.top + 'px' }"
+                @click.stop
+            >
+                <view class="conversation-action-item danger-action" @click="confirmDeleteSelectedConversation">
+                    删除
+                </view>
+            </view>
+        </view>
     </view>
 </template>
 
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-import { getNoitceCount, deleteConversation as deleteConversationApi } from '@/request/im.js';
+import { getNoitceCount, updateConversationSetting, markRead } from '@/request/im.js';
+import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 
 export default {
     data() {
@@ -126,6 +150,14 @@ export default {
                 moved: false
             },
 
+            conversationAction: {
+                visible: false,
+                left: 0,
+                top: 0,
+                conversation: null
+            },
+
+            systemNoticeCount: 0,
             followNoticeCount: 0,
             actionNoticeCount: 0
         };
@@ -168,27 +200,51 @@ export default {
             }
         });
 
-        this.commandListener = uni.$on('command', (data) => {
+        this.commandListener = uni.$on('command', async (data) => {
             for (let i = 0; i < this.conversationList.length; i++) {
                 if (this.conversationList[i].con_id == data.msg_body.con_id) {
                     const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
 
-                    if (data.msg_body.msg_type == 101) {
+                    if (data.msg_body.msg_type == 100) {
+                        if (cmdMessage.type == 3) {
+                            this.conversationList[i].name = cmdMessage.content || '群聊';
+                        } else if (cmdMessage.type == 4) {
+                            this.conversationList[i].avatar_uri = cmdMessage.content || '/static/conv_avatar.png';
+                        }
+                    } else if (data.msg_body.msg_type == 101) {
                         this.conversationList[i].read_index_end = cmdMessage.read_index_end;
                         this.conversationList[i].read_badge_count = cmdMessage.read_badge_count;
                     } else if (data.msg_body.msg_type == 102) {
-                        DB.getConversationByShortId(data.msg_body.con_short_id).then((res) => {
-                            if (!res) return;
+                        const msgId = cmdMessage.msg_id;
+                        if (String(msgId) == String(this.conversationList[i].last_message_id)) {
+                            const extraMap = JSONbig.parse(cmdMessage.extra || '{}');
+                            const isRecall = extraMap.is_recall === true;
+                            if (isRecall) {
+                                let nickname = '用户';
+                                const selfUserId = getApp().globalData.userId;
 
-                            const newConversation = Array.isArray(res) ? res[0] : res;
-                            if (!newConversation) return;
+                                if (String(data.msg_body.sender_id) === String(selfUserId)) {
+                                    nickname = '你';
+                                } else {
+                                    const members = await getMemberInfosBySendersEnsure(
+                                        data.msg_body.con_id,
+                                        data.msg_body.con_short_id,
+                                        [
+                                            {
+                                                sender_type: 1,
+                                                sender_id: data.msg_body.sender_id
+                                            }
+                                        ]
+                                    );
+                                    const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
+                                    nickname = member?.nick_name || '用户';
+                                }
 
-                            this.conversationList.splice(i, 1, {
-                                ...this.conversationList[i],
-                                ...newConversation
-                            });
-                        });
+                                this.conversationList[i].last_message = `${nickname}撤回了一条消息`;
+                            }
+                        }
                     }
+
                     break;
                 }
             }
@@ -198,17 +254,20 @@ export default {
             const g = data && typeof data.group === 'number' ? data.group : 0;
             const op = data && typeof data.op_type === 'number' ? data.op_type : 0;
 
+            const isSystem = g === this.NOTICE_GROUP.SYSTEM;
             const isFollow = g === this.NOTICE_GROUP.FOLLOW;
             const isAction = g === this.NOTICE_GROUP.ACTION;
-            if (!isFollow && !isAction) return;
+            if (!isSystem && !isFollow && !isAction) return;
 
             if (op === 1) {
+                if (isSystem) this.systemNoticeCount = Number(this.systemNoticeCount || 0) + 1;
                 if (isFollow) this.followNoticeCount = Number(this.followNoticeCount || 0) + 1;
                 if (isAction) this.actionNoticeCount = Number(this.actionNoticeCount || 0) + 1;
                 return;
             }
 
             if (op === 2) {
+                if (isSystem) this.systemNoticeCount = 0;
                 if (isFollow) this.followNoticeCount = 0;
                 if (isAction) this.actionNoticeCount = 0;
             }
@@ -225,7 +284,14 @@ export default {
 
     methods: {
         async loadNoticeCounts() {
-            let payload = { group: this.NOTICE_GROUP.FOLLOW };
+            let payload = { group: this.NOTICE_GROUP.SYSTEM };
+            const systemRes = await getNoitceCount(payload);
+            this.systemNoticeCount =
+                systemRes && typeof systemRes.notice_count === 'number'
+                    ? systemRes.notice_count
+                    : 0;
+
+            payload = { group: this.NOTICE_GROUP.FOLLOW };
             const followRes = await getNoitceCount(payload);
             this.followNoticeCount =
                 followRes && typeof followRes.notice_count === 'number'
@@ -296,19 +362,58 @@ export default {
             }, 80);
         },
 
-        showDeleteConversationAction(conversation) {
+        showDeleteConversationAction(e, conversation) {
             if (this.conversationTouch.moved) return;
             if (!conversation?.con_short_id || this.deletingConId) return;
 
-            uni.showActionSheet({
-                itemList: ['删除'],
-                itemColor: '#ff4d4f',
-                success: res => {
-                    if (res.tapIndex === 0) {
-                        this.confirmDeleteConversation(conversation);
-                    }
-                }
-            });
+            const point = this.getLongPressPoint(e);
+            const menuWidth = 72;
+            const menuHeight = 42;
+            const sys = uni.getSystemInfoSync();
+
+            let left = point.x - menuWidth / 2;
+            let top = point.y - menuHeight - 12;
+
+            left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
+            if (top < 64) top = point.y + 12;
+            top = Math.max(8, Math.min(top, sys.windowHeight - menuHeight - 8));
+
+            this.conversationAction = {
+                visible: true,
+                left,
+                top,
+                conversation
+            };
+        },
+
+        getLongPressPoint(e) {
+            const touch =
+                e?.changedTouches?.[0] ||
+                e?.touches?.[0] ||
+                e?.detail ||
+                {};
+
+            const sys = uni.getSystemInfoSync();
+            const x = touch.clientX ?? touch.pageX ?? touch.x ?? sys.windowWidth / 2;
+            const y = touch.clientY ?? touch.pageY ?? touch.y ?? sys.windowHeight / 2;
+
+            return { x, y };
+        },
+
+        hideConversationAction() {
+            this.conversationAction = {
+                visible: false,
+                left: 0,
+                top: 0,
+                conversation: null
+            };
+        },
+
+        confirmDeleteSelectedConversation() {
+            const conversation = this.conversationAction.conversation;
+            this.hideConversationAction();
+            if (!conversation) return;
+            this.confirmDeleteConversation(conversation);
         },
 
         confirmDeleteConversation(conversation) {
@@ -330,18 +435,48 @@ export default {
         async deleteConversation(conversation) {
             const conShortId = conversation?.con_short_id;
             const conId = conversation?.con_id;
-            if (!conShortId || !conId || this.deletingConId) return;
+            const lastMessageId = conversation?.last_message_id;
+
+            if (!conShortId || !conId || !lastMessageId || this.deletingConId) return;
 
             this.deletingConId = String(conId);
 
             try {
-                const ok = await deleteConversationApi({
-                    conShortId
+                const messages = await DB.getMessagesByIds([lastMessageId]);
+                const lastMessage = Array.isArray(messages) && messages.length > 0 ? messages[0] : null;
+
+                if (!lastMessage || lastMessage.con_index === null || lastMessage.con_index === undefined) {
+                    throw new Error('last message not found');
+                }
+
+                const unreadCount = Number(conversation.badge_count || 0) - Number(conversation.read_badge_count || 0);
+                if (unreadCount > 0) {
+                    const readOk = await markRead(conShortId, lastMessage.con_index, conversation.badge_count);
+                    if (!readOk) {
+                        throw new Error('markRead returned false');
+                    }
+                }
+
+                const value = (BigInt(String(lastMessage.con_index)) + 1n).toString();
+                const ok = await updateConversationSetting({
+                    conShortId,
+                    type: 'min_index',
+                    value
                 });
 
-                if (!ok) return;
+                if (!ok) {
+                    throw new Error('updateConversationSetting returned false');
+                }
 
-                this.conversationList = this.conversationList.filter(item => String(item.con_id) !== String(conId));
+                const map = new Map();
+                map.set('status', 1);
+
+                await DB.deleteMessagesByIndex(conId, lastMessage.con_index);
+                await DB.updateConversation(conId, map);
+
+                this.conversationList = this.conversationList.filter(
+                    item => String(item.con_id) !== String(conId)
+                );
             } catch (err) {
                 console.error('deleteConversation failed', err);
                 uni.showToast({
@@ -471,10 +606,18 @@ export default {
     border-bottom: 1px solid #f0f0f0;
 }
 
-.dropdown-item:last-child { border-bottom: none; }
-.dropdown-item:active { background: #f5f5f5; }
+.dropdown-item:last-child {
+    border-bottom: none;
+}
 
-.item-icon { font-size: 20px; }
+.dropdown-item:active {
+    background: #f5f5f5;
+}
+
+.item-icon {
+    font-size: 20px;
+}
+
 .item-text {
     font-size: 15px;
     color: #333;
@@ -482,16 +625,21 @@ export default {
 }
 
 /* ==================== 会话列表 ==================== */
-.conversation-scroll { flex: 1; overflow: hidden; }
-.conversation-list { padding: 8px 0; }
+.conversation-scroll {
+    flex: 1;
+    overflow: hidden;
+}
 
-/* 通知入口：一行两列，图标在上，名称在下 */
+.conversation-list {
+    padding: 8px 0;
+}
+
 .notice-row {
     display: flex;
     align-items: center;
     background: #fff;
-    margin-bottom: 6px;
-    padding: 10px 16px;
+    margin-bottom: 5px;
+    padding: 7px 16px;
 }
 
 .notice-card {
@@ -508,37 +656,50 @@ export default {
 
 .notice-avatar-wrapper {
     position: relative;
-    width: 44px;
-    height: 44px;
-    margin-bottom: 6px;
+    width: 38px;
+    height: 38px;
+    margin-bottom: 4px;
 }
 
 .notice-avatar {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     border: 2px solid #f0f0f0;
 }
 
 .notice-name {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 400;
     color: #333;
-    line-height: 1.3;
+    line-height: 1.25;
 }
 
 .conversation-item {
+    position: relative;
     display: flex;
     align-items: center;
-    padding: 12px 16px;
+    padding: 9px 16px;
     background: #fff;
-    margin-bottom: 1px;
+    margin-bottom: 0;
     transition: background 0.2s;
 }
 
-.conversation-item:active { background: #f5f5f5; }
+.conversation-item::after {
+    content: '';
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent 0%, #e1e4e8 14%, #e1e4e8 86%, transparent 100%);
+    pointer-events: none;
+}
 
-/* 头像 */
+.conversation-item:active {
+    background: #f5f5f5;
+}
+
 .avatar-wrapper {
     position: relative;
     flex-shrink: 0;
@@ -546,8 +707,8 @@ export default {
 }
 
 .avatar {
-    width: 54px;
-    height: 54px;
+    width: 46px;
+    height: 46px;
     border-radius: 50%;
     border: 2px solid #f0f0f0;
 }
@@ -556,13 +717,13 @@ export default {
     position: absolute;
     top: -4px;
     right: -4px;
-    min-width: 18px;
-    height: 18px;
+    min-width: 17px;
+    height: 17px;
     padding: 0 4px;
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
     color: #fff;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 400;
     border-radius: 9px;
     display: flex;
     align-items: center;
@@ -571,21 +732,23 @@ export default {
     box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
 }
 
-/* 会话内容 */
-.conversation-content { flex: 1; overflow: hidden; }
+.conversation-content {
+    flex: 1;
+    overflow: hidden;
+}
 
 .conversation-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .conversation-name {
     flex: 1;
     min-width: 0;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 400;
     color: #333;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -593,23 +756,71 @@ export default {
 }
 
 .conversation-time {
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 400;
     color: #999;
     margin-left: 8px;
     flex-shrink: 0;
 }
 
-.conversation-message { display: flex; align-items: center; }
+.conversation-message {
+    display: flex;
+    align-items: center;
+    min-height: 18px;
+}
 
 .last-message {
-    font-size: 14px;
+    min-height: 18px;
+    line-height: 18px;
+    font-size: 13px;
+    font-weight: 400;
     color: #666;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* ==================== 空状态 ==================== */
+.conversation-action-mask {
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    background: transparent;
+}
+
+.conversation-action-menu {
+    position: fixed;
+    height: 42px;
+    background: #ffffff;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.conversation-action-item {
+    min-width: 64px;
+    height: 42px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #333333;
+    box-sizing: border-box;
+}
+
+.conversation-action-item:active {
+    background: #f5f5f5;
+}
+
+.danger-action {
+    color: #333333;
+}
+
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -618,6 +829,13 @@ export default {
     padding: 100px 20px;
 }
 
-.empty-icon { font-size: 64px; margin-bottom: 16px; }
-.empty-hint { font-size: 14px; color: #999; }
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.empty-hint {
+    font-size: 14px;
+    color: #999;
+}
 </style>

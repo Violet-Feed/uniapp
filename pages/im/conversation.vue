@@ -126,7 +126,8 @@
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-import { sendMessage, getMessageByConversation, markRead, recallMessage } from '@/request/im.js';
+import { sendMessage, getMessageByConversation, markRead, recallMessage, handleMessageExtra } from '@/request/im.js';
+import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 
 export default {
     data() {
@@ -250,14 +251,23 @@ export default {
         };
         uni.$on('normal', this.normalListener);
 
-        this.commandListener = (data) => {
+        this.commandListener = async (data) => {
             if (this.conversation.con_id == data.msg_body.con_id) {
                 const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
-                if (data.msg_body.msg_type == 101) {
+
+                if (data.msg_body.msg_type == 100) {
+                    this.handleConversationCommand(cmdMessage);
+                } else if (data.msg_body.msg_type == 101) {
                     this.conversation.read_index_end = cmdMessage.read_index_end;
                     this.conversation.read_badge_count = cmdMessage.read_badge_count;
                 } else if (data.msg_body.msg_type == 102) {
-                    this.handleMessageUpdateCommand(cmdMessage);
+                    const msgId = cmdMessage.msg_id;
+                    if (msgId === null || msgId === undefined || msgId === '') return;
+                    const index = this.findMessageIndexById(msgId);
+                    if (index === -1) return;
+                    this.messages[index].extra = cmdMessage.extra || '{}';
+                    const nextMessage = await handleMessageExtra(this.messages[index]);
+                    this.messages.splice(index, 1, nextMessage);
                 }
             }
         };
@@ -303,9 +313,9 @@ export default {
                 }
             }
 
-            if (senders.length > 0 && typeof DB.getMemberInfosBySenders === 'function') {
+            if (senders.length > 0) {
                 try {
-                    const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, senders);
+                    const infos = await getMemberInfosBySendersEnsure(this.conversation.con_id, BigInt(this.conversation.con_short_id), senders);
                     if (Array.isArray(infos)) {
                         for (const info of infos) {
                             const key = `${Number(info.sender_type)}:${String(info.sender_id)}`;
@@ -384,7 +394,7 @@ export default {
                 let selfInfo = this.senderInfoMap.get(selfKey) || {};
                 if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
                     try {
-                        const infos = await DB.getMemberInfosBySenders(this.conversation.con_id, [{ sender_type: 1, sender_id: this.userId }]);
+                        const infos = await getMemberInfosBySendersEnsure(this.conversation.con_id, BigInt(this.conversation.con_short_id), [{ sender_type: 1, sender_id: this.userId }]);
                         if (Array.isArray(infos) && infos.length > 0) {
                             selfInfo = {
                                 nick_name: infos[0].nick_name || '',
@@ -633,42 +643,13 @@ export default {
             return this.messages.findIndex(item => String(item.msg_id) === String(msgId));
         },
 
-        handleMessageUpdateCommand(cmdMessage) {
-            const contentMap = typeof cmdMessage.content === 'string'
-                ? JSONbig.parse(cmdMessage.content || '{}')
-                : (cmdMessage.content || {});
-
-            const msgId = cmdMessage.msg_id ?? contentMap.msg_id;
-            if (msgId === null || msgId === undefined || msgId === '') return;
-
-            const extraRaw = cmdMessage.extra ?? contentMap.extra ?? '';
-            const extraMap = typeof extraRaw === 'string'
-                ? JSONbig.parse(extraRaw || '{}')
-                : (extraRaw || {});
-
-            const isRecall =
-                extraMap.is_recall === true ||
-                extraMap.is_recall === 'true' ||
-                extraMap.is_recall === 1 ||
-                extraMap.is_recall === '1';
-
-            if (!isRecall) return;
-
-            const index = this.findMessageIndexById(msgId);
-            if (index === -1) return;
-
-            const extraStr = typeof extraRaw === 'string'
-                ? extraRaw
-                : JSONbig.stringify(extraMap);
-
-            this.messages.splice(index, 1, {
-                ...this.messages[index],
-                sender_type: 3,
-                send_type: 3,
-                msg_content: '撤回了一条消息',
-                extra: extraStr,
-                status: 0
-            });
+        handleConversationCommand(cmdMessage) {
+            if (cmdMessage.type == 3) {
+                const newName = cmdMessage.content || '群聊';
+                this.chatName = newName;
+                this.conversation.name = newName;
+                uni.setNavigationBarTitle({ title: newName });
+            }
         },
 
         formatTime(timestamp) {
@@ -755,7 +736,7 @@ export default {
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 12px 12px 8px;
+    padding: 10px 10px 10px 8px;
 }
 
 .messages {
@@ -795,21 +776,22 @@ export default {
 .message-time {
     display: flex;
     justify-content: center;
-    margin: 16px 0 12px;
+    margin: 14px 0 10px;
 }
 
 .time-text {
-    font-size: 12px;
+    font-size: 9px;
+    line-height: 1.2;
     color: #999;
     background: rgba(0, 0, 0, 0.05);
-    padding: 4px 12px;
-    border-radius: 12px;
+    padding: 1px 8px;
+    border-radius: 9px;
 }
 
 .message {
     display: flex;
-    margin-bottom: 16px;
-    align-items: flex-end;
+    margin-bottom: 12px;
+    align-items: flex-start;
     padding: 0 4px;
 }
 
@@ -830,19 +812,19 @@ export default {
 }
 
 .avatar {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: 2px solid #fff;
 }
 
 .message-left .avatar-box {
-    margin-right: 8px;
+    margin-right: 7px;
 }
 
 .message-right .avatar-box {
-    margin-left: 6px;
-    margin-right: 8px;
+    margin-left: 5px;
+    margin-right: 7px;
 }
 
 .message-content {
@@ -850,22 +832,22 @@ export default {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 36px;
+    min-height: 32px;
 }
 
 .message-content-left {
-    max-width: calc(100% - 96px);
+    max-width: calc(100% - 88px);
     align-items: flex-start;
 }
 
 .message-content-right {
     flex: 0 1 auto;
-    max-width: calc(100% - 96px);
+    max-width: calc(100% - 88px);
     align-items: flex-end;
 }
 
 .sender-name {
-    font-size: 12px;
+    font-size: 10px;
     line-height: 1.2;
     color: #999;
     margin: 0 0 2px 6px;
@@ -878,16 +860,16 @@ export default {
 }
 
 .bubble {
-    padding: 8px 16px;
-    border-radius: 18px;
+    padding: 6px 12px;
+    border-radius: 15px;
     word-break: break-word;
     position: relative;
     display: inline-block;
 }
 
 .bubble-text {
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 13px;
+    line-height: 1.42;
     text-align: left;
 }
 
@@ -912,21 +894,21 @@ export default {
 }
 
 .message-status {
-    width: 18px;
-    min-width: 18px;
-    height: 18px;
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-right: 4px;
-    padding-top: 12px;
+    padding-top: 8px;
     flex-shrink: 0;
     box-sizing: content-box;
 }
 
 .status-loading {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border: 2px solid rgba(102, 126, 234, 0.3);
     border-top-color: #667eea;
     border-radius: 50%;
@@ -934,14 +916,15 @@ export default {
 }
 
 .system-message {
-    padding: 8px 16px;
+    padding: 1px 8px;
     background: rgba(0, 0, 0, 0.05);
-    border-radius: 16px;
+    border-radius: 9px;
     max-width: 80%;
 }
 
 .system-text {
-    font-size: 13px;
+    font-size: 9px;
+    line-height: 1.2;
     color: #666;
     text-align: center;
 }
@@ -959,12 +942,12 @@ export default {
 .message-action-menu {
     position: fixed;
     height: 42px;
-    background: rgba(32, 32, 32, 0.96);
+    background: #ffffff;
     border-radius: 8px;
     display: flex;
     align-items: center;
     overflow: hidden;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 
 .message-action-item {
@@ -975,8 +958,8 @@ export default {
     align-items: center;
     justify-content: center;
     font-size: 14px;
-    color: #ffffff;
-    border-right: 1px solid rgba(255, 255, 255, 0.16);
+    color: #333333;
+    border-right: 1px solid #eeeeee;
     box-sizing: border-box;
 }
 
@@ -985,20 +968,20 @@ export default {
 }
 
 .message-action-item:active {
-    background: rgba(255, 255, 255, 0.14);
+    background: #f5f5f5;
 }
 
 .danger-action {
-    color: #ffb3b3;
+    color: #333333;
 }
 
 .input-bar {
     display: flex;
     align-items: center;
-    padding: 12px 16px;
+    padding: 9px 14px;
     background: #fff;
     border-top: 1px solid #e5e5e5;
-    gap: 12px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
@@ -1006,28 +989,28 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 14px 16px;
+    padding: 11px 14px;
     background: #fff;
     border-top: 1px solid #e5e5e5;
     flex-shrink: 0;
 }
 
 .disabled-input-text {
-    font-size: 14px;
+    font-size: 13px;
     color: #999;
 }
 
 .input-wrapper {
     flex: 1;
     background: #f0f2f5;
-    border-radius: 24px;
+    border-radius: 20px;
     overflow: hidden;
 }
 
 .input-field {
-    height: 40px;
-    padding: 0 16px;
-    font-size: 15px;
+    height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
     color: #333;
     background: transparent;
 }
@@ -1037,8 +1020,8 @@ export default {
 }
 
 .send-btn {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     background: #e0e0e0;
     border-radius: 50%;
     display: flex;
@@ -1057,7 +1040,7 @@ export default {
 }
 
 .send-icon {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: bold;
     color: #999;
 }

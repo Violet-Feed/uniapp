@@ -7,6 +7,7 @@ import {
   enqueueGroupRosters,
   enqueueEntityAvatars
 } from "@/utils/im-cache.js";
+import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 
 export const getInitInfo = async () => {
 	const { userId } = getApp().globalData;
@@ -72,13 +73,13 @@ export const getMessageByUser = async () => {
     }
     await ensureUsersCached(privateUserIds);
     await ensureAgentsCached(privateAgentIds);
-	//todo:处理extra
     const msgRows = [];
     const conRows = [];
     for (const con of cons) {
       const conInfo = con.con_info;
       const msgBodies = con.msg_bodies || [];
-      for (const msg of msgBodies) {
+      for (let msg of msgBodies) {
+		msg = await handleMessageExtra(msg);  
         msgRows.push({
           sender_id: msg.sender_id,
           sender_type: msg.sender_type,
@@ -171,8 +172,7 @@ export const getMessageByConversation = async (conShortId, conIndex, limit) => {
   if (msgBodies.length === 0) return msgBodies;
   const msgRows = [];
   for (let i = 0; i < msgBodies.length; i++) {
-	//todo:处理extra
-    const msg = msgBodies[i];
+    const msg = await handleMessageExtra(msgBodies[i]);
     msg.msg_content = await transformContent(msg);
     msgRows.push({
       sender_id: msg.sender_id,
@@ -294,18 +294,19 @@ export const updateConversationMember = async (payload) => {
 	return httpRequestBackBool("/im/update_conversation_member",data);
 }
 
-export const deleteConversation = async (payload) => {
-	const data={
-		con_short_id: payload.conShortId
-	}
-	return httpRequestBackBool("/im/delete_conversation",data);
-}
-
 export const getConversationMembers = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId
 	};
 	return httpRequestBackData("/im/get_conversation_members",data);
+};
+
+export const getConversationMembersByIds = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId,
+		member_ids: payload.memberIds
+	};
+	return httpRequestBackData("/im/get_conversation_members_by_ids",data);
 };
 
 export const addConversationMembers = async (payload) => {
@@ -331,6 +332,14 @@ export const getConversationAgents = async (payload) => {
 	return httpRequestBackData("/im/get_conversation_agents",data);
 };
 
+export const getConversationAgentsByIds = async (payload) => {
+	const data = {
+		con_short_id: payload.conShortId,
+		agent_ids: payload.agentIds
+	};
+	return httpRequestBackData("/im/get_conversation_agents_by_ids",data);
+};
+
 export const addConversationAgents = async (payload) => {
 	const data = {
 		con_short_id: payload.conShortId,
@@ -349,8 +358,10 @@ export const removeConversationAgent = async (payload) => {
 
 export const transformContent = async (message) => {
 	if (message.msg_type != 100) return message.msg_content;
+
 	try {
 		const data = JSONbig.parse(message.msg_content);
+		const selfUserId = getApp().globalData.userId;
 		const senders = [];
 
 		if (data.operator !== undefined && data.operator !== null && String(data.operator) !== '') {
@@ -367,6 +378,10 @@ export const transformContent = async (message) => {
 			contentIds = [data.content];
 		}
 
+		if (data.type == 1) {
+			contentIds = contentIds.filter(id => String(id) !== String(data.operator));
+		}
+
 		if (contentIds.length > 0) {
 			const contentSenderType = data.type == 7 || data.type == 8 ? 2 : 1;
 			for (const senderId of contentIds) {
@@ -380,29 +395,40 @@ export const transformContent = async (message) => {
 
 		const nameMap = new Map();
 		if (senders.length > 0) {
-			const infos = await DB.getMemberInfosBySenders(message.con_id, senders);
+			const infos = await getMemberInfosBySendersEnsure(
+				message.con_id,
+				message.con_short_id,
+				senders
+			);
 			if (Array.isArray(infos)) {
 				for (const info of infos) {
-					nameMap.set(`${info.sender_type}_${info.sender_id}`, info.nick_name || '');
+					nameMap.set(`${Number(info.sender_type)}_${String(info.sender_id)}`, info.nick_name || '');
 				}
 			}
 		}
 
-		const operator = nameMap.get(`1_${data.operator}`) || '用户';
+		const getUserName = (id) => {
+			if (String(id) === String(selfUserId)) return '你';
+			return nameMap.get(`1_${String(id)}`);
+		};
+		const getAgentName = (id) => {
+			return nameMap.get(`2_${String(id)}`);
+		};
+		const operator = getUserName(data.operator);
+
 		switch (data.type) {
-			case 1:
-				if (contentIds.length > 0) {
-					const memberNames = contentIds.map(id => nameMap.get(`1_${id}`) || '用户');
-					return `${operator} 邀请 ${memberNames.join('、')} 加入了群聊`;
+			case 1: {
+				const memberNames = contentIds.map(id => getUserName(id));
+				if (memberNames.length === 0) return `${operator} 加入了群聊`;
+				return `${operator} 邀请 ${memberNames.join('、')} 加入了群聊`;
+			}
+			case 2: {
+				if (String(data.operator) === String(contentIds[0])) {
+					return `${operator} 退出了群聊`;
 				}
-			case 2:
-				if (contentIds.length > 0) {
-					if (Number(data.operator) == Number(contentIds[0])) {
-						return `${operator} 退出了群聊`;
-					}
-					const memberNames = contentIds.map(id => nameMap.get(`1_${id}`) || '用户');
-					return `${operator} 将 ${memberNames.join('、')} 移出了群聊`;
-				}
+				const memberNames = contentIds.map(id => getUserName(id));
+				return `${operator} 将 ${memberNames.join('、')} 移出了群聊`;
+			}
 			case 3:
 				return `${operator} 修改群名为 "${data.content}"`;
 			case 4:
@@ -412,11 +438,11 @@ export const transformContent = async (message) => {
 			case 6:
 				return `${operator} 解散了群聊`;
 			case 7: {
-				const agentNames = contentIds.map(id => nameMap.get(`2_${id}`) || 'AI');
+				const agentNames = contentIds.map(id => getAgentName(id));
 				return `${operator} 将智能体 ${agentNames.join('、')} 添加进群聊`;
 			}
 			case 8: {
-				const agentNames = contentIds.map(id => nameMap.get(`2_${id}`) || 'AI');
+				const agentNames = contentIds.map(id => getAgentName(id));
 				return `${operator} 将智能体 ${agentNames.join('、')} 移出了群聊`;
 			}
 			default:
@@ -436,74 +462,64 @@ export const handleCommandMessage = async (msg) => {
     const cmdMessage = JSONbig.parse(msg.msg_content);
     switch (cmdMessage.type) {
       case 1: {
-        const addedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
-        if (addedIds.length === 0) break;
-        const senderInputs = addedIds.map(id => ({
-          sender_type: 1,
-          sender_id: id
-        }));
-        const existedMembers = await DB.getMemberInfosBySenders(conId, senderInputs);
-        const existedSet = new Set(
-          (existedMembers || [])
-            .filter(row => row.con_id)
-            .map(row => row.sender_id.toString())
-        );
-        const memberResp = await getConversationMembers({ conShortId });
-        if (memberResp) {
-          const members = Array.isArray(memberResp) ? memberResp : (memberResp.members || memberResp.list || []);
-          if (Array.isArray(members) && members.length > 0) {
-            const addedSet = new Set(addedIds.map(id => id.toString()));
-            const targetMembers = members.filter(m =>
-              m &&
-              m.user_id !== null &&
-              m.user_id !== undefined &&
-              addedSet.has(m.user_id.toString()) &&
-              !existedSet.has(m.user_id.toString())
-            );
-            if (targetMembers.length > 0) {
-              const targetUserIds = targetMembers.map(m => m.user_id);
-              const oldUsers = await DB.getUsersByIds(targetUserIds);
-              const oldUserSet = new Set((oldUsers || []).map(u => u.user_id.toString()));
-              const memberRows = [];
-              const userRows = [];
-              const now = Date.now();
-              for (const m of targetMembers) {
-                const uid = m.user_id;
-                memberRows.push({
-                  con_short_id: conShortId,
-                  con_id: conId,
-                  member_id: uid,
-                  member_type: 1,
-                  nick_name: m.nick_name || "",
-                  privilege: m.privilege ?? 0,
-                  create_time: m.create_time ?? 0,
-                  status: m.status ?? 0,
-                  extra: m.extra || ""
-                });
-                if (!oldUserSet.has(uid.toString())) {
-                  userRows.push({
-                    user_id: uid,
-                    username: m.username || "用户",
-                    avatar_uri: m.avatar || "/static/user_avatar.png",
-                    local_avatar_uri: "",
-                    modify_time: now
-                  });
-                }
-              }
-              if (memberRows.length > 0) await DB.upsertMembers(memberRows);
-              if (userRows.length > 0) await DB.upsertUsers(userRows);
-            }
-          }
-        }
-        const memberCount = await DB.getMemberCount(conId);
-        const map = new Map();
-        map.set("member_count", memberCount);
-		const selfUserId = getApp().globalData.userId;
-		if (addedIds.some(id => String(id) === String(selfUserId))) {
-		  map.set("is_member", 1);
-		}
-        await DB.updateConversation(conId, map);
-        break;
+      	const addedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
+      	if (addedIds.length === 0) break;
+      
+      	const memberResp = await getConversationMembersByIds({
+      		conShortId,
+      		memberIds: addedIds
+      	});
+      
+      	const targetMembers = Object.values(memberResp?.members || {});
+      	if (targetMembers.length > 0) {
+      		const targetUserIds = targetMembers
+      			.map(m => m.user_id)
+      			.filter(id => id !== null && id !== undefined && String(id) !== '');
+      
+      		const oldUsers = await DB.getUsersByIds(targetUserIds);
+      		const oldUserSet = new Set((oldUsers || []).map(u => u.user_id.toString()));
+      
+      		const memberRows = [];
+      		const userRows = [];
+      		const now = Date.now();
+      
+      		for (const m of targetMembers) {
+      			const uid = m.user_id;
+      			if (uid === null || uid === undefined || String(uid) === '') continue;
+      			memberRows.push({
+      				con_short_id: conShortId,
+      				con_id: conId,
+      				member_id: uid,
+      				member_type: 1,
+      				nick_name: m.nick_name || "",
+      				privilege: m.privilege ?? 0,
+      				create_time: m.create_time ?? 0,
+      				status: m.status ?? 0,
+      				extra: m.extra || ""
+      			});
+      			if (!oldUserSet.has(uid.toString())) {
+      				userRows.push({
+      					user_id: uid,
+      					username: m.username || "用户",
+      					avatar_uri: m.avatar || "/static/user_avatar.png",
+      					local_avatar_uri: "",
+      					modify_time: now
+      				});
+      			}
+      		}
+      		if (memberRows.length > 0) await DB.upsertMembers(memberRows);
+      		if (userRows.length > 0) await DB.upsertUsers(userRows);
+      	}
+      
+      	const memberCount = await DB.getMemberCount(conId);
+      	const map = new Map();
+      	map.set("member_count", memberCount);
+      	const selfUserId = getApp().globalData.userId;
+      	if (addedIds.some(id => String(id) === String(selfUserId))) {
+      		map.set("is_member", 1);
+      	}
+      	await DB.updateConversation(conId, map);
+      	break;
       }
       case 2: {
         const removedId = cmdMessage.content;
@@ -542,68 +558,57 @@ export const handleCommandMessage = async (msg) => {
         break;
       }
       case 7: {
-        const addedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
-        if (addedIds.length === 0) break;
-        const senderInputs = addedIds.map(id => ({
-          sender_type: 2,
-          sender_id: id
-        }));
-        const existedMembers = await DB.getMemberInfosBySenders(conId, senderInputs);
-        const existedSet = new Set(
-          (existedMembers || [])
-            .filter(row => row.con_id)
-            .map(row => row.sender_id.toString())
-        );
-        const agentResp = await getConversationAgents({ conShortId });
-        if (agentResp) {
-          const agents = agentResp.agents || [];
-          if (Array.isArray(agents) && agents.length > 0) {
-            const addedSet = new Set(addedIds.map(id => id.toString()));
-            const targetAgents = agents.filter(a =>
-              a &&
-              a.agent_id !== null &&
-              a.agent_id !== undefined &&
-              addedSet.has(a.agent_id.toString()) &&
-              !existedSet.has(a.agent_id.toString())
-            );
-            if (targetAgents.length > 0) {
-              const targetAgentIds = targetAgents.map(a => a.agent_id);
-              const oldAgents = await DB.getAgentsByIds(targetAgentIds);
-              const oldAgentSet = new Set((oldAgents || []).map(a => a.agent_id.toString()));
-              const memberRows = [];
-              const agentRows = [];
-              const now = Date.now();
-              for (const a of targetAgents) {
-                const aid = a.agent_id;
-                memberRows.push({
-                  con_short_id: conShortId,
-                  con_id: conId,
-                  member_id: aid,
-                  member_type: 2,
-                  nick_name: a.agent_name || "AI",
-                  privilege: 0,
-                  create_time: a.create_time ?? 0,
-                  status: a.status ?? 0,
-                  extra: a.extra || ""
-                });
-                if (!oldAgentSet.has(aid.toString())) {
-                  agentRows.push({
-                    agent_id: aid,
-                    agent_name: a.agent_name || "AI",
-                    avatar_uri: a.avatar_uri || "/static/ai.png",
-                    local_avatar_uri: "",
-                    description: a.description || "",
-                    owner_id: a.owner_id ?? 0n,
-                    modify_time: now
-                  });
-                }
-              }
-              if (memberRows.length > 0) await DB.upsertMembers(memberRows);
-              if (agentRows.length > 0) await DB.upsertAgents(agentRows);
-            }
-          }
-        }
-        break;
+      	const addedIds = Array.isArray(cmdMessage.content) ? cmdMessage.content : [];
+      	if (addedIds.length === 0) break;
+      
+      	const agentResp = await getConversationAgentsByIds({
+      		conShortId,
+      		agentIds: addedIds
+      	});
+      
+      	const targetAgents = Object.values(agentResp?.agents || {});
+      	if (targetAgents.length > 0) {
+      		const targetAgentIds = targetAgents
+      			.map(a => a.agent_id)
+      			.filter(id => id !== null && id !== undefined && String(id) !== '');
+      
+      		const oldAgents = await DB.getAgentsByIds(targetAgentIds);
+      		const oldAgentSet = new Set((oldAgents || []).map(a => a.agent_id.toString()));
+      
+      		const memberRows = [];
+      		const agentRows = [];
+      		const now = Date.now();
+      
+      		for (const a of targetAgents) {
+      			const aid = a.agent_id;
+      			if (aid === null || aid === undefined || String(aid) === '') continue;
+      			memberRows.push({
+      				con_short_id: conShortId,
+      				con_id: conId,
+      				member_id: aid,
+      				member_type: 2,
+      				nick_name: a.agent_name || "AI",
+      				privilege: 0,
+      				create_time: a.create_time ?? 0,
+      				status: a.status ?? 0,
+      				extra: a.extra || ""
+      			});
+      			if (!oldAgentSet.has(aid.toString())) {
+      				agentRows.push({
+      					agent_id: aid,
+      					agent_name: a.agent_name || "AI",
+      					avatar_uri: a.avatar_uri || "/static/ai.png",
+      					local_avatar_uri: "",
+      					description: a.description || "",
+      					owner_id: a.owner_id ?? 0n,
+      					modify_time: now
+      				});
+      			}
+      		}
+      		if (memberRows.length > 0) await DB.upsertMembers(memberRows);
+      		if (agentRows.length > 0) await DB.upsertAgents(agentRows);
+      	}
+      	break;
       }
       case 8: {
         const removedId = cmdMessage.content;
@@ -626,22 +631,41 @@ export const handleCommandMessage = async (msg) => {
     const msgId = cmdMessage.msg_id;
     if (msgId === null || msgId === undefined || msgId === '') return;
     const extraMap = JSONbig.parse(cmdMessage.extra || '{}');
-	console.log(extraMap.is_recall)
-	console.log(typeof extraMap.is_recall)
-    const isRecall =
-      extraMap.is_recall === true ||
-      extraMap.is_recall === 'true' ||
-      extraMap.is_recall === 1 ||
-      extraMap.is_recall === '1';
+    const isRecall = extraMap.is_recall === true;
     if (isRecall) {
+		let nickname = '用户';
+		const selfUserId = getApp().globalData.userId;
+		if (String(msg.sender_id) === String(selfUserId)) {
+			nickname = '你';
+		} else {
+			const members = await getMemberInfosBySendersEnsure(msg.con_id, msg.con_short_id, [
+				{
+					sender_type: 1,
+					sender_id: msg.sender_id
+				}
+			]);
+			const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
+			nickname = member?.nick_name || '用户';
+		}
       await DB.updateMessage(msgId, {
 		sender_type: 3,
-		//todo:查用户名
-        msg_content: '撤回了一条消息',
+        msg_content: `${nickname}撤回了一条消息`,
         extra: cmdMessage.extra
       });
     }
   } else if (msg.msg_type == 103) {
+	  const cmdMessage = JSONbig.parse(msg.msg_content);
+	  switch (cmdMessage.type) {
+	    case 1: {
+	      const map = new Map();
+	      map.set("min_index", Number(cmdMessage.content));
+	      await DB.updateConversation(conId, map);
+	      break;
+	    }
+	    default:
+	      console.warn("未知的设置命令类型:", cmdMessage.type);
+	      break;
+	  }
   } else if (msg.msg_type == 104) {
     const cmdMessage = JSONbig.parse(msg.msg_content);
     switch (cmdMessage.type) {
@@ -656,6 +680,34 @@ export const handleCommandMessage = async (msg) => {
         break;
     }
   }
+};
+
+export const handleMessageExtra = async (message) => {
+	if (!message) return message;
+	const extraMap = JSONbig.parse(message.extra || '{}');
+	const isRecall = extraMap.is_recall === true;
+	if (isRecall) {
+		let nickname = '用户';
+		const selfUserId = getApp().globalData.userId;
+		if (String(message.sender_id) === String(selfUserId)) {
+			nickname = '你';
+		} else {
+			const members = await getMemberInfosBySendersEnsure(message.con_id, message.con_short_id, [
+				{
+					sender_type: 1,
+					sender_id: message.sender_id
+				}
+			]);
+			const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
+			nickname = member?.nick_name || '用户';
+		}
+		return {
+			...message,
+			sender_type: 3,
+			msg_content: `${nickname}撤回了一条消息`
+		};
+	}
+	return message;
 };
 
 export const getNoitceCount = async (payload) => {

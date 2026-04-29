@@ -464,7 +464,65 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
      AND a.agent_id = c.peer_id
     LEFT JOIN ${msgTable} m
       ON m.msg_id = c.last_message_id
-    WHERE c.user_con_index <= ${sqlValue(before)}
+    WHERE c.status = 0
+	  AND c.user_con_index <= ${sqlValue(before)}
+    ORDER BY c.user_con_index DESC
+    LIMIT ${Number(limit)};
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['con_short_id', 'owner_id', 'last_message_id', 'peer_id']);
+}
+
+async function pullAllConversation(limit = 1000) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { conTable, userTable, agentTable } = getTablesByUser(loginUserId);
+
+  const sql = `
+    SELECT
+      CAST(c.con_short_id AS TEXT) AS con_short_id,
+      c.con_id,
+      c.con_type,
+
+      CASE
+        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.username, ''), c.name)
+        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.agent_name, ''), c.name)
+        ELSE c.name
+      END AS name,
+
+      CASE
+        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
+        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
+      END AS avatar_uri,
+
+      c.local_avatar_uri,
+      c.description,
+      CAST(c.owner_id AS TEXT) AS owner_id,
+      c.create_time,
+      c.status,
+      c.min_index,
+      c.top_timestamp,
+      c.push_status,
+      c.core_extra,
+      c.setting_extra,
+      c.member_count,
+      c.badge_count,
+      c.read_index_end,
+      c.read_badge_count,
+      c.user_con_index,
+      c.is_member,
+      CAST(c.last_message_id AS TEXT) AS last_message_id,
+      CAST(c.peer_id AS TEXT) AS peer_id
+    FROM ${conTable} c
+    LEFT JOIN ${userTable} u
+      ON c.con_type = 1
+     AND u.user_id = c.peer_id
+    LEFT JOIN ${agentTable} a
+      ON c.con_type = 4
+     AND a.agent_id = c.peer_id
     ORDER BY c.user_con_index DESC
     LIMIT ${Number(limit)};
   `;
@@ -890,6 +948,48 @@ async function getAgentsByIds(agentIds) {
   return mapRowsBigInt(rows, ['agent_id', 'owner_id']);
 }
 
+async function getMessagesByIds(msgIds) {
+  await ensureOpen();
+
+  const loginUserId = getLoginUserId();
+  const { msgTable } = getTablesByUser(loginUserId);
+
+  if (!Array.isArray(msgIds) || msgIds.length === 0) return [];
+
+  const uniq = Array.from(
+    new Set(
+      msgIds
+        .filter(v => v !== null && v !== undefined && String(v) !== '')
+        .map(v => String(v))
+    )
+  );
+
+  if (uniq.length === 0) return [];
+
+  const inList = uniq.map(v => sqlValue(v)).join(',');
+
+  const sql = `
+    SELECT
+      CAST(sender_id AS TEXT) AS sender_id,
+      sender_type,
+      CAST(con_short_id AS TEXT) AS con_short_id,
+      con_id,
+      con_type,
+      CAST(client_msg_id AS TEXT) AS client_msg_id,
+      CAST(msg_id AS TEXT) AS msg_id,
+      msg_type,
+      msg_content,
+      create_time,
+      extra,
+      con_index
+    FROM ${msgTable}
+    WHERE CAST(msg_id AS TEXT) IN (${inList});
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['sender_id', 'con_short_id', 'client_msg_id', 'msg_id']);
+}
+
 async function getMemberCount(conId) {
   await ensureOpen();
 
@@ -1013,6 +1113,24 @@ async function deleteMessage(msgId) {
   return execSql(sql);
 }
 
+async function deleteMessagesByIndex(conId, conIndex) {
+  await ensureOpen();
+
+  if (conId === null || conId === undefined || String(conId) === '') return;
+  if (conIndex === null || conIndex === undefined || String(conIndex) === '') return;
+
+  const loginUserId = getLoginUserId();
+  const { msgTable } = getTablesByUser(loginUserId);
+
+  const sql = `
+    DELETE FROM ${msgTable}
+    WHERE con_id = ${sqlValue(conId)}
+      AND con_index <= ${sqlValue(conIndex)};
+  `;
+
+  await execSql(sql);
+}
+
 async function deleteMembersByIds(conId, memberType, memberIds) {
   await ensureOpen();
 
@@ -1048,6 +1166,7 @@ export default {
   upsertMembers,
 
   pullConversation,
+  pullAllConversation,
   pullMessage,
   pullUserMembers,
   pullAgentMembers,
@@ -1057,6 +1176,7 @@ export default {
 
   getUsersByIds,
   getAgentsByIds,
+  getMessagesByIds,
   getMemberCount,
 
   updateConversation,
@@ -1067,5 +1187,6 @@ export default {
 
   deleteConversation,
   deleteMessage,
+  deleteMessagesByIndex,
   deleteMembersByIds
 };
