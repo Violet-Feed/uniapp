@@ -22,7 +22,6 @@
 
     <!-- 右侧头像 + 点赞 / 评论 / 转发 -->
     <view class="right-actions">
-      <!-- 头像 + 关注（作者本人不显示关注） -->
       <view
         class="action-item avatar-item"
         @click="goToUserPage(creation.author.user_id)"
@@ -32,7 +31,7 @@
             <image
               class="avatar-img"
               :src="creation.author.avatar || defaultAvatar"
-			  mode="aspectFill"
+              mode="aspectFill"
             />
           </view>
         </view>
@@ -45,7 +44,6 @@
         </view>
       </view>
 
-      <!-- 点赞 -->
       <view class="action-item" @click="toggleLike">
         <view class="action-hit">
           <text class="action-icon" :class="{ liked: isLiked }">
@@ -57,7 +55,6 @@
         </view>
       </view>
 
-      <!-- 评论：点击后再加载评论列表 / 回复列表 -->
       <view class="action-item" @click="openCommentsPanel">
         <view class="action-hit">
           <text class="action-icon">💬</text>
@@ -67,10 +64,11 @@
         </view>
       </view>
 
-      <!-- 转发 -->
-      <view class="action-item" @click="handleShare">
+      <view class="action-item" @click="openSharePanel">
         <view class="action-hit">
-          <text class="action-icon">↗</text>
+          <view class="share-action-icon">
+            <text class="share-action-text">↗</text>
+          </view>
           <text class="action-count">
             {{ formatNumber(creation.shares) }}
           </text>
@@ -106,34 +104,19 @@
           class="detail-text"
           :lines="isDetailExpanded ? 10 : 2"
         >
-          {{ creation.detail }}
+          {{ detailDisplayText }}
         </text>
         <text
-          v-if="creation.detail && creation.detail.length > 50"
+          v-if="detailDisplayText && detailDisplayText.length > 50"
           class="detail-expand"
           @click="toggleDetail"
         >
           {{ isDetailExpanded ? '收起' : '...展开' }}
         </text>
       </view>
-
-      <!-- category 灰色圆角矩形 -->
-      <view class="category-row" v-if="categoryLabel">
-        <text class="category-text"># {{ categoryLabel }}</text>
-      </view>
-
-      <view class="tags-row" v-if="creation.tags && creation.tags.length">
-        <text
-          class="tag-text"
-          v-for="(tag, index) in creation.tags"
-          :key="index"
-        >
-          # {{ tag }}
-        </text>
-      </view>
     </view>
 
-    <!-- 评论抽屉 -->
+    <!-- 评论抽屉：恢复原始样式结构 -->
     <view
       v-if="showCommentsPanel"
       class="comments-mask"
@@ -155,14 +138,13 @@
           </view>
         </view>
 
-        <!-- 评论列表：触底分页 -->
+        <!-- 评论列表：恢复 scroll-view 原始写法 -->
         <scroll-view
           scroll-y="true"
           class="comments-scroll"
           @scrolltolower="onCommentsScrollToLower"
           lower-threshold="80"
         >
-          <!-- 一级评论 -->
           <view
             class="comment-item"
             v-for="comment in commentList"
@@ -171,74 +153,93 @@
             <image
               class="comment-avatar"
               :src="comment.user.avatar || defaultAvatar"
+              mode="aspectFill"
               @click="goToUserPage(comment.user.user_id)"
             />
+
             <view class="comment-main">
-              <view class="comment-header">
-                <text
-                  class="comment-username"
-                  @click="goToUserPage(comment.user.user_id)"
-                >
-                  {{ comment.user.name }}
-                </text>
-                <view
-                  class="comment-like"
-                  :class="{ liked: comment.isLiked }"
-                  @click="toggleCommentLike(comment)"
-                >
-                  <text class="comment-like-icon">
-                    {{ comment.isLiked ? '♥️' : '♡' }}
+              <!-- 一级评论主体：只给这块绑定长按，避免和回复长按冲突 -->
+              <view
+                class="comment-primary"
+                @touchstart="onCommentTouchStart"
+                @touchmove="onCommentTouchMove"
+                @touchend="onCommentTouchEnd"
+                @touchcancel="onCommentTouchEnd"
+                @longpress.stop="showCommentAction(comment, null, 'comment')"
+              >
+                <view class="comment-header">
+                  <text
+                    class="comment-username"
+                    @click="goToUserPage(comment.user.user_id)"
+                  >
+                    {{ comment.user.name }}
+                  </text>
+
+                  <view
+                    class="comment-like"
+                    :class="{ liked: comment.isLiked }"
+                    @click="toggleCommentLike(comment)"
+                  >
+                    <text class="comment-like-icon">
+                      {{ comment.isLiked ? '♥️' : '♡' }}
+                    </text>
+                    <text
+                      v-if="comment.likes > 0"
+                      class="comment-like-count"
+                    >
+                      {{ formatNumber(comment.likes) }}
+                    </text>
+                  </view>
+                </view>
+
+                <view class="comment-text-wrap">
+                  <text class="comment-text">
+                    {{ comment.text }}
+                  </text>
+                </view>
+
+                <view class="comment-meta">
+                  <text class="comment-time">
+                    {{ formatRelativeTime(comment.time) }}
                   </text>
                   <text
-                    v-if="comment.likes > 0"
-                    class="comment-like-count"
+                    class="comment-reply"
+                    @click="replyToComment(comment, comment)"
                   >
-                    {{ formatNumber(comment.likes) }}
+                    回复
+                  </text>
+                </view>
+
+                <view
+                  v-if="comment.replyCount && !comment.showReplies"
+                  class="comment-replies-toggle"
+                  @click="toggleReplies(comment)"
+                >
+                  <text class="comment-replies-toggle-text">
+                    展开{{ comment.replyCount }}条回复
                   </text>
                 </view>
               </view>
 
-              <view class="comment-text-wrap">
-                <text class="comment-text">
-                  {{ comment.text }}
-                </text>
-              </view>
-
-              <view class="comment-meta">
-                <text class="comment-time">
-                  {{ formatRelativeTime(comment.time) }}
-                </text>
-                <text
-                  class="comment-reply"
-                  @click="replyToComment(comment, comment)"
-                >
-                  回复
-                </text>
-              </view>
-
-              <!-- 一级评论下方：展开 X 条回复 -->
-              <view
-                v-if="comment.replyCount && !comment.showReplies"
-                class="comment-replies-toggle"
-                @click="toggleReplies(comment)"
-              >
-                <text class="comment-replies-toggle-text">
-                  展开{{ comment.replyCount }}条回复
-                </text>
-              </view>
-
-              <!-- 二级回复列表 -->
+              <!-- 二级回复列表：恢复原始样式，但保留长按删除与头像裁剪 -->
               <view v-if="comment.showReplies" class="reply-list">
                 <view
                   class="reply-item"
                   v-for="reply in comment.replies"
                   :key="reply.id"
+                  @touchstart="onCommentTouchStart"
+                  @touchmove="onCommentTouchMove"
+                  @touchend="onCommentTouchEnd"
+                  @touchcancel="onCommentTouchEnd"
+                  @longpress.stop="showCommentAction(reply, comment, 'reply')"
                 >
                   <image
                     class="reply-avatar"
                     :src="reply.user.avatar || defaultAvatar"
+                    mode="aspectFill"
                     @click="goToUserPage(reply.user.user_id)"
                   />
+
                   <view class="reply-main">
                     <view class="reply-header">
                       <view class="reply-name-line">
@@ -248,7 +249,7 @@
                         >
                           {{ reply.user.name }}
                         </text>
-                        <!-- 仅对二级评论的回复展示 @sib_username -->
+
                         <text
                           v-if="reply.replyToUser && reply.replyToUserId"
                           class="reply-at"
@@ -293,8 +294,7 @@
                   </view>
                 </view>
 
-                <!-- 展开更多 / 收起 在同一行，整体与一级评论用户名左侧对齐 -->
-                <view class="reply-footer">
+                <view class="reply-footer" v-if="comment.replies.length > 0">
                   <text
                     v-if="comment.replyHasMore && !comment.replyLoading"
                     @click="loadMoreReplies(comment)"
@@ -333,7 +333,7 @@
           </view>
         </scroll-view>
 
-        <!-- 底部输入 -->
+        <!-- 底部输入：恢复原始样式 -->
         <view class="comment-input-bar">
           <input
             class="comment-input"
@@ -361,12 +361,80 @@
         </view>
       </view>
     </view>
+
+    <!-- 长按评论/回复删除菜单 -->
+    <view class="comment-action-mask" v-if="commentAction.visible" @click="hideCommentAction">
+      <view class="comment-action-sheet" @click.stop>
+        <view class="comment-action-delete" @click="confirmDeleteSelectedComment">
+          <text class="comment-action-delete-text">删除</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 分享面板 -->
+    <view class="share-mask" v-if="showSharePanel" @click="closeSharePanel">
+      <view class="share-panel" @click.stop>
+        <view class="share-panel-title-wrap">
+          <text class="share-panel-title">分享至</text>
+        </view>
+
+        <view class="share-options-row">
+          <view class="share-option" @click="shareToChat">
+            <view class="share-option-icon chat-icon">
+              <text class="share-icon-text">💬</text>
+            </view>
+            <text class="share-option-text">聊天</text>
+          </view>
+
+          <view class="share-option" @click="shareToFriend">
+            <view class="share-option-icon friend-icon">
+              <view class="friend-person-icon">
+                <view class="friend-person-head"></view>
+                <view class="friend-person-body"></view>
+              </view>
+            </view>
+            <text class="share-option-text">朋友</text>
+          </view>
+
+          <view class="share-option" @click="shareToWechat">
+            <view class="share-option-icon wechat-icon">
+              <text class="share-icon-text-small">微</text>
+            </view>
+            <text class="share-option-text">微信</text>
+          </view>
+
+          <view class="share-option" @click="shareToTimeline">
+            <view class="share-option-icon timeline-icon">
+              <text class="share-icon-text-small">朋</text>
+            </view>
+            <text class="share-option-text">朋友圈</text>
+          </view>
+
+          <view class="share-option" @click="shareToQQ">
+            <view class="share-option-icon qq-icon">
+              <text class="share-icon-text">Q</text>
+            </view>
+            <text class="share-option-text">QQ</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <forward-picker
+      :visible="forwardPicker.visible"
+      :mode="forwardPicker.mode"
+      entity-type="creation"
+      :entity-id="creationId"
+      @close="closeForwardPicker"
+      @success="handleForwardSuccess"
+    />
   </view>
 </template>
 
 <script>
 import { getCreationById } from '@/request/creation.js'
 import { getUserProfile } from '@/request/user.js'
+import ForwardPicker from '@/components/forward-picker.nvue'
 import {
   digg,
   cancelDigg,
@@ -378,10 +446,15 @@ import {
   cancelDiggComment,
   getReplyList,
   follow,
-  unfollow
+  deleteComment,
+  deleteReply
 } from '@/request/action.js'
 
 export default {
+  components: {
+    ForwardPicker
+  },
+
   data() {
     return {
       creationId: '',
@@ -410,7 +483,8 @@ export default {
         },
         likes: 0,
         comments: 0,
-        shares: 0
+        shares: 0,
+        shareUrl: ''
       },
 
       currentUserId: null,
@@ -425,10 +499,8 @@ export default {
       showCenterIcon: false,
       centerIconTimer: null,
 
-      // 评论抽屉
       showCommentsPanel: false,
 
-      // 评论数据
       commentList: [],
       commentLoading: false,
       commentPage: 1,
@@ -436,18 +508,37 @@ export default {
       commentSortType: 'digg',
       commentsInitialized: false,
 
-      // 输入状态
       commentText: '',
       commentPlaceholder: '说点什么...',
       commentInputFocus: false,
       replyingTo: null,
+
+      commentAction: {
+        visible: false,
+        type: '',
+        target: null,
+        parent: null,
+        deleting: false
+      },
+
+      commentTouch: {
+        startX: 0,
+        startY: 0,
+        moved: false
+      },
+
+      showSharePanel: false,
+      shareLoading: false,
+      forwardPicker: {
+        visible: false,
+        mode: 'conversation'
+      },
 
       likeLoading: false
     }
   },
 
   computed: {
-    // category -> 中文标签
     categoryLabel() {
       const map = {
         life: '生活',
@@ -457,7 +548,26 @@ export default {
       }
       return map[this.creation.category] || ''
     },
-    // 是否作者本人
+
+    inlineTagsText() {
+      const arr = []
+      if (this.categoryLabel) arr.push(`# ${this.categoryLabel}`)
+
+      if (Array.isArray(this.creation.tags)) {
+        for (const tag of this.creation.tags) {
+          if (tag) arr.push(`# ${tag}`)
+        }
+      }
+
+      return arr.join(' ')
+    },
+
+    detailDisplayText() {
+      const detail = this.creation.detail || ''
+      const tags = this.inlineTagsText || ''
+      return `${detail}${detail && tags ? ' ' : ''}${tags}`
+    },
+
     isSelfAuthor() {
       if (!this.currentUserId || !this.creation.author.user_id) return false
       return String(this.currentUserId) === String(this.creation.author.user_id)
@@ -465,8 +575,8 @@ export default {
   },
 
   onLoad(options) {
-    this.creationId = options.creationId
-    this.authorId = options.userId
+    this.creationId = options.creationId || options.creation_id || ''
+    this.authorId = options.userId || options.user_id || ''
 
     const app = getApp()
     if (app && app.globalData) {
@@ -482,6 +592,10 @@ export default {
     this.videoContext = uni.createVideoContext('creationVideo', this)
   },
 
+  onShow() {
+    this.shareLoading = false
+  },
+
   onUnload() {
     if (this.centerIconTimer) {
       clearTimeout(this.centerIconTimer)
@@ -494,11 +608,12 @@ export default {
       uni.showLoading({ title: '加载中...' })
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
-      // 进入视频页面时就加载评论数量
       const ok3 = await this.fetchActionInfo()
+
       if (!ok1 || !ok2 || !ok3) {
         uni.showToast({ title: '加载失败', icon: 'none' })
       }
+
       uni.hideLoading()
     },
 
@@ -517,6 +632,7 @@ export default {
       this.creation.detail = c.content || ''
       this.creation.category = c.category || ''
       this.creation.time = c.create_time || ''
+      this.creation.shareUrl = c.share_url || c.shareUrl || ''
 
       const cover = c.cover_url || c.material_url || ''
       this.creation.coverImage = cover
@@ -539,18 +655,22 @@ export default {
         avatar: info.avatar || this.defaultAvatar,
         followerCount: res.follower_count || 0
       }
+
       this.isFollowed = !!res.is_following
       return true
     },
 
     async fetchActionInfo() {
       if (!this.creationId) return false
+
       const payload = {
         entityType: 'creation',
         entityId: BigInt(this.creationId)
       }
+
       const res = await getActionInfo(payload)
       if (!res) return false
+
       this.creation.likes = res.digg_count
       this.isLiked = res.is_digg
       this.creation.comments = res.comment_count
@@ -568,16 +688,20 @@ export default {
       if (this.isPlaying) {
         this.videoContext.pause()
         this.isPlaying = false
+
         if (this.centerIconTimer) {
           clearTimeout(this.centerIconTimer)
           this.centerIconTimer = null
         }
+
         this.showCenterIcon = true
       } else {
         this.videoContext.play()
         this.isPlaying = true
         this.showCenterIcon = true
+
         if (this.centerIconTimer) clearTimeout(this.centerIconTimer)
+
         this.centerIconTimer = setTimeout(() => {
           this.showCenterIcon = false
           this.centerIconTimer = null
@@ -594,19 +718,20 @@ export default {
         ok = await cancelDigg('creation', this.creation.creationId)
         if (ok) {
           this.isLiked = false
-          this.creation.likes = Math.max(0, this.creation.likes - 1)
+          this.creation.likes = Math.max(0, Number(this.creation.likes || 0) - 1)
         }
       } else {
         ok = await digg('creation', this.creation.creationId)
         if (ok) {
           this.isLiked = true
-          this.creation.likes += 1
+          this.creation.likes = Number(this.creation.likes || 0) + 1
         }
       }
 
       if (!ok) {
         uni.showToast({ title: '操作失败', icon: 'none' })
       }
+
       this.likeLoading = false
     },
 
@@ -620,8 +745,9 @@ export default {
         uni.showToast({ title: '操作失败', icon: 'none' })
         return
       }
+
       this.isFollowed = true
-      this.creation.author.followerCount += 1
+      this.creation.author.followerCount = Number(this.creation.author.followerCount || 0) + 1
       uni.showToast({ title: '关注成功', icon: 'none' })
     },
 
@@ -630,14 +756,15 @@ export default {
     },
 
     async openCommentsPanel() {
+      this.showSharePanel = false
+      this.forwardPicker.visible = false
       this.showCommentsPanel = true
       this.commentInputFocus = false
 
-      // 评论数量已在进入页面时加载；这里只做评论列表初始化
       if (!this.commentsInitialized) {
-        const ok2 = await this.fetchComments(true)
+        const ok = await this.fetchComments(true)
         this.commentsInitialized = true
-        if (!ok2) {
+        if (!ok) {
           uni.showToast({ title: '评论加载失败', icon: 'none' })
         }
       }
@@ -649,6 +776,7 @@ export default {
       this.replyingTo = null
       this.commentPlaceholder = '说点什么...'
       this.commentInputFocus = false
+      this.resetCommentAction()
     },
 
     closeCommentsPanelByMask() {
@@ -691,7 +819,6 @@ export default {
         replyToUser: c.sib_username || '',
         replyToUserId: c.sib_user_id || null,
         replyCount: c.reply_count || 0,
-
         showReplies: false,
         replies: [],
         replyPage: 0,
@@ -708,8 +835,7 @@ export default {
         this.commentPage = pageToLoad
       }
 
-      const pageSize = 10
-      this.commentHasMore = list.length >= pageSize
+      this.commentHasMore = list.length >= 10
       this.commentLoading = false
       return true
     },
@@ -727,6 +853,7 @@ export default {
 
     async toggleReplies(comment) {
       if (!comment) return
+
       if (!comment.showReplies) {
         comment.showReplies = true
         if (!comment.replies.length && comment.replyCount) {
@@ -790,8 +917,7 @@ export default {
         comment.replyPage = pageToLoad
       }
 
-      const pageSize = 10
-      comment.replyHasMore = list.length >= pageSize
+      comment.replyHasMore = list.length >= 10
       comment.replyLoading = false
     },
 
@@ -802,13 +928,15 @@ export default {
     goToUserPage(userId) {
       const targetId = userId || this.creation.author.user_id
       if (!targetId) return
-	  const currentUserId = getApp().globalData.userId;
-	  if (String(targetId) === String(currentUserId)) {
-	  	uni.navigateTo({
-	  		url: '/pages/user/my_profile_copy'
-	  	});
-	  	return;
-	  }
+
+      const currentUserId = getApp().globalData.userId
+      if (String(targetId) === String(currentUserId)) {
+        uni.navigateTo({
+          url: '/pages/user/my_profile_copy'
+        })
+        return
+      }
+
       uni.navigateTo({
         url: `/pages/user/user_profile?userId=${targetId}`
       })
@@ -827,34 +955,33 @@ export default {
         ok = await cancelDiggComment(payload)
         if (ok) {
           comment.isLiked = false
-          comment.likes = Math.max(0, comment.likes - 1)
+          comment.likes = Math.max(0, Number(comment.likes || 0) - 1)
         }
       } else {
         ok = await diggComment(payload)
         if (ok) {
           comment.isLiked = true
-          comment.likes += 1
+          comment.likes = Number(comment.likes || 0) + 1
         }
       }
 
       if (!ok) {
         uni.showToast({ title: '操作失败', icon: 'none' })
       }
+
       comment._loading = false
     },
 
-    // parentComment 是一级评论，targetComment 可能是一级或二级
     replyToComment(targetComment, parentComment) {
       if (!targetComment) return
-      const parent = parentComment || targetComment
 
+      const parent = parentComment || targetComment
       const isReplyToReply = parent.id !== targetComment.id
 
       this.replyingTo = {
         parentId: parent.id,
         displayName: targetComment.user.name || '',
         isReplyToReply,
-        // 对一级评论的回复：sibId / sibUserId 为 0
         sibId: isReplyToReply ? targetComment.id : 0,
         sibUserId: isReplyToReply ? (targetComment.user.user_id || 0) : 0
       }
@@ -882,7 +1009,6 @@ export default {
       let res
 
       if (this.replyingTo) {
-        // 回复
         const payload = {
           parentId: BigInt(this.replyingTo.parentId),
           entityType: 'creation',
@@ -894,7 +1020,6 @@ export default {
         }
         res = await createReply(payload)
       } else {
-        // 一级评论
         const payload = {
           entityType: 'creation',
           entityId: BigInt(this.creationId),
@@ -915,6 +1040,7 @@ export default {
         const parentIndex = this.commentList.findIndex(
           (c) => String(c.id) === String(this.replyingTo.parentId)
         )
+
         if (parentIndex !== -1) {
           const parent = this.commentList[parentIndex]
           const isReplyToReply = !!this.replyingTo.isReplyToReply
@@ -944,6 +1070,7 @@ export default {
           if (!Array.isArray(parent.replies)) {
             parent.replies = []
           }
+
           parent.replies.push(replyComment)
           parent.replyCount += 1
           parent.showReplies = true
@@ -970,10 +1097,11 @@ export default {
           replyLoading: false,
           _loading: false
         }
+
         this.commentList.unshift(newComment)
       }
 
-      this.creation.comments += 1
+      this.creation.comments = Number(this.creation.comments || 0) + 1
 
       uni.showToast({ title: '发送成功', icon: 'success' })
       this.commentText = ''
@@ -982,8 +1110,286 @@ export default {
       this.commentInputFocus = false
     },
 
-    handleShare() {
-      uni.showToast({ title: '分享功能开发中', icon: 'none' })
+    isSelfUser(userId) {
+      if (!this.currentUserId || !userId) return false
+      return String(this.currentUserId) === String(userId)
+    },
+
+    onCommentTouchStart(e) {
+      const touch = e && e.changedTouches && e.changedTouches[0]
+        ? e.changedTouches[0]
+        : (e && e.touches && e.touches[0] ? e.touches[0] : {})
+
+      this.commentTouch = {
+        startX: touch.clientX || touch.pageX || 0,
+        startY: touch.clientY || touch.pageY || 0,
+        moved: false
+      }
+    },
+
+    onCommentTouchMove(e) {
+      const touch = e && e.changedTouches && e.changedTouches[0]
+        ? e.changedTouches[0]
+        : (e && e.touches && e.touches[0] ? e.touches[0] : {})
+
+      const x = touch.clientX || touch.pageX || 0
+      const y = touch.clientY || touch.pageY || 0
+      const dx = Math.abs(x - this.commentTouch.startX)
+      const dy = Math.abs(y - this.commentTouch.startY)
+
+      if (dx > 8 || dy > 8) {
+        this.commentTouch.moved = true
+      }
+    },
+
+    onCommentTouchEnd() {
+      setTimeout(() => {
+        this.commentTouch = {
+          startX: 0,
+          startY: 0,
+          moved: false
+        }
+      }, 80)
+    },
+
+    showCommentAction(target, parent, type) {
+      if (this.commentTouch.moved) return
+      if (!target || !target.user || !this.isSelfUser(target.user.user_id)) return
+
+      this.showSharePanel = false
+      this.forwardPicker.visible = false
+      this.commentInputFocus = false
+
+      this.commentAction = {
+        visible: true,
+        type,
+        target,
+        parent,
+        deleting: false
+      }
+    },
+
+    hideCommentAction() {
+      if (this.commentAction.deleting) return
+      this.resetCommentAction()
+    },
+
+    resetCommentAction() {
+      this.commentAction = {
+        visible: false,
+        type: '',
+        target: null,
+        parent: null,
+        deleting: false
+      }
+    },
+
+    confirmDeleteSelectedComment() {
+      const { type, target, parent } = this.commentAction
+      if (!target || this.commentAction.deleting) return
+
+      uni.showModal({
+        title: type === 'reply' ? '删除回复' : '删除评论',
+        content: type === 'reply' ? '确定删除这条回复吗？' : '确定删除这条评论及其全部回复吗？',
+        confirmText: '删除',
+        confirmColor: '#ff4d4f',
+        success: async res => {
+          if (!res.confirm) return
+          await this.deleteSelectedComment(type, target, parent)
+        }
+      })
+    },
+
+    async deleteSelectedComment(type, target, parent) {
+      if (!target || this.commentAction.deleting) return
+
+      this.commentAction.deleting = true
+
+      try {
+        let ok = false
+
+        if (type === 'reply') {
+          ok = await deleteReply({
+            replyId: target.id
+          })
+        } else {
+          ok = await deleteComment({
+            commentId: target.id
+          })
+        }
+
+        if (!ok) throw new Error('delete comment returned false')
+
+        if (type === 'reply') {
+          this.removeReplyFromList(parent, target)
+        } else {
+          this.removeCommentFromList(target)
+        }
+
+        this.resetCommentAction()
+      } catch (err) {
+        console.error('deleteSelectedComment failed', err)
+        this.commentAction.deleting = false
+        uni.showToast({ title: '删除失败', icon: 'none' })
+      }
+    },
+
+    removeReplyFromList(parent, reply) {
+      if (!parent || !Array.isArray(parent.replies)) return
+
+      const oldLength = parent.replies.length
+      parent.replies = parent.replies.filter(item => String(item.id) !== String(reply.id))
+
+      if (parent.replies.length !== oldLength) {
+        parent.replyCount = Math.max(0, Number(parent.replyCount || 0) - 1)
+        this.creation.comments = Math.max(0, Number(this.creation.comments || 0) - 1)
+
+        if (parent.replies.length === 0 && parent.replyCount === 0) {
+          parent.showReplies = false
+          parent.replyHasMore = false
+          parent.replyPage = 0
+        }
+      }
+    },
+
+    removeCommentFromList(comment) {
+      const oldLength = this.commentList.length
+      const removedCount = 1 + Number(comment.replyCount || 0)
+
+      this.commentList = this.commentList.filter(item => String(item.id) !== String(comment.id))
+
+      if (this.commentList.length !== oldLength) {
+        this.creation.comments = Math.max(0, Number(this.creation.comments || 0) - removedCount)
+      }
+    },
+
+    openSharePanel() {
+      this.shareLoading = false
+      this.showCommentsPanel = false
+      this.forwardPicker.visible = false
+      this.showSharePanel = true
+    },
+
+    closeSharePanel() {
+      this.showSharePanel = false
+    },
+
+    shareToChat() {
+      this.closeSharePanel()
+      this.forwardPicker = {
+        visible: true,
+        mode: 'conversation'
+      }
+    },
+
+    shareToFriend() {
+      this.closeSharePanel()
+      this.forwardPicker = {
+        visible: true,
+        mode: 'friend'
+      }
+    },
+
+    closeForwardPicker() {
+      this.forwardPicker.visible = false
+    },
+
+    handleForwardSuccess(payload) {
+      this.forwardPicker.visible = false
+      this.creation.shares += payload && payload.count ? payload.count : 1
+    },
+
+    shareToWechat() {
+      this.shareByUni({
+        provider: 'weixin',
+        scene: 'WXSceneSession'
+      })
+    },
+
+    shareToTimeline() {
+      this.shareByUni({
+        provider: 'weixin',
+        scene: 'WXSceneTimeline'
+      })
+    },
+
+    shareToQQ() {
+      this.shareByUni({
+        provider: 'qq'
+      })
+    },
+
+    getShareInfo() {
+      const title = this.creation.title || '分享一个作品'
+      const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
+      const imageUrl = this.creation.coverImage || ''
+      const href = this.creation.shareUrl || 'https://uniapp.dcloud.net.cn/api/plugins/share.html'
+
+      return {
+        title,
+        summary,
+        imageUrl,
+        href
+      }
+    },
+
+    shareByUni({ provider, scene }) {
+      const info = this.getShareInfo()
+      let released = false
+      let releaseTimer = null
+
+      const releaseShareLock = () => {
+        if (released) return
+        released = true
+        this.shareLoading = false
+        if (releaseTimer) {
+          clearTimeout(releaseTimer)
+          releaseTimer = null
+        }
+      }
+
+      const params = {
+        provider,
+        type: 1,
+        title: info.title,
+        summary: info.summary,
+        success: () => {
+          console.log('uni.share success: platform share panel opened')
+        },
+        fail: err => {
+          console.error('uni.share failed', err)
+          uni.showToast({ title: '分享失败', icon: 'none' })
+        },
+        complete: () => {
+          releaseShareLock()
+        }
+      }
+
+      if (provider === 'weixin') {
+        params.scene = scene
+        if (info.href && info.imageUrl) {
+          params.type = 0
+          params.href = info.href
+          params.imageUrl = info.imageUrl
+        }
+      }
+
+      if (provider === 'qq') {
+        if (info.href && info.imageUrl) {
+          params.type = 0
+          params.href = info.href
+          params.imageUrl = info.imageUrl
+        }
+      }
+
+      this.shareLoading = true
+      this.closeSharePanel()
+
+      releaseTimer = setTimeout(() => {
+        releaseShareLock()
+      }, 1200)
+
+      uni.share(params)
     },
 
     formatNumber(num) {
@@ -1002,17 +1408,11 @@ export default {
 
       const now = new Date()
       const target = new Date(msTimestamp)
-      const nowMs = now.getTime()
-      const diffMs = nowMs - msTimestamp
+      const diffMs = now.getTime() - msTimestamp
       const diffSec = Math.floor(diffMs / 1000)
 
-      if (diffSec < 60) {
-        return '刚刚'
-      }
-      if (diffSec < 3600) {
-        const m = Math.floor(diffSec / 60)
-        return `${m}分钟前`
-      }
+      if (diffSec < 60) return '刚刚'
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分钟前`
 
       const oneDayMs = 24 * 60 * 60 * 1000
       const todayStart = new Date(
@@ -1021,28 +1421,20 @@ export default {
         now.getDate()
       ).getTime()
 
-      const pad2 = (n) => (n < 10 ? '0' + n : '' + n)
+      const pad2 = n => (n < 10 ? '0' + n : '' + n)
       const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`
 
-      if (msTimestamp >= todayStart) {
-        return `今天 ${hhmm}`
-      }
-      if (msTimestamp >= todayStart - oneDayMs) {
-        return `昨天 ${hhmm}`
-      }
+      if (msTimestamp >= todayStart) return `今天 ${hhmm}`
+      if (msTimestamp >= todayStart - oneDayMs) return `昨天 ${hhmm}`
 
       const diffDay = Math.floor(diffMs / oneDayMs)
-      if (diffDay < 7) {
-        return `${diffDay}天前`
-      }
+      if (diffDay < 7) return `${diffDay}天前`
 
       const year = target.getFullYear()
       const month = target.getMonth() + 1
       const day = target.getDate()
 
-      if (year !== now.getFullYear()) {
-        return `${year}年${month}月${day}日`
-      }
+      if (year !== now.getFullYear()) return `${year}年${month}月${day}日`
       return `${month}月${day}日`
     }
   }
@@ -1090,63 +1482,58 @@ export default {
   color: #ffffff;
 }
 
-/* 右侧操作栏：靠下偏中 */
+/* 右侧操作栏 */
 .right-actions {
   position: absolute;
-  right: 16px;
-  top: 0;
-  bottom: 0;
-  justify-content: flex-end;
+  right: 12px;
+  bottom: 36px;
+  width: 56px;
   align-items: center;
-  padding-bottom: 50%;
 }
 
 .action-item {
-  width: 68px;
-  height: 68px;
+  width: 56px;
+  height: 56px;
   justify-content: center;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .avatar-item {
-  height: 90px;
+  height: 68px;
   position: relative;
+  margin-bottom: 8px;
 }
 
 .avatar-touch {
-  width: 68px;
-  height: 68px;
+  width: 56px;
+  height: 52px;
   justify-content: center;
   align-items: center;
 }
 
 .avatar-wrapper {
-  width: 52px;
-  height: 52px;
-  border-radius: 26px;
-  border-width: 2px;
-  border-style: solid;
-  border-color: #ffffff;
-  overflow: hidden;
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background-color: #ffffff;
   justify-content: center;
   align-items: center;
 }
 
 .avatar-img {
-  width: 52px;
-  height: 52px;
-  border-radius: 26px;
+  width: 42px;
+  height: 42px;
+  border-radius: 21px;
 }
 
-/* 关注 + 圆形，和头像中心在同一竖直线 */
 .follow-plus {
   position: absolute;
-  bottom: 6px;
-  left: 23px;
-  width: 22px;
-  height: 22px;
-  border-radius: 11px;
+  bottom: 2px;
+  left: 18px;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
   background-color: #ff4757;
   border-width: 2px;
   border-style: solid;
@@ -1156,19 +1543,19 @@ export default {
 }
 
 .follow-plus-text {
-  font-size: 14px;
+  font-size: 13px;
   color: #ffffff;
   font-weight: bold;
 }
 
 .action-hit {
-  width: 68px;
+  width: 56px;
   justify-content: center;
   align-items: center;
 }
 
 .action-icon {
-  font-size: 30px;
+  font-size: 26px;
   color: #ffffff;
   text-align: center;
 }
@@ -1178,10 +1565,24 @@ export default {
 }
 
 .action-count {
-  font-size: 12px;
+  font-size: 11px;
   color: #ffffff;
-  margin-top: 2px;
+  margin-top: 1px;
   text-align: center;
+}
+
+.share-action-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  background-color: #667eea;
+  justify-content: center;
+  align-items: center;
+}
+
+.share-action-text {
+  font-size: 19px;
+  color: #ffffff;
 }
 
 /* 中间暂停 / 播放图标 */
@@ -1209,82 +1610,53 @@ export default {
   color: #ffffff;
 }
 
-/* 底部信息：整体稍微向左、向下紧贴一点 */
+/* 底部信息 */
 .bottom-info {
   position: absolute;
   left: 10px;
-  right: 90px;
-  bottom: 12px;
+  right: 82px;
+  bottom: 10px;
 }
 
 .author-row {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .author-name {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: #ffffff;
 }
 
 .title-row {
-  margin-bottom: 8px;
+  margin-bottom: 5px;
 }
 
 .title-text {
-  font-size: 18px;
-  color: #ffffff;
-  line-height: 22px;
-  margin-left: 6px;
-}
-
-.detail-row {
-  margin-bottom: 6px;
-}
-
-.detail-text {
   font-size: 16px;
-  color: #f5f5f5;
+  color: #ffffff;
   line-height: 20px;
   margin-left: 6px;
 }
 
-.detail-expand {
-  margin-top: 2px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-/* category 灰色圆角矩形 */
-.category-row {
-  margin-bottom: 6px;
-}
-
-.category-text {
-  padding-left: 6px;
-  padding-right: 10px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-  font-size: 14px;
-  color: #f5f5f5;
-  background-color: rgba(0, 0, 0, 0.4);
-  border-radius: 999px;
-}
-
-.tags-row {
-  margin-top: 4px;
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-
-.tag-text {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.9);
-  margin-right: 6px;
+.detail-row {
   margin-bottom: 2px;
 }
 
-/* 评论遮罩和抽屉 */
+.detail-text {
+  font-size: 13px;
+  color: #f5f5f5;
+  line-height: 18px;
+  margin-left: 6px;
+}
+
+.detail-expand {
+  margin-top: 1px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 评论遮罩和抽屉：恢复原始样式 */
 .comments-mask {
   position: absolute;
   left: 0;
@@ -1298,7 +1670,7 @@ export default {
 
 .comments-panel {
   width: 750rpx;
-  height: 900rpx; /* 大约 2/3 屏高 */
+  height: 1000rpx;
   background-color: #ffffff;
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
@@ -1371,6 +1743,10 @@ export default {
 
 .comment-main {
   flex: 1;
+}
+
+.comment-primary {
+  flex-direction: column;
 }
 
 .comment-header {
@@ -1531,7 +1907,6 @@ export default {
   color: #666666;
 }
 
-/* 展开更多 / 收起 在同一行，整体位置与回复列表左边一致 */
 .reply-footer {
   flex-direction: row;
   align-items: center;
@@ -1609,5 +1984,155 @@ export default {
 
 .send-btn-text-active {
   color: #ffffff;
+}
+
+/* 删除评论/回复菜单 */
+.comment-action-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 300;
+  background-color: rgba(0, 0, 0, 0.25);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.comment-action-sheet {
+  width: 750rpx;
+  background-color: #f7f7f7;
+  padding: 8px;
+}
+
+.comment-action-delete {
+  height: 52px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  justify-content: center;
+  align-items: center;
+}
+
+.comment-action-delete-text {
+  color: #ff4d4f;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* 分享面板 */
+.share-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 300;
+  background-color: rgba(0, 0, 0, 0.25);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.share-panel {
+  width: 750rpx;
+  background-color: #ffffff;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  padding-top: 14px;
+  padding-bottom: 18px;
+}
+
+.share-panel-title-wrap {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.share-panel-title {
+  font-size: 14px;
+  color: #666666;
+}
+
+.share-options-row {
+  width: 750rpx;
+  flex-direction: row;
+  align-items: center;
+}
+
+.share-option {
+  width: 150rpx;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-option-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 23px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.chat-icon {
+  background-color: #667eea;
+}
+
+.friend-icon {
+  background-color: #667eea;
+}
+
+.friend-person-icon {
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.friend-person-head {
+  position: absolute;
+  left: 7px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background-color: #ffffff;
+}
+
+.friend-person-body {
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  width: 16px;
+  height: 10px;
+  border-radius: 8px;
+  background-color: #ffffff;
+}
+
+.wechat-icon {
+  background-color: #1ecb5c;
+}
+
+.timeline-icon {
+  background-color: #1ecb5c;
+}
+
+.qq-icon {
+  background-color: #3b82f6;
+}
+
+.share-icon-text {
+  font-size: 20px;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.share-icon-text-small {
+  font-size: 17px;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.share-option-text {
+  font-size: 12px;
+  color: #333333;
+  text-align: center;
 }
 </style>

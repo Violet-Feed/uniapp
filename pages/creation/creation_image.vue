@@ -85,7 +85,16 @@
 
       <view class="comment-list">
         <!-- 一级评论 -->
-        <view class="comment-item" v-for="comment in commentList" :key="comment.id">
+        <view
+          class="comment-item"
+          v-for="comment in commentList"
+          :key="comment.id"
+          @touchstart="onCommentTouchStart"
+          @touchmove="onCommentTouchMove"
+          @touchend="onCommentTouchEnd"
+          @touchcancel="onCommentTouchEnd"
+          @longpress.stop="showCommentAction(comment, null, 'comment')"
+        >
           <image
             class="comment-avatar"
             :src="comment.user.avatar || '/static/user_avatar.png'"
@@ -134,7 +143,16 @@
 
             <!-- 二级回复列表 -->
             <view v-if="comment.showReplies" class="reply-list">
-              <view class="reply-item" v-for="reply in comment.replies" :key="reply.id">
+              <view
+                class="reply-item"
+                v-for="reply in comment.replies"
+                :key="reply.id"
+                @touchstart="onCommentTouchStart"
+                @touchmove="onCommentTouchMove"
+                @touchend="onCommentTouchEnd"
+                @touchcancel="onCommentTouchEnd"
+                @longpress.stop="showCommentAction(reply, comment, 'reply')"
+              >
                 <image
                   class="reply-avatar"
                   :src="reply.user.avatar || '/static/user_avatar.png'"
@@ -186,7 +204,7 @@
               </view>
 
               <!-- 展开更多 / 收起：与“展开 X 条回复”同一左边界，横向排布 -->
-              <view class="reply-footer">
+              <view class="reply-footer" v-if="comment.replies.length > 0">
                 <text
                   v-if="comment.replyHasMore && !comment.replyLoading"
                   @click="loadMoreReplies(comment)"
@@ -240,8 +258,10 @@
           <text class="action-count">{{ formatNumber(creation.comments) }}</text>
         </view>
 
-        <view class="action-item" @click="handleShare">
-          <text class="action-icon">↗</text>
+        <view class="action-item share-action" @click="openSharePanel">
+          <view class="share-action-icon">
+            <text>↗</text>
+          </view>
           <text class="action-count">{{ formatNumber(creation.shares) }}</text>
         </view>
       </view>
@@ -261,12 +281,66 @@
         <text>发送</text>
       </view>
     </view>
+
+    <!-- 长按评论/回复删除菜单 -->
+    <view class="comment-action-mask" v-if="commentAction.visible" @click="hideCommentAction">
+      <view class="comment-action-sheet" @click.stop>
+        <view class="comment-action-delete" @click="confirmDeleteSelectedComment">
+          删除
+        </view>
+      </view>
+    </view>
+
+    <!-- 转发面板 -->
+    <view class="share-mask" v-if="showSharePanel" @click="closeSharePanel">
+      <view class="share-panel" @click.stop>
+        <view class="share-panel-title">分享至</view>
+        <view class="share-options-row">
+          <view class="share-option" @click="shareToChat">
+            <view class="share-option-icon chat-icon">💬</view>
+            <text class="share-option-text">聊天</text>
+          </view>
+          <view class="share-option" @click="shareToFriend">
+            <view class="share-option-icon friend-icon">
+              <view class="friend-person-icon">
+                <view class="friend-person-head"></view>
+                <view class="friend-person-body"></view>
+              </view>
+            </view>
+            <text class="share-option-text">朋友</text>
+          </view>
+          <view class="share-option" @click="shareToWechat">
+            <view class="share-option-icon wechat-icon">微</view>
+            <text class="share-option-text">微信</text>
+          </view>
+          <view class="share-option" @click="shareToTimeline">
+            <view class="share-option-icon timeline-icon">朋</view>
+            <text class="share-option-text">朋友圈</text>
+          </view>
+          <view class="share-option" @click="shareToQQ">
+            <view class="share-option-icon qq-icon">Q</view>
+            <text class="share-option-text">QQ</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 站内转发选择器 -->
+    <forward-picker
+      :visible="forwardPicker.visible"
+      :mode="forwardPicker.mode"
+      entity-type="creation"
+      :entity-id="creationId"
+      @close="closeForwardPicker"
+      @success="handleForwardSuccess"
+    />
   </view>
 </template>
 
 <script>
 import { getCreationById } from '@/request/creation.js'
 import { getUserProfile } from '@/request/user.js'
+import ForwardPicker from '@/components/forward-picker.vue'
 import {
   digg,
   cancelDigg,
@@ -278,10 +352,16 @@ import {
   cancelDiggComment,
   getReplyList,
   follow,
-  unfollow
+  unfollow,
+  deleteComment,
+  deleteReply
 } from '@/request/action.js'
 
 export default {
+  components: {
+    ForwardPicker
+  },
+
   data() {
     return {
       creationId: '',
@@ -308,7 +388,8 @@ export default {
         },
         likes: 0,
         comments: 0,
-        shares: 0
+        shares: 0,
+        shareUrl: ''
       },
 
       isLiked: false,
@@ -330,6 +411,26 @@ export default {
       // replyingTo: { parentId, displayName, isReplyToReply, sibId, sibUserId }
       replyingTo: null,
 
+      commentAction: {
+        visible: false,
+        type: '',
+        target: null,
+        parent: null,
+        deleting: false
+      },
+
+      commentTouch: {
+        startX: 0,
+        startY: 0,
+        moved: false
+      },
+
+      showSharePanel: false,
+      shareLoading: false,
+      forwardPicker: {
+        visible: false,
+        mode: 'conversation'
+      },
       likeLoading: false
     }
   },
@@ -353,8 +454,8 @@ export default {
   },
 
   onLoad(options) {
-    this.creationId = options.creationId
-    this.authorId = options.userId
+    this.creationId = options.creationId || options.creation_id || ''
+    this.authorId = options.userId || options.user_id || ''
     const app = getApp()
     this.currentUserId = app && app.globalData ? app.globalData.userId : null
     this.initPage()
@@ -362,6 +463,10 @@ export default {
 
   onReachBottom() {
     this.fetchComments(false)
+  },
+
+  onShow() {
+    this.shareLoading = false
   },
 
   methods: {
@@ -391,6 +496,7 @@ export default {
       this.creation.detail = res.creation.content || ''
       this.creation.category = res.creation.category || ''
       this.creation.time = res.creation.create_time || ''
+      this.creation.shareUrl = res.creation.share_url || res.creation.shareUrl || ''
 
       const cover = res.creation.material_url || res.creation.cover_url || ''
       this.creation.coverImage = cover
@@ -425,10 +531,10 @@ export default {
       }
       const res = await getActionInfo(payload)
       if (!res) return false
-	  this.creation.likes = res.digg_count
-	  this.isLiked = res.is_digg
+      this.creation.likes = res.digg_count
+      this.isLiked = res.is_digg
       this.creation.comments = res.comment_count
-	  this.creation.shares = res.forward_count
+      this.creation.shares = res.forward_count
       return true
     },
 
@@ -581,13 +687,13 @@ export default {
     goToUserPage(userId) {
       const targetId = userId || this.creation.author.user_id
       if (!targetId) return
-	  const currentUserId = getApp().globalData.userId;
-	  if (String(targetId) === String(currentUserId)) {
-	  	uni.navigateTo({
-	  		url: '/pages/user/my_profile_copy'
-	  	});
-	  	return;
-	  }
+      const currentUserId = getApp().globalData.userId
+      if (String(targetId) === String(currentUserId)) {
+        uni.navigateTo({
+          url: '/pages/user/my_profile_copy'
+        })
+        return
+      }
       uni.navigateTo({
         url: `/pages/user/user_profile?userId=${targetId}`
       })
@@ -719,6 +825,8 @@ export default {
     },
 
     focusCommentInput() {
+      this.showSharePanel = false
+      this.forwardPicker.visible = false
       this.showCommentInput = true
       this.commentInputFocus = true
     },
@@ -857,8 +965,275 @@ export default {
       this.commentInputFocus = false
     },
 
-    handleShare() {
-      uni.showToast({ title: '分享功能开发中', icon: 'none' })
+    isSelfUser(userId) {
+      if (!this.currentUserId || !userId) return false
+      return String(this.currentUserId) === String(userId)
+    },
+
+    onCommentTouchStart(e) {
+      const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+      this.commentTouch = {
+        startX: touch.clientX ?? touch.pageX ?? 0,
+        startY: touch.clientY ?? touch.pageY ?? 0,
+        moved: false
+      }
+    },
+
+    onCommentTouchMove(e) {
+      const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+      const x = touch.clientX ?? touch.pageX ?? 0
+      const y = touch.clientY ?? touch.pageY ?? 0
+      const dx = Math.abs(x - this.commentTouch.startX)
+      const dy = Math.abs(y - this.commentTouch.startY)
+
+      if (dx > 8 || dy > 8) {
+        this.commentTouch.moved = true
+      }
+    },
+
+    onCommentTouchEnd() {
+      setTimeout(() => {
+        this.commentTouch = {
+          startX: 0,
+          startY: 0,
+          moved: false
+        }
+      }, 80)
+    },
+
+    showCommentAction(target, parent, type) {
+      if (this.commentTouch.moved) return
+      if (!target || !target.user || !this.isSelfUser(target.user.user_id)) return
+      this.showSharePanel = false
+      this.showCommentInput = false
+      this.forwardPicker.visible = false
+      this.commentAction = {
+        visible: true,
+        type,
+        target,
+        parent,
+        deleting: false
+      }
+    },
+
+    hideCommentAction() {
+      if (this.commentAction.deleting) return
+      this.resetCommentAction()
+    },
+
+    resetCommentAction() {
+      this.commentAction = {
+        visible: false,
+        type: '',
+        target: null,
+        parent: null,
+        deleting: false
+      }
+    },
+
+    confirmDeleteSelectedComment() {
+      const { type, target, parent } = this.commentAction
+      if (!target || this.commentAction.deleting) return
+
+      uni.showModal({
+        title: type === 'reply' ? '删除回复' : '删除评论',
+        content: type === 'reply' ? '确定删除这条回复吗？' : '确定删除这条评论及其全部回复吗？',
+        confirmText: '删除',
+        confirmColor: '#ff4d4f',
+        success: async (res) => {
+          if (!res.confirm) return
+          await this.deleteSelectedComment(type, target, parent)
+        }
+      })
+    },
+
+    async deleteSelectedComment(type, target, parent) {
+      if (!target || this.commentAction.deleting) return
+
+      this.commentAction.deleting = true
+
+      try {
+        let ok = false
+        if (type === 'reply') {
+          ok = await deleteReply({
+            replyId: target.id
+          })
+        } else {
+          ok = await deleteComment({
+            commentId: target.id
+          })
+        }
+
+        if (!ok) throw new Error('delete comment returned false')
+
+        if (type === 'reply') {
+          this.removeReplyFromList(parent, target)
+        } else {
+          this.removeCommentFromList(target)
+        }
+
+        this.resetCommentAction()
+      } catch (err) {
+        console.error('deleteSelectedComment failed', err)
+        this.commentAction.deleting = false
+        uni.showToast({ title: '删除失败', icon: 'none' })
+      }
+    },
+
+    removeReplyFromList(parent, reply) {
+      if (!parent || !Array.isArray(parent.replies)) return
+      const oldLength = parent.replies.length
+      parent.replies = parent.replies.filter(item => String(item.id) !== String(reply.id))
+
+      if (parent.replies.length !== oldLength) {
+        parent.replyCount = Math.max(0, Number(parent.replyCount || 0) - 1)
+        this.creation.comments = Math.max(0, Number(this.creation.comments || 0) - 1)
+
+        if (parent.replies.length === 0 && parent.replyCount === 0) {
+          parent.showReplies = false
+          parent.replyHasMore = false
+          parent.replyPage = 0
+        }
+      }
+    },
+
+    removeCommentFromList(comment) {
+      const oldLength = this.commentList.length
+      const removedCount = 1 + Number(comment.replyCount || 0)
+      this.commentList = this.commentList.filter(item => String(item.id) !== String(comment.id))
+
+      if (this.commentList.length !== oldLength) {
+        this.creation.comments = Math.max(0, Number(this.creation.comments || 0) - removedCount)
+      }
+    },
+
+    openSharePanel() {
+      this.shareLoading = false
+      this.forwardPicker.visible = false
+      this.showCommentInput = false
+      this.showSharePanel = true
+    },
+
+    closeSharePanel() {
+      this.showSharePanel = false
+    },
+
+    shareToChat() {
+      this.closeSharePanel()
+      this.forwardPicker = {
+        visible: true,
+        mode: 'conversation'
+      }
+    },
+
+    shareToFriend() {
+      this.closeSharePanel()
+      this.forwardPicker = {
+        visible: true,
+        mode: 'friend'
+      }
+    },
+
+    closeForwardPicker() {
+      this.forwardPicker.visible = false
+    },
+
+    handleForwardSuccess(payload) {
+      this.forwardPicker.visible = false
+      this.creation.shares += payload?.count || 1
+    },
+
+    shareToWechat() {
+      this.shareByUni({
+        provider: 'weixin',
+        scene: 'WXSceneSession'
+      })
+    },
+
+    shareToTimeline() {
+      this.shareByUni({
+        provider: 'weixin',
+        scene: 'WXSceneTimeline'
+      })
+    },
+
+    shareToQQ() {
+      this.shareByUni({
+        provider: 'qq'
+      })
+    },
+
+    getShareInfo() {
+      const title = this.creation.title || '分享一个作品'
+      const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
+      const imageUrl = this.creation.coverImage || this.creation.images[0] || ''
+      const href = this.creation.shareUrl || 'https://uniapp.dcloud.net.cn/api/plugins/share.html'
+
+      return {
+        title,
+        summary,
+        imageUrl,
+        href
+      }
+    },
+
+    shareByUni({ provider, scene }) {
+      const info = this.getShareInfo()
+      let released = false
+      let releaseTimer = null
+
+      const releaseShareLock = () => {
+        if (released) return
+        released = true
+        this.shareLoading = false
+        if (releaseTimer) {
+          clearTimeout(releaseTimer)
+          releaseTimer = null
+        }
+      }
+
+      const params = {
+        provider,
+        type: 1,
+        title: info.title,
+        summary: info.summary,
+        success: () => {
+          console.log('uni.share success: platform share panel opened')
+        },
+        fail: (err) => {
+          console.error('uni.share failed', err)
+          uni.showToast({ title: '分享失败', icon: 'none' })
+        },
+        complete: () => {
+          releaseShareLock()
+        }
+      }
+
+      if (provider === 'weixin') {
+        params.scene = scene
+        if (info.href && info.imageUrl) {
+          params.type = 0
+          params.href = info.href
+          params.imageUrl = info.imageUrl
+        }
+      }
+
+      if (provider === 'qq') {
+        if (info.href && info.imageUrl) {
+          params.type = 0
+          params.href = info.href
+          params.imageUrl = info.imageUrl
+        }
+      }
+
+      this.shareLoading = true
+      this.closeSharePanel()
+
+      releaseTimer = setTimeout(() => {
+        releaseShareLock()
+      }, 1200)
+
+      uni.share(params)
     },
 
     formatNumber(num) {
@@ -1348,7 +1723,7 @@ export default {
 .action-group {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
 }
 
 .action-item {
@@ -1370,6 +1745,24 @@ export default {
 .action-count {
   font-size: 11px;
   color: #999;
+}
+
+.share-action-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  line-height: 1;
+  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.24);
+}
+
+.share-action:active .share-action-icon {
+  transform: scale(0.94);
 }
 
 /* 评论输入框抽屉 */
@@ -1406,5 +1799,152 @@ export default {
 .send-btn.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
+}
+
+.share-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: flex-end;
+}
+
+.comment-action-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: flex-end;
+}
+
+.comment-action-sheet {
+  width: 100%;
+  background: #f7f7f7;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.comment-action-delete {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff4d4f;
+  font-size: 16px;
+  font-weight: 500;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.comment-action-delete:active {
+  background: #fff1f0;
+}
+
+.share-panel {
+  width: 100%;
+  background: #fff;
+  border-radius: 18px 18px 0 0;
+  padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.share-panel-title {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.share-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.share-option {
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.share-option:active {
+  opacity: 0.75;
+}
+
+.share-option-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 7px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.chat-icon {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.friend-icon {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.friend-person-icon {
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.friend-person-head {
+  position: absolute;
+  left: 7px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.friend-person-body {
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  width: 16px;
+  height: 10px;
+  border-radius: 10px 10px 4px 4px;
+  background: #fff;
+}
+
+.wechat-icon {
+  background: linear-gradient(135deg, #1ecb5c 0%, #0fa849 100%);
+  font-size: 17px;
+}
+
+.timeline-icon {
+  background: linear-gradient(135deg, #1ecb5c 0%, #0fa849 100%);
+  font-size: 17px;
+}
+
+.qq-icon {
+  background: linear-gradient(135deg, #12c2e9 0%, #3b82f6 100%);
+  font-size: 20px;
+}
+
+.share-option-text {
+  font-size: 12px;
+  color: #333;
 }
 </style>

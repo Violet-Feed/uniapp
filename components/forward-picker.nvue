@@ -1,0 +1,438 @@
+<template>
+  <view v-if="visible" class="forward-mask" @click="handleClose">
+    <view class="forward-panel" @click.stop="noop">
+      <view class="forward-header">
+        <text class="forward-title">{{ title }}</text>
+        <text class="forward-close" @click="handleClose">×</text>
+      </view>
+
+      <scroll-view
+        class="forward-scroll"
+        scroll-y="true"
+        @scrolltolower="handleScrollToLower"
+      >
+        <view v-if="loading && list.length === 0" class="forward-empty">
+          <text class="forward-empty-text">加载中...</text>
+        </view>
+
+        <view v-else-if="list.length === 0" class="forward-empty">
+          <text class="forward-empty-text">{{ emptyText }}</text>
+        </view>
+
+        <view v-else class="forward-list">
+          <view
+            class="forward-item"
+            v-for="item in list"
+            :key="item.key"
+            @click="handleSelect(item)"
+          >
+            <image class="forward-avatar" :src="item.avatar" mode="aspectFill"></image>
+
+            <view class="forward-info">
+              <text class="forward-name" :lines="1">{{ item.name }}</text>
+            </view>
+
+            <view class="forward-status">
+              <text v-if="forwardingKey === item.key" class="forward-loading-text">发送中</text>
+              <text v-else class="forward-arrow">›</text>
+            </view>
+
+            <view class="forward-line"></view>
+          </view>
+        </view>
+
+        <view v-if="mode === 'friend' && loading && list.length > 0" class="forward-footer">
+          <text class="forward-footer-text">加载中...</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</template>
+
+<script>
+import DB from '@/utils/sqlite.js'
+import { getFriendList, forward } from '@/request/action.js'
+
+export default {
+  name: 'ForwardPickerNvue',
+
+  props: {
+    visible: {
+      type: Boolean,
+      default: false
+    },
+    mode: {
+      type: String,
+      default: 'conversation'
+    },
+    entityType: {
+      type: String,
+      default: 'creation'
+    },
+    entityId: {
+      type: [String, Number],
+      default: ''
+    }
+  },
+
+  data() {
+    return {
+      list: [],
+      loading: false,
+      hasMore: true,
+      page: 1,
+      forwardingKey: ''
+    }
+  },
+
+  computed: {
+    title() {
+      return this.mode === 'friend' ? '分享给朋友' : '分享到聊天'
+    },
+
+    emptyText() {
+      return this.mode === 'friend' ? '暂无可分享的朋友' : '暂无可分享的聊天'
+    }
+  },
+
+  watch: {
+    visible(val) {
+      if (val) {
+        this.init()
+      }
+    },
+
+    mode() {
+      if (this.visible) {
+        this.init()
+      }
+    }
+  },
+
+  methods: {
+    noop() {},
+
+    async init() {
+      this.list = []
+      this.page = 1
+      this.hasMore = true
+      this.forwardingKey = ''
+
+      if (this.mode === 'friend') {
+        await this.loadFriends(true)
+      } else {
+        await this.loadConversations()
+      }
+    },
+
+    async loadConversations() {
+      if (this.loading) return
+      this.loading = true
+
+      try {
+        const rows = await DB.pullAllConversation()
+        const conversations = Array.isArray(rows) ? rows : []
+
+        this.list = conversations
+          .filter(item => item && Number(item.status || 0) === 0)
+          .map(item => {
+            return {
+              key: `conversation_${String(item.con_id || '')}`,
+              type: 'conversation',
+              conShortId: item.con_short_id || 0,
+              conId: item.con_id || '',
+              conType: item.con_type,
+              name: item.name || '聊天',
+              avatar: item.avatar_uri || '/static/conv_avatar.png'
+            }
+          })
+          .filter(item => item.conId)
+
+        this.hasMore = false
+      } catch (err) {
+        console.error('loadConversations failed', err)
+        uni.showToast({
+          title: '聊天加载失败',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async loadFriends(reset = false) {
+      if (this.loading) return
+      if (!reset && !this.hasMore) return
+
+      const app = getApp()
+      const userId = app && app.globalData ? app.globalData.userId : ''
+      if (!userId) return
+
+      this.loading = true
+      const pageToLoad = reset ? 1 : this.page + 1
+
+      try {
+        const res = await getFriendList({
+          userId,
+          page: pageToLoad
+        })
+
+        const rawList = Array.isArray(res && res.user_infos) ? res.user_infos : []
+        const mapped = rawList
+          .map(u => {
+            return {
+              key: `friend_${String(u.user_id || '')}`,
+              type: 'friend',
+              userId: String(u.user_id || ''),
+              name: u.username || '用户',
+              avatar: u.avatar || '/static/user_avatar.png'
+            }
+          })
+          .filter(item => item.userId)
+
+        if (reset) {
+          this.list = mapped
+          this.page = 1
+        } else {
+          this.list = this.list.concat(mapped)
+          this.page = pageToLoad
+        }
+
+        this.hasMore = rawList.length >= 10
+      } catch (err) {
+        console.error('loadFriends failed', err)
+        uni.showToast({
+          title: '朋友加载失败',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    handleScrollToLower() {
+      if (this.mode === 'friend') {
+        this.loadFriends(false)
+      }
+    },
+
+    async handleSelect(item) {
+      if (!item || this.forwardingKey) return
+
+      if (!this.entityId) {
+        uni.showToast({
+          title: '分享内容不存在',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.forwardingKey = item.key
+
+      try {
+        const payload = this.buildForwardPayload(item)
+        const ok = await forward(payload)
+
+        if (!ok) {
+          throw new Error('forward returned false')
+        }
+
+        uni.showToast({
+          title: '分享成功',
+          icon: 'none'
+        })
+
+        this.$emit('success', {
+          mode: this.mode,
+          target: item,
+          count: 1
+        })
+      } catch (err) {
+        console.error('forward failed', err)
+        uni.showToast({
+          title: '分享失败',
+          icon: 'none'
+        })
+      } finally {
+        this.forwardingKey = ''
+      }
+    },
+
+    buildForwardPayload(item) {
+      if (item.type === 'friend') {
+        return {
+          entityType: this.entityType,
+          entityId: this.entityId,
+          conShortId: 0,
+          conId: this.buildFriendConId(item.userId),
+          conType: 1
+        }
+      }
+
+      return {
+        entityType: this.entityType,
+        entityId: this.entityId,
+        conShortId: item.conShortId,
+        conId: item.conId,
+        conType: item.conType
+      }
+    },
+
+    buildFriendConId(friendUserId) {
+      const app = getApp()
+      const myId = String(app && app.globalData ? app.globalData.userId || '' : '')
+      const otherId = String(friendUserId || '')
+
+      if (!myId || !otherId) return ''
+
+      try {
+        const a = BigInt(myId)
+        const b = BigInt(otherId)
+        return a < b ? `${a}:${b}` : `${b}:${a}`
+      } catch (e) {
+        return `${myId}:${otherId}`
+      }
+    },
+
+    handleClose() {
+      if (this.forwardingKey) return
+      this.$emit('close')
+    }
+  }
+}
+</script>
+
+<style>
+.forward-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 400;
+  background-color: rgba(0, 0, 0, 0.25);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.forward-panel {
+  width: 750rpx;
+  height: 480px;
+  background-color: #ffffff;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  overflow: hidden;
+}
+
+.forward-header {
+  height: 52px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: #f2f2f2;
+}
+
+.forward-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.forward-close {
+  position: absolute;
+  right: 16px;
+  top: 0;
+  height: 52px;
+  line-height: 52px;
+  font-size: 26px;
+  color: #999999;
+}
+
+.forward-scroll {
+  height: 428px;
+}
+
+.forward-list {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.forward-item {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  padding-left: 16px;
+  padding-right: 16px;
+  height: 64px;
+  background-color: #ffffff;
+}
+
+.forward-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background-color: #f2f2f2;
+}
+
+.forward-info {
+  flex: 1;
+  margin-left: 12px;
+}
+
+.forward-name {
+  font-size: 15px;
+  color: #333333;
+  line-height: 20px;
+}
+
+.forward-status {
+  width: 42px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+}
+
+.forward-arrow {
+  font-size: 24px;
+  color: #bbbbbb;
+}
+
+.forward-loading-text {
+  font-size: 11px;
+  color: #667eea;
+}
+
+.forward-line {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 0;
+  height: 1px;
+  background-color: #eef0f2;
+}
+
+.forward-empty {
+  height: 160px;
+  align-items: center;
+  justify-content: center;
+}
+
+.forward-empty-text {
+  color: #999999;
+  font-size: 14px;
+}
+
+.forward-footer {
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+}
+
+.forward-footer-text {
+  color: #999999;
+  font-size: 12px;
+}
+</style>

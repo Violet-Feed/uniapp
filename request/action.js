@@ -78,6 +78,20 @@ export const createReply = async (payload) => {
 	return httpRequestBackData("/action/create_reply",data);
 }
 
+export const deleteComment = async (payload) => {
+	const data = {
+		comment_id: payload.commentId
+	};
+	return httpRequestBackBool("/action/delete_comment",data);
+}
+
+export const deleteReply = async (payload) => {
+	const data = {
+		reply_id: payload.replyId
+	};
+	return httpRequestBackBool("/action/delete_reply",data);
+}
+
 export const getCommentList = async (payload) => {
 	const data = {
 		entity_type: payload.entityType,
@@ -122,7 +136,9 @@ export const forward = async (payload) => {
 	const data = {
 		entity_type: payload.entityType,
 		entity_id: payload.entityId,
-		con_short_id: payload.conShortId
+		con_short_id: payload.conShortId,
+		con_id: payload.conId,
+		con_type: payload.conType
 	};
 	return httpRequestBackBool("/action/forward",data);
 }
