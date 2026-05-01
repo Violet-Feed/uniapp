@@ -166,23 +166,33 @@ export default {
     onLoad() {
         DB.pullConversation(this.userConIndex)
             .then((res) => {
-                this.conversationList = Array.isArray(res) ? res : [];
+                const list = Array.isArray(res) ? res : [];
+                this.conversationList = list.map(item => this.normalizeConversationPreview(item));
             })
             .catch((err) => {
                 console.error('pullConversation err', err);
             });
 
-        this.normalListener = uni.$on('normal', (data) => {
+        this.normalListener = (data) => {
+            if (!data || !data.msg_body) return;
+
             this.userConIndex = data.user_con_index;
+
+            const msgBody = data.msg_body;
+            const lastMessageType = Number(msgBody.msg_type ?? msgBody.msgType ?? 0);
+            const lastMessageRaw = msgBody.msg_content || '';
+
             let index = -1;
 
             for (let i = 0; i < this.conversationList.length; i++) {
-                if (this.conversationList[i].con_id == data.msg_body.con_id) {
+                if (this.conversationList[i].con_id == msgBody.con_id) {
                     this.conversationList[i].badge_count = Number(data.badge_count);
                     this.conversationList[i].user_con_index = data.user_con_index;
-                    this.conversationList[i].last_message_id = data.msg_body.msg_id;
-                    this.conversationList[i].last_message = data.msg_body.msg_content;
-                    this.conversationList[i].last_message_time = data.msg_body.create_time;
+                    this.conversationList[i].last_message_id = msgBody.msg_id;
+                    this.conversationList[i].last_message_type = lastMessageType;
+                    this.conversationList[i].last_message = this.buildLastMessagePreview(lastMessageRaw, lastMessageType);
+                    this.conversationList[i].last_message_time = msgBody.create_time;
+
                     index = i;
                     break;
                 }
@@ -192,15 +202,19 @@ export default {
                 const conversation = this.conversationList.splice(index, 1)[0];
                 this.conversationList.unshift(conversation);
             } else {
-                DB.getConversationById(data.msg_body.con_id).then((res) => {
+                DB.getConversationById(msgBody.con_id).then((res) => {
                     if (res) {
-                        this.conversationList.unshift(res);
+                        this.conversationList.unshift(this.normalizeConversationPreview(res));
                     }
                 });
             }
-        });
+        };
 
-        this.commandListener = uni.$on('command', async (data) => {
+        uni.$on('normal', this.normalListener);
+
+        this.commandListener = async (data) => {
+            if (!data || !data.msg_body) return;
+
             for (let i = 0; i < this.conversationList.length; i++) {
                 if (this.conversationList[i].con_id == data.msg_body.con_id) {
                     const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
@@ -216,9 +230,11 @@ export default {
                         this.conversationList[i].read_badge_count = cmdMessage.read_badge_count;
                     } else if (data.msg_body.msg_type == 102) {
                         const msgId = cmdMessage.msg_id;
+
                         if (String(msgId) == String(this.conversationList[i].last_message_id)) {
                             const extraMap = JSONbig.parse(cmdMessage.extra || '{}');
                             const isRecall = extraMap.is_recall === true;
+
                             if (isRecall) {
                                 let nickname = '用户';
                                 const selfUserId = getApp().globalData.userId;
@@ -236,10 +252,12 @@ export default {
                                             }
                                         ]
                                     );
+
                                     const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
                                     nickname = member?.nick_name || '用户';
                                 }
 
+                                this.conversationList[i].last_message_type = 0;
                                 this.conversationList[i].last_message = `${nickname}撤回了一条消息`;
                             }
                         }
@@ -248,15 +266,18 @@ export default {
                     break;
                 }
             }
-        });
+        };
 
-        this.noticeListener = uni.$on('notice', (data) => {
+        uni.$on('command', this.commandListener);
+
+        this.noticeListener = (data) => {
             const g = data && typeof data.group === 'number' ? data.group : 0;
             const op = data && typeof data.op_type === 'number' ? data.op_type : 0;
 
             const isSystem = g === this.NOTICE_GROUP.SYSTEM;
             const isFollow = g === this.NOTICE_GROUP.FOLLOW;
             const isAction = g === this.NOTICE_GROUP.ACTION;
+
             if (!isSystem && !isFollow && !isAction) return;
 
             if (op === 1) {
@@ -271,18 +292,79 @@ export default {
                 if (isFollow) this.followNoticeCount = 0;
                 if (isAction) this.actionNoticeCount = 0;
             }
-        });
+        };
+
+        uni.$on('notice', this.noticeListener);
 
         this.loadNoticeCounts();
     },
 
     onUnload() {
-        uni.$off('normal', this.normalListener);
-        uni.$off('command', this.commandListener);
-        uni.$off('notice', this.noticeListener);
+        if (this.normalListener) {
+            uni.$off('normal', this.normalListener);
+        }
+
+        if (this.commandListener) {
+            uni.$off('command', this.commandListener);
+        }
+
+        if (this.noticeListener) {
+            uni.$off('notice', this.noticeListener);
+        }
     },
 
     methods: {
+        normalizeConversationPreview(conversation) {
+            if (!conversation) return conversation;
+
+            const lastMessageType = Number(
+                conversation.last_message_type ??
+                conversation.msg_type ??
+                0
+            );
+
+            return {
+                ...conversation,
+                last_message_type: lastMessageType,
+                last_message: this.buildLastMessagePreview(
+                    conversation.last_message || '',
+                    lastMessageType
+                )
+            };
+        },
+
+        buildLastMessagePreview(content, msgType) {
+            if (Number(msgType) !== 4) {
+                return content || '';
+            }
+
+            const share = this.parseShareLastMessageContent(content);
+            const title = share.title || share.name || '分享内容';
+
+            return `[分享] ${title}`;
+        },
+
+        parseShareLastMessageContent(content) {
+            if (!content) return {};
+
+            if (typeof content === 'object') {
+                return content;
+            }
+
+            try {
+                const data = JSONbig.parse(String(content));
+                return data && typeof data === 'object' ? data : {};
+            } catch (err) {
+                try {
+                    const data = JSON.parse(String(content));
+                    return data && typeof data === 'object' ? data : {};
+                } catch (e) {
+                    console.error('parse share last message failed:', e);
+                    return {};
+                }
+            }
+        },
+
         async loadNoticeCounts() {
             let payload = { group: this.NOTICE_GROUP.SYSTEM };
             const systemRes = await getNoitceCount(payload);
@@ -412,7 +494,9 @@ export default {
         confirmDeleteSelectedConversation() {
             const conversation = this.conversationAction.conversation;
             this.hideConversationAction();
+
             if (!conversation) return;
+
             this.confirmDeleteConversation(conversation);
         },
 
@@ -450,8 +534,10 @@ export default {
                 }
 
                 const unreadCount = Number(conversation.badge_count || 0) - Number(conversation.read_badge_count || 0);
+
                 if (unreadCount > 0) {
                     const readOk = await markRead(conShortId, lastMessage.con_index, conversation.badge_count);
+
                     if (!readOk) {
                         throw new Error('markRead returned false');
                     }
@@ -577,8 +663,12 @@ export default {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .dropdown-menu {
@@ -593,8 +683,14 @@ export default {
 }
 
 @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .dropdown-item {

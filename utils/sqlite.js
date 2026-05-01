@@ -453,6 +453,7 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
       c.is_member,
       CAST(c.last_message_id AS TEXT) AS last_message_id,
       COALESCE(m.msg_content, '') AS last_message,
+      COALESCE(m.msg_type, 0) AS last_message_type,
       m.create_time AS last_message_time,
       CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c
@@ -465,7 +466,7 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
     LEFT JOIN ${msgTable} m
       ON m.msg_id = c.last_message_id
     WHERE c.status = 0
-	  AND c.user_con_index <= ${sqlValue(before)}
+      AND c.user_con_index <= ${sqlValue(before)}
     ORDER BY c.user_con_index DESC
     LIMIT ${Number(limit)};
   `;
@@ -573,6 +574,7 @@ async function getConversationById(conId) {
       c.is_member,
       CAST(c.last_message_id AS TEXT) AS last_message_id,
       COALESCE(m.msg_content, '') AS last_message,
+      COALESCE(m.msg_type, 0) AS last_message_type,
       m.create_time AS last_message_time,
       CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c
@@ -634,6 +636,7 @@ async function getConversationByShortId(conShortId) {
       c.is_member,
       CAST(c.last_message_id AS TEXT) AS last_message_id,
       COALESCE(m.msg_content, '') AS last_message,
+      COALESCE(m.msg_type, 0) AS last_message_type,
       m.create_time AS last_message_time,
       CAST(c.peer_id AS TEXT) AS peer_id
     FROM ${conTable} c

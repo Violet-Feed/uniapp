@@ -33,11 +33,58 @@
                     <view class="message message-right" v-if="isSelfMessage(message)">
                         <view class="message-content message-content-right">
                             <text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
+
                             <view class="self-bubble-row">
                                 <view class="message-status">
                                     <view class="status-loading" v-if="message.status == -1"></view>
                                 </view>
+
+                                <!-- 分享消息 -->
                                 <view
+                                    v-if="isShareMessage(message)"
+                                    class="share-card share-card-right"
+                                    @click="goToShareCreationDetail(message)"
+                                    @touchstart="onMessageTouchStart"
+                                    @touchmove="onMessageTouchMove"
+                                    @touchend="onMessageTouchEnd"
+                                    @touchcancel="onMessageTouchEnd"
+                                    @longpress.stop="showMessageActions($event, message)"
+                                >
+                                    <view class="share-image-wrapper">
+                                        <image
+                                            class="share-card-image"
+                                            :src="getShareCoverUrl(message)"
+                                            mode="aspectFill"
+                                        ></image>
+
+                                        <view class="share-image-gradient"></view>
+
+                                        <view class="share-type-badge">
+                                            <text>{{ getShareMaterialTypeIcon(message) }}</text>
+                                        </view>
+                                    </view>
+
+                                    <view class="share-card-content">
+                                        <view class="share-card-title-container">
+                                            <text class="share-card-title">{{ getShareTitle(message) }}</text>
+                                        </view>
+
+                                        <view class="share-card-footer">
+                                            <view class="share-card-author" @click.stop="goToShareUserPage(message)">
+                                                <image
+                                                    class="share-author-avatar"
+                                                    :src="getShareAuthorAvatar(message)"
+                                                    mode="aspectFill"
+                                                ></image>
+                                                <text class="share-author-name">{{ getShareAuthorName(message) }}</text>
+                                            </view>
+                                        </view>
+                                    </view>
+                                </view>
+
+                                <!-- 普通文本消息 -->
+                                <view
+                                    v-else
                                     class="bubble bubble-right"
                                     @touchstart="onMessageTouchStart"
                                     @touchmove="onMessageTouchMove"
@@ -49,6 +96,7 @@
                                 </view>
                             </view>
                         </view>
+
                         <view class="avatar-box" @click="goToUserProfile(message)">
                             <image class="avatar" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
                         </view>
@@ -59,9 +107,56 @@
                         <view class="avatar-box" @click="goToUserProfile(message)">
                             <image class="avatar" :src="message.avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)" mode="aspectFill"></image>
                         </view>
+
                         <view class="message-content message-content-left">
                             <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
+
+                            <!-- 分享消息 -->
                             <view
+                                v-if="isShareMessage(message)"
+                                class="share-card share-card-left"
+                                @click="goToShareCreationDetail(message)"
+                                @touchstart="onMessageTouchStart"
+                                @touchmove="onMessageTouchMove"
+                                @touchend="onMessageTouchEnd"
+                                @touchcancel="onMessageTouchEnd"
+                                @longpress.stop="showMessageActions($event, message)"
+                            >
+                                <view class="share-image-wrapper">
+                                    <image
+                                        class="share-card-image"
+                                        :src="getShareCoverUrl(message)"
+                                        mode="aspectFill"
+                                    ></image>
+
+                                    <view class="share-image-gradient"></view>
+
+                                    <view class="share-type-badge">
+                                        <text>{{ getShareMaterialTypeIcon(message) }}</text>
+                                    </view>
+                                </view>
+
+                                <view class="share-card-content">
+                                    <view class="share-card-title-container">
+                                        <text class="share-card-title">{{ getShareTitle(message) }}</text>
+                                    </view>
+
+                                    <view class="share-card-footer">
+                                        <view class="share-card-author" @click.stop="goToShareUserPage(message)">
+                                            <image
+                                                class="share-author-avatar"
+                                                :src="getShareAuthorAvatar(message)"
+                                                mode="aspectFill"
+                                            ></image>
+                                            <text class="share-author-name">{{ getShareAuthorName(message) }}</text>
+                                        </view>
+                                    </view>
+                                </view>
+                            </view>
+
+                            <!-- 普通文本消息 -->
+                            <view
+                                v-else
                                 class="bubble bubble-left"
                                 @touchstart="onMessageTouchStart"
                                 @touchmove="onMessageTouchMove"
@@ -98,7 +193,11 @@
                 :style="{ left: messageAction.left + 'px', top: messageAction.top + 'px' }"
                 @click.stop
             >
-                <view class="message-action-item" @click="copyMessage">复制</view>
+                <view
+                    class="message-action-item"
+                    v-if="canCopyMessage(messageAction.message)"
+                    @click="copyMessage"
+                >复制</view>
                 <view
                     class="message-action-item danger-action"
                     v-if="canRecallMessage(messageAction.message)"
@@ -110,7 +209,14 @@
         <!-- 输入栏 -->
         <view class="input-bar" v-if="canSendMessage">
             <view class="input-wrapper">
-                <input class="input-field" v-model="inputText" placeholder="说点什么..." placeholder-class="input-placeholder" @confirm="sendMessage" confirm-type="send" />
+                <input
+                    class="input-field"
+                    v-model="inputText"
+                    placeholder="说点什么..."
+                    placeholder-class="input-placeholder"
+                    @confirm="sendMessage"
+                    confirm-type="send"
+                />
             </view>
             <view class="send-btn" :class="{ 'send-btn-active': inputText.trim() }" @click="sendMessage">
                 <text class="send-icon">➤</text>
@@ -147,6 +253,7 @@ export default {
             chatName: '',
             userDefaultAvatar: '/static/user_avatar.png',
             aiDefaultAvatar: '/static/ai.png',
+            defaultCover: '/static/images/default.png',
             messageAction: {
                 visible: false,
                 left: 0,
@@ -183,6 +290,8 @@ export default {
             res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
             if (res.length > 0) {
                 await this.fillSenderInfos(res);
+                this.normalizeMessages(res);
+
                 this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
             }
@@ -193,22 +302,31 @@ export default {
                 res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
                 if (res.length > 0) {
                     await this.fillSenderInfos(res);
+                    this.normalizeMessages(res);
+
                     res.reverse();
                     this.messages = res.concat(this.messages);
                     this.conIndex = this.messages[0].con_index - 1;
                 }
+
                 if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
                     this.hasMore = false;
                 }
             }
-            if (this.conversation.badge_count - this.conversation.read_badge_count > 0) {
-                markRead(this.conversation.con_short_id, this.messages[this.messages.length - 1].con_index, this.conversation.badge_count);
+
+            if (this.conversation.badge_count - this.conversation.read_badge_count > 0 && this.messages.length > 0) {
+                markRead(
+                    this.conversation.con_short_id,
+                    this.messages[this.messages.length - 1].con_index,
+                    this.conversation.badge_count
+                );
             }
         }
 
         setTimeout(() => this.scrollToBottom(), 100);
 
         this.normalListener = async (data) => {
+            if (!data || !data.msg_body) return;
             if (this.conversation.con_id != data.msg_body.con_id) return;
 
             const msg = data.msg_body;
@@ -223,6 +341,7 @@ export default {
             }
 
             await this.fillSenderInfos([msg]);
+            this.normalizeMessages([msg]);
 
             if (this.isSelfMessage(msg)) {
                 for (let i = this.messages.length - 1; i >= 0; i--) {
@@ -243,15 +362,20 @@ export default {
                     break;
                 }
             }
+
             if (msg.con_index && BigInt(msg.con_index) <= maxConIndex) {
                 return;
             }
 
             this.messages.push(msg);
+            this.scrollToBottom();
         };
+
         uni.$on('normal', this.normalListener);
 
         this.commandListener = async (data) => {
+            if (!data || !data.msg_body) return;
+
             if (this.conversation.con_id == data.msg_body.con_id) {
                 const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
 
@@ -263,14 +387,20 @@ export default {
                 } else if (data.msg_body.msg_type == 102) {
                     const msgId = cmdMessage.msg_id;
                     if (msgId === null || msgId === undefined || msgId === '') return;
+
                     const index = this.findMessageIndexById(msgId);
                     if (index === -1) return;
+
                     this.messages[index].extra = cmdMessage.extra || '{}';
+
                     const nextMessage = await handleMessageExtra(this.messages[index]);
+                    this.normalizeMessages([nextMessage]);
+
                     this.messages.splice(index, 1, nextMessage);
                 }
             }
         };
+
         uni.$on('command', this.commandListener);
     },
 
@@ -315,7 +445,12 @@ export default {
 
             if (senders.length > 0) {
                 try {
-                    const infos = await getMemberInfosBySendersEnsure(this.conversation.con_id, BigInt(this.conversation.con_short_id), senders);
+                    const infos = await getMemberInfosBySendersEnsure(
+                        this.conversation.con_id,
+                        BigInt(this.conversation.con_short_id),
+                        senders
+                    );
+
                     if (Array.isArray(infos)) {
                         for (const info of infos) {
                             const key = `${Number(info.sender_type)}:${String(info.sender_id)}`;
@@ -336,6 +471,7 @@ export default {
 
                 const key = `${Number(message.sender_type)}:${String(message.sender_id)}`;
                 const cached = this.senderInfoMap.get(key);
+
                 if (cached) {
                     if (!message.nick_name) {
                         message.nick_name = cached.nick_name || '';
@@ -347,12 +483,137 @@ export default {
             }
         },
 
+        normalizeMessages(messages) {
+            if (!Array.isArray(messages)) return;
+
+            for (const message of messages) {
+                if (!message) continue;
+
+                if (this.isShareMessage(message)) {
+                    message.share_content = this.parseShareContent(message);
+                }
+            }
+        },
+
+        isShareMessage(message) {
+            return !!message && Number(message.msg_type ?? message.msgType) === 4;
+        },
+
+        parseShareContent(message) {
+            const raw = message?.msg_content ?? message?.content ?? '';
+
+            if (!raw) return {};
+
+            if (typeof raw === 'object') {
+                return raw;
+            }
+
+            try {
+                const data = JSONbig.parse(String(raw));
+                return data && typeof data === 'object' ? data : {};
+            } catch (err) {
+                try {
+                    const data = JSON.parse(String(raw));
+                    return data && typeof data === 'object' ? data : {};
+                } catch (e) {
+                    console.error('parse share message failed:', e);
+                    return {};
+                }
+            }
+        },
+
+        getShareContent(message) {
+            if (!message) return {};
+
+            if (message.share_content && typeof message.share_content === 'object') {
+                return message.share_content;
+            }
+
+            return this.parseShareContent(message);
+        },
+
+        getShareCoverUrl(message) {
+            const share = this.getShareContent(message);
+
+            return share.coverUrl ||
+                share.cover_url ||
+                share.image ||
+                share.materialUrl ||
+                share.material_url ||
+                this.defaultCover;
+        },
+
+        getShareTitle(message) {
+            const share = this.getShareContent(message);
+
+            return share.title || share.name || '未命名作品';
+        },
+
+        getShareAuthorAvatar(message) {
+            const share = this.getShareContent(message);
+
+            return share.authorAvatarUrl ||
+                share.author_avatar_url ||
+                share.authorAvatar ||
+                share.author_avatar ||
+                share.avatar ||
+                this.userDefaultAvatar;
+        },
+
+        getShareAuthorName(message) {
+            const share = this.getShareContent(message);
+
+            return share.authorName ||
+                share.author_name ||
+                share.username ||
+                share.name ||
+                '未知作者';
+        },
+
+        getShareMaterialTypeIcon(message) {
+            const share = this.getShareContent(message);
+            const materialType = share.materialType ?? share.material_type;
+            const type = share.type ?? share.creationType ?? share.creation_type;
+
+            const isVideo = type === 'video' || Number(materialType) === 2;
+            return isVideo ? '📹' : '🖼️';
+        },
+
+        getIdString(value) {
+            if (value === null || value === undefined) return '';
+            return String(value);
+        },
+
+        getShareAuthorId(message) {
+            const share = this.getShareContent(message);
+
+            return this.getIdString(
+                share.authorId ??
+                share.author_id ??
+                share.userId ??
+                share.user_id ??
+                ''
+            );
+        },
+
+        getShareCreationId(message) {
+            const share = this.getShareContent(message);
+
+            return this.getIdString(
+                share.creationId ??
+                share.creation_id ??
+                ''
+            );
+        },
+
         isSelfMessage(message) {
             return !!message && Number(message.sender_type) === 1 && String(message.sender_id) === String(this.userId);
         },
 
         isOtherSenderMessage(message) {
-            return !!message && (Number(message.sender_type) === 1 || Number(message.sender_type) === 2) && !this.isSelfMessage(message);
+            return !!message &&
+                (Number(message.sender_type) === 1 || Number(message.sender_type) === 2) &&
+                !this.isSelfMessage(message);
         },
 
         compareBigIntLike(a, b) {
@@ -376,7 +637,6 @@ export default {
             if (!this.canSendMessage) return;
             if (this.inputText.trim() === '') return;
 
-            const token = getApp().globalData.token;
             const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
             const sendingText = this.inputText;
 
@@ -388,13 +648,21 @@ export default {
                 msgType: 1,
                 msgContent: sendingText
             };
-            let res = await sendMessage(payload);
+
+            const res = await sendMessage(payload);
+
             if (res) {
                 const selfKey = `1:${String(this.userId)}`;
                 let selfInfo = this.senderInfoMap.get(selfKey) || {};
+
                 if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
                     try {
-                        const infos = await getMemberInfosBySendersEnsure(this.conversation.con_id, BigInt(this.conversation.con_short_id), [{ sender_type: 1, sender_id: this.userId }]);
+                        const infos = await getMemberInfosBySendersEnsure(
+                            this.conversation.con_id,
+                            BigInt(this.conversation.con_short_id),
+                            [{ sender_type: 1, sender_id: this.userId }]
+                        );
+
                         if (Array.isArray(infos) && infos.length > 0) {
                             selfInfo = {
                                 nick_name: infos[0].nick_name || '',
@@ -406,6 +674,7 @@ export default {
                         console.error('get self member info failed:', err);
                     }
                 }
+
                 const optimisticMessage = {
                     sender_id: this.userId,
                     sender_type: 1,
@@ -421,11 +690,16 @@ export default {
                     nick_name: selfInfo.nick_name || '',
                     avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
                 };
+
                 this.senderInfoMap.set(selfKey, {
                     nick_name: optimisticMessage.nick_name || '',
                     avatar_uri: optimisticMessage.avatar_uri || ''
                 });
-                if (this.messages.length === 0 || this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0) {
+
+                if (
+                    this.messages.length === 0 ||
+                    this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0
+                ) {
                     this.messages.push(optimisticMessage);
                 }
 
@@ -442,13 +716,60 @@ export default {
                     });
                     return;
                 }
+
                 uni.navigateTo({
                     url: `/pages/user/user_profile?userId=${BigInt(message.sender_id)}`
                 });
                 return;
             }
+
             uni.navigateTo({
                 url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(message.sender_id)}`
+            });
+        },
+
+        goToUserPage(userId) {
+            const targetId = this.getIdString(userId);
+            if (!targetId) return;
+
+            const currentUserId = getApp().globalData.userId;
+
+            if (String(targetId) === String(currentUserId)) {
+                uni.navigateTo({
+                    url: '/pages/user/my_profile_copy'
+                });
+                return;
+            }
+
+            uni.navigateTo({
+                url: `/pages/user/user_profile?userId=${encodeURIComponent(targetId)}`
+            });
+        },
+
+        goToShareUserPage(message) {
+            const authorId = this.getShareAuthorId(message);
+            this.goToUserPage(authorId);
+        },
+
+        goToShareCreationDetail(message) {
+            if (this.messageTouch.moved) return;
+
+            const share = this.getShareContent(message);
+            const creationId = this.getShareCreationId(message);
+            if (!creationId) return;
+
+            const userId = this.getShareAuthorId(message);
+            const materialType = share.materialType ?? share.material_type;
+            const type = share.type ?? share.creationType ?? share.creation_type;
+
+            const isVideo = type === 'video' || Number(materialType) === 2;
+
+            const basePath = isVideo
+                ? '/pages/creation/creation_video'
+                : '/pages/creation/creation_image';
+
+            uni.navigateTo({
+                url: `${basePath}?creationId=${encodeURIComponent(creationId)}&userId=${encodeURIComponent(userId || '')}`
             });
         },
 
@@ -466,8 +787,10 @@ export default {
 
                 let res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
                 await this.fillSenderInfos(res);
+                this.normalizeMessages(res);
 
                 let newMessages = res.reverse();
+
                 if (res.length > 0) {
                     if (this.conIndex != newMessages[res.length - 1].con_index) {
                         console.error('TODO:getByConversation');
@@ -478,13 +801,21 @@ export default {
                 if (this.conIndex <= this.conversation.min_index) {
                     this.hasMore = false;
                 } else if (res.length < 20) {
-                    res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - res.length);
+                    res = await getMessageByConversation(
+                        this.conversation.con_short_id,
+                        this.conIndex,
+                        20 - res.length
+                    );
+
                     if (res.length > 0) {
                         await this.fillSenderInfos(res);
+                        this.normalizeMessages(res);
+
                         res.reverse();
                         newMessages = res.concat(newMessages);
                         this.conIndex = newMessages[0].con_index - 1;
                     }
+
                     if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
                         this.hasMore = false;
                     }
@@ -494,9 +825,11 @@ export default {
 
                 this.$nextTick(() => {
                     this.messages = newMessages.concat(this.messages);
+
                     if (firstMsgId) {
                         this.scrollIntoViewId = 'message-' + String(firstMsgId);
                     }
+
                     this.isLoading = false;
                 });
             }
@@ -538,9 +871,13 @@ export default {
             if (Number(message.sender_type) === 3 || Number(message.send_type) === 3) return;
             if (this.messageTouch.moved) return;
 
-            const point = this.getLongPressPoint(e);
+            const canCopy = this.canCopyMessage(message);
             const canRecall = this.canRecallMessage(message);
-            const menuWidth = canRecall ? 128 : 72;
+
+            if (!canCopy && !canRecall) return;
+
+            const point = this.getLongPressPoint(e);
+            const menuWidth = canCopy && canRecall ? 128 : 72;
             const menuHeight = 42;
             const sys = uni.getSystemInfoSync();
 
@@ -582,6 +919,15 @@ export default {
             };
         },
 
+        canCopyMessage(message) {
+            if (!message) return false;
+            if (this.isShareMessage(message)) return false;
+            if (Number(message.sender_type) === 3 || Number(message.send_type) === 3) return false;
+
+            const text = message.msg_content;
+            return text !== null && text !== undefined && String(text).length > 0;
+        },
+
         canRecallMessage(message) {
             if (!this.isSelfMessage(message)) return false;
             if (!message?.msg_id) return false;
@@ -597,6 +943,12 @@ export default {
 
         copyMessage() {
             const message = this.messageAction.message;
+
+            if (!this.canCopyMessage(message)) {
+                this.hideMessageActions();
+                return;
+            }
+
             const text = message?.msg_content || '';
 
             this.hideMessageActions();
@@ -614,6 +966,7 @@ export default {
 
         async recallSelectedMessage() {
             const message = this.messageAction.message;
+
             if (!this.canRecallMessage(message)) {
                 this.hideMessageActions();
                 return;
@@ -655,10 +1008,12 @@ export default {
         formatTime(timestamp) {
             const now = Date.now() / 1000;
             const diff = now - Number(timestamp);
+
             if (diff < 60) return '刚刚';
             if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
             if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
             if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+
             const date = new Date(Number(timestamp) * 1000);
             return `${date.getMonth() + 1}/${date.getDate()}`;
         },
@@ -666,9 +1021,11 @@ export default {
         shouldShowTime(index) {
             try {
                 if (index === 0) return true;
+
                 const currentTime = Number(this.messages[index].create_time);
                 const prevTime = Number(this.messages[index - 1].create_time);
                 const timeDiff = (currentTime - prevTime) / 60;
+
                 return timeDiff > 5;
             } catch (err) {
                 console.log(err);
@@ -913,6 +1270,122 @@ export default {
     border-top-color: #667eea;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+}
+
+/* 分享消息卡片：参考创作首页卡片，但移除点赞信息 */
+.share-card {
+    width: 176px;
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s;
+}
+
+.share-card-left {
+    align-self: flex-start;
+}
+
+.share-card-right {
+    align-self: flex-end;
+}
+
+.share-card:active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.share-image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 236px;
+    overflow: hidden;
+    background: #f5f5f7;
+}
+
+.share-card-image {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.share-image-gradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
+    pointer-events: none;
+}
+
+.share-type-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.share-card-content {
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.share-card-title-container {
+    margin-bottom: 8px;
+}
+
+.share-card-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+.share-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.share-card-author {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.share-author-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid #f0f0f0;
+    flex-shrink: 0;
+    background: #f0f0f0;
+}
+
+.share-author-name {
+    font-size: 11px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .system-message {
