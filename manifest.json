@@ -1,6 +1,6 @@
 {
-    "name" : "violet",
-    "appid" : "",
+    "name" : "Violet",
+    "appid" : "__UNI__1A73A33",
     "description" : "",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -41,10 +41,13 @@
                     "<uses-permission android:name=\"android.permission.FLASHLIGHT\"/>",
                     "<uses-feature android:name=\"android.hardware.camera\"/>",
                     "<uses-permission android:name=\"android.permission.WRITE_SETTINGS\"/>"
-                ]
+                ],
+                "schemes" : "violet"
             },
             /* ios打包配置 */
-            "ios" : {},
+            "ios" : {
+                "urltypes" : "violet"
+            },
             /* SDK配置 */
             "sdkConfigs" : {
                 "share" : {

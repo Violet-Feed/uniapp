@@ -1323,7 +1323,7 @@ export default {
       const title = this.creation.title || '分享一个作品'
       const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
       const imageUrl = this.creation.coverImage || ''
-      const href = this.creation.shareUrl || 'https://uniapp.dcloud.net.cn/api/plugins/share.html'
+      const href = this.creation.shareUrl || `http://127.0.0.1:3000/violet.html?creationId=${this.creationId}`
 
       return {
         title,
