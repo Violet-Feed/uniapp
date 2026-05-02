@@ -116,29 +116,29 @@
       </view>
     </view>
 
-    <!-- 评论抽屉：恢复原始样式结构 -->
+    <!-- 评论抽屉 -->
     <view
       v-if="showCommentsPanel"
       class="comments-mask"
       @click="closeCommentsPanelByMask"
     >
-      <view class="comments-panel" @click.stop>
+      <view class="comments-panel" @click.stop="handleCommentsPanelTap">
         <view class="comments-header">
           <text class="comments-title">
             评论 {{ formatNumber(creation.comments) }}
           </text>
 
           <view class="comments-header-right">
-            <view class="comments-sort" @click="toggleCommentSort">
+            <view class="comments-sort" @click.stop="toggleCommentSort">
               <text class="comments-sort-label">
                 {{ commentSortType === 'time' ? '按时间' : '按热度' }}
               </text>
             </view>
-            <text class="comments-close" @click="closeCommentsPanel">✕</text>
+            <text class="comments-close" @click.stop="closeCommentsPanel">✕</text>
           </view>
         </view>
 
-        <!-- 评论列表：恢复 scroll-view 原始写法 -->
+        <!-- 评论列表 -->
         <scroll-view
           scroll-y="true"
           class="comments-scroll"
@@ -154,7 +154,7 @@
               class="comment-avatar"
               :src="comment.user.avatar || defaultAvatar"
               mode="aspectFill"
-              @click="goToUserPage(comment.user.user_id)"
+              @click.stop="goToUserPage(comment.user.user_id)"
             />
 
             <view class="comment-main">
@@ -170,7 +170,7 @@
                 <view class="comment-header">
                   <text
                     class="comment-username"
-                    @click="goToUserPage(comment.user.user_id)"
+                    @click.stop="goToUserPage(comment.user.user_id)"
                   >
                     {{ comment.user.name }}
                   </text>
@@ -178,7 +178,7 @@
                   <view
                     class="comment-like"
                     :class="{ liked: comment.isLiked }"
-                    @click="toggleCommentLike(comment)"
+                    @click.stop="toggleCommentLike(comment)"
                   >
                     <text class="comment-like-icon">
                       {{ comment.isLiked ? '♥️' : '♡' }}
@@ -204,7 +204,7 @@
                   </text>
                   <text
                     class="comment-reply"
-                    @click="replyToComment(comment, comment)"
+                    @click.stop="replyToComment(comment, comment)"
                   >
                     回复
                   </text>
@@ -213,7 +213,7 @@
                 <view
                   v-if="comment.replyCount && !comment.showReplies"
                   class="comment-replies-toggle"
-                  @click="toggleReplies(comment)"
+                  @click.stop="toggleReplies(comment)"
                 >
                   <text class="comment-replies-toggle-text">
                     展开{{ comment.replyCount }}条回复
@@ -221,7 +221,7 @@
                 </view>
               </view>
 
-              <!-- 二级回复列表：恢复原始样式，但保留长按删除与头像裁剪 -->
+              <!-- 二级回复列表 -->
               <view v-if="comment.showReplies" class="reply-list">
                 <view
                   class="reply-item"
@@ -237,7 +237,7 @@
                     class="reply-avatar"
                     :src="reply.user.avatar || defaultAvatar"
                     mode="aspectFill"
-                    @click="goToUserPage(reply.user.user_id)"
+                    @click.stop="goToUserPage(reply.user.user_id)"
                   />
 
                   <view class="reply-main">
@@ -245,7 +245,7 @@
                       <view class="reply-name-line">
                         <text
                           class="reply-username"
-                          @click="goToUserPage(reply.user.user_id)"
+                          @click.stop="goToUserPage(reply.user.user_id)"
                         >
                           {{ reply.user.name }}
                         </text>
@@ -262,7 +262,7 @@
                       <view
                         class="reply-like"
                         :class="{ liked: reply.isLiked }"
-                        @click="toggleCommentLike(reply)"
+                        @click.stop="toggleCommentLike(reply)"
                       >
                         <text class="reply-like-icon">
                           {{ reply.isLiked ? '♥️' : '♡' }}
@@ -286,7 +286,7 @@
                       </text>
                       <text
                         class="reply-reply"
-                        @click="replyToComment(reply, comment)"
+                        @click.stop="replyToComment(reply, comment)"
                       >
                         回复
                       </text>
@@ -297,7 +297,7 @@
                 <view class="reply-footer" v-if="comment.replies.length > 0">
                   <text
                     v-if="comment.replyHasMore && !comment.replyLoading"
-                    @click="loadMoreReplies(comment)"
+                    @click.stop="loadMoreReplies(comment)"
                   >
                     展开更多回复
                   </text>
@@ -309,7 +309,7 @@
                   </text>
                   <text
                     class="reply-footer-collapse"
-                    @click="toggleReplies(comment)"
+                    @click.stop="toggleReplies(comment)"
                   >
                     收起
                   </text>
@@ -333,8 +333,23 @@
           </view>
         </scroll-view>
 
-        <!-- 底部输入：恢复原始样式 -->
-        <view class="comment-input-bar">
+        <!-- 默认占位输入条：点击后从下方切换为真正输入框 -->
+        <view
+          v-if="!showCommentInput"
+          class="comment-placeholder-bar"
+          @click.stop="startNewComment"
+        >
+          <view class="comment-placeholder-input">
+            <text class="comment-placeholder-text">说点什么...</text>
+          </view>
+        </view>
+
+        <!-- 评论输入框：点击回复后出现，点击其他地方且内容为空时取消回复状态 -->
+        <view
+          v-if="showCommentInput"
+          class="comment-input-bar"
+          @click.stop
+        >
           <input
             class="comment-input"
             v-model="commentText"
@@ -508,6 +523,7 @@ export default {
       commentSortType: 'digg',
       commentsInitialized: false,
 
+      showCommentInput: false,
       commentText: '',
       commentPlaceholder: '说点什么...',
       commentInputFocus: false,
@@ -775,12 +791,47 @@ export default {
       this.commentText = ''
       this.replyingTo = null
       this.commentPlaceholder = '说点什么...'
+      this.showCommentInput = false
       this.commentInputFocus = false
       this.resetCommentAction()
     },
 
     closeCommentsPanelByMask() {
+      if (this.showCommentInput && !this.commentText.trim()) {
+        this.cancelCommentInput()
+        return
+      }
       this.closeCommentsPanel()
+    },
+
+    handleCommentsPanelTap() {
+      if (this.showCommentInput && !this.commentText.trim()) {
+        this.cancelCommentInput()
+      }
+    },
+
+    startNewComment() {
+      this.replyingTo = null
+      this.commentPlaceholder = '说点什么...'
+      this.focusCommentInput()
+    },
+
+    focusCommentInput() {
+      this.showSharePanel = false
+      this.showCommentInput = true
+      this.commentInputFocus = false
+
+      this.$nextTick(() => {
+        this.commentInputFocus = true
+      })
+    },
+
+    cancelCommentInput() {
+      this.commentText = ''
+      this.replyingTo = null
+      this.commentPlaceholder = '说点什么...'
+      this.showCommentInput = false
+      this.commentInputFocus = false
     },
 
     async fetchComments(reset = false) {
@@ -989,12 +1040,17 @@ export default {
       this.commentPlaceholder = this.replyingTo.displayName
         ? `回复 @${this.replyingTo.displayName}`
         : '回复'
-      this.commentInputFocus = true
+
+      this.focusCommentInput()
     },
 
     handleInputBlurInPanel() {
       setTimeout(() => {
-        this.commentInputFocus = false
+        if (!this.commentText.trim()) {
+          this.cancelCommentInput()
+        } else {
+          this.commentInputFocus = false
+        }
       }, 200)
     },
 
@@ -1107,6 +1163,7 @@ export default {
       this.commentText = ''
       this.commentPlaceholder = '说点什么...'
       this.replyingTo = null
+      this.showCommentInput = false
       this.commentInputFocus = false
     },
 
@@ -1937,6 +1994,32 @@ export default {
 }
 
 .empty-comments-text {
+  font-size: 14px;
+  color: #999999;
+}
+
+/* 默认占位输入条 */
+.comment-placeholder-bar {
+  height: 52px;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: #f0f0f0;
+  flex-direction: row;
+  align-items: center;
+}
+
+.comment-placeholder-input {
+  flex: 1;
+  height: 36px;
+  background-color: #f5f5f5;
+  border-radius: 18px;
+  padding-left: 12px;
+  justify-content: center;
+}
+
+.comment-placeholder-text {
   font-size: 14px;
   color: #999999;
 }

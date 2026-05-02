@@ -258,7 +258,7 @@ class Socket {
 			con_id: conInfo.con_id,
 			con_type: conInfo.con_type,
 			name: core.name || "群聊",
-			avatar_uri: core.avatar_uri || "",
+			avatar_uri: core.avatar_uri || "/static/conv_avatar.png",
 			local_avatar_uri: "",
 			description: core.description || "",
 			owner_id: core.owner_id ?? 0n,

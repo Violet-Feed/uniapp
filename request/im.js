@@ -34,7 +34,6 @@ export const getMessageByUser = async () => {
   const PAGE_LIMIT = 50;
 
   let hasMore = true;
-
   while (hasMore) {
     hasMore = false;
     const userConIndex = Number(getApp().globalData.userConIndex || 0);
@@ -544,6 +543,7 @@ export const handleCommandMessage = async (msg) => {
       case 4: {
         const map = new Map();
         map.set("avatar_uri", cmdMessage.content || "");
+		map.set("local_avatar_uri", "");
         await DB.updateConversation(conId, map);
         await enqueueEntityAvatars("conv", [conId]);
         break;

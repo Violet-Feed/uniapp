@@ -293,10 +293,34 @@ async function insertConversation(data) {
     'peer_id'
   ];
 
-  const values = rows.map(r => `(${cols.map(c => sqlValue(r[c])).join(',')})`).join(',');
-  const sql = `INSERT OR REPLACE INTO ${conTable} (${cols.join(',')}) VALUES ${values};`;
+  // 更新旧会话时不改 con_short_id 和 local_avatar_uri。
+  const updateCols = cols.filter(c =>
+    c !== 'con_short_id' &&
+    c !== 'local_avatar_uri'
+  );
 
-  return withTransaction(() => execSql(sql));
+  return withTransaction(async () => {
+    const values = rows
+      .map(r => `(${cols.map(c => sqlValue(r[c])).join(',')})`)
+      .join(',');
+    const insertSql = `
+      INSERT OR IGNORE INTO ${conTable} (${cols.join(',')})
+      VALUES ${values};
+    `;
+    await execSql(insertSql);
+
+    for (const r of rows) {
+      const setSql = updateCols
+        .map(c => `${c} = ${sqlValue(r[c])}`)
+        .join(',');
+      const updateSql = `
+        UPDATE ${conTable}
+        SET ${setSql}
+        WHERE con_short_id = ${sqlValue(r.con_short_id)};
+      `;
+      await execSql(updateSql);
+    }
+  });
 }
 
 async function insertMessage(data) {
@@ -762,6 +786,7 @@ async function pullUserMembers(conId) {
      AND u.user_id = mem.member_id
     WHERE mem.con_id = ${sqlValue(conId)}
       AND mem.member_type = 1
+      AND mem.status = 0
     ORDER BY mem.create_time ASC;
   `;
 
@@ -798,6 +823,7 @@ async function pullAgentMembers(conId) {
      AND a.agent_id = mem.member_id
     WHERE mem.con_id = ${sqlValue(conId)}
       AND mem.member_type = 2
+      AND mem.status = 0
     ORDER BY mem.create_time ASC;
   `;
 
@@ -1003,7 +1029,8 @@ async function getMemberCount(conId) {
     SELECT COUNT(1) AS cnt
     FROM ${memberTable}
     WHERE con_id = ${sqlValue(conId)}
-      AND member_type = 1;
+      AND member_type = 1
+      AND status = 0;
   `;
 
   const rows = await selectSql(sql);

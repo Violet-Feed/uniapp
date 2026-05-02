@@ -3,6 +3,8 @@ import {
 	getConversationMembersByIds,
 	getConversationAgentsByIds
 } from '@/request/im.js';
+import { getUserInfos } from '@/request/user.js';
+import { getAgentsByIds } from '@/request/agent.js';
 
 const USER_DEFAULT_AVATAR = '/static/user_avatar.png';
 const AI_DEFAULT_AVATAR = '/static/ai.png';
@@ -33,26 +35,77 @@ function valuesFromMapObject(data) {
 	return Object.values(data);
 }
 
+function idKey(id) {
+	if (id === null || id === undefined || String(id) === '') return '';
+	return String(id);
+}
+
+function uniqueIds(ids) {
+	const result = [];
+	const seen = new Set();
+
+	for (const id of ids || []) {
+		const key = idKey(id);
+		if (!key || seen.has(key)) continue;
+
+		seen.add(key);
+		result.push(id);
+	}
+
+	return result;
+}
+
+function missingIds(inputIds, foundIds) {
+	const foundSet = new Set(
+		(foundIds || [])
+			.map(idKey)
+			.filter(Boolean)
+	);
+
+	return (inputIds || []).filter(id => !foundSet.has(idKey(id)));
+}
+
 async function syncMissingUsers(conId, conShortId, userIds) {
-	if (!Array.isArray(userIds) || userIds.length === 0) return;
+	const ids = uniqueIds(userIds);
+	if (ids.length === 0) return;
 
 	const memberResp = await getConversationMembersByIds({
 		conShortId,
-		memberIds: userIds
+		memberIds: ids
 	});
 
 	const members = valuesFromMapObject(memberResp?.members);
-	if (members.length === 0) return;
 
-	const targetUserIds = members
+	const memberUserIds = members
 		.map(m => m?.user_id)
-		.filter(id => id !== null && id !== undefined && String(id) !== '');
+		.filter(id => idKey(id));
 
-	if (targetUserIds.length === 0) return;
+	const fallbackUserIds = missingIds(ids, memberUserIds);
 
-	const oldUsers = await DB.getUsersByIds(targetUserIds);
+	let fallbackUsers = [];
+	if (fallbackUserIds.length > 0) {
+		const userResp = await getUserInfos({
+			userIds: fallbackUserIds
+		});
+
+		fallbackUsers = Array.isArray(userResp?.user_infos)
+			? userResp.user_infos
+			: [];
+	}
+
+	const allUserIds = uniqueIds([
+		...memberUserIds,
+		...fallbackUsers
+			.map(u => u?.user_id)
+			.filter(id => idKey(id))
+	]);
+
+	const oldUsers = allUserIds.length > 0
+		? await DB.getUsersByIds(allUserIds)
+		: [];
+
 	const oldUserSet = new Set(
-		(oldUsers || []).map(u => u.user_id.toString())
+		(oldUsers || []).map(u => idKey(u.user_id))
 	);
 
 	const memberRows = [];
@@ -61,7 +114,8 @@ async function syncMissingUsers(conId, conShortId, userIds) {
 
 	for (const m of members) {
 		const uid = m?.user_id;
-		if (uid === null || uid === undefined || String(uid) === '') continue;
+		const uidKey = idKey(uid);
+		if (!uidKey) continue;
 
 		memberRows.push({
 			con_short_id: conShortId,
@@ -75,14 +129,52 @@ async function syncMissingUsers(conId, conShortId, userIds) {
 			extra: m.extra || ''
 		});
 
-		if (!oldUserSet.has(uid.toString())) {
+		if (!oldUserSet.has(uidKey)) {
 			userRows.push({
 				user_id: uid,
-				username: m.username || '用户',
-				avatar_uri: m.avatar || USER_DEFAULT_AVATAR,
+				username: m.username || m.nick_name || '用户',
+				avatar_uri: m.avatar || m.avatar_uri || USER_DEFAULT_AVATAR,
 				local_avatar_uri: '',
-				modify_time: now
+				create_time: m.create_time ?? 0,
+				modify_time: m.modify_time ?? now,
+				status: 0,
+				extra: ''
 			});
+
+			oldUserSet.add(uidKey);
+		}
+	}
+
+	for (const u of fallbackUsers) {
+		const uid = u?.user_id;
+		const uidKey = idKey(uid);
+		if (!uidKey) continue;
+
+		memberRows.push({
+			con_short_id: conShortId,
+			con_id: conId,
+			member_id: uid,
+			member_type: 1,
+			nick_name: u.username || '用户',
+			privilege: 0,
+			create_time: u.create_time ?? 0,
+			status: 1,
+			extra: u.extra || ''
+		});
+
+		if (!oldUserSet.has(uidKey)) {
+			userRows.push({
+				user_id: uid,
+				username: u.username || '用户',
+				avatar_uri: u.avatar || USER_DEFAULT_AVATAR,
+				local_avatar_uri: '',
+				create_time: u.create_time ?? 0,
+				modify_time: u.modify_time ?? now,
+				status: u.status ?? 0,
+				extra: u.extra || ''
+			});
+
+			oldUserSet.add(uidKey);
 		}
 	}
 
@@ -96,25 +188,46 @@ async function syncMissingUsers(conId, conShortId, userIds) {
 }
 
 async function syncMissingAgents(conId, conShortId, agentIds) {
-	if (!Array.isArray(agentIds) || agentIds.length === 0) return;
+	const ids = uniqueIds(agentIds);
+	if (ids.length === 0) return;
 
 	const agentResp = await getConversationAgentsByIds({
 		conShortId,
-		agentIds
+		agentIds: ids
 	});
 
 	const agents = valuesFromMapObject(agentResp?.agents);
-	if (agents.length === 0) return;
 
-	const targetAgentIds = agents
+	const memberAgentIds = agents
 		.map(a => a?.agent_id)
-		.filter(id => id !== null && id !== undefined && String(id) !== '');
+		.filter(id => idKey(id));
 
-	if (targetAgentIds.length === 0) return;
+	const fallbackAgentIds = missingIds(ids, memberAgentIds);
 
-	const oldAgents = await DB.getAgentsByIds(targetAgentIds);
+	let fallbackAgents = [];
+	if (fallbackAgentIds.length > 0) {
+		const fallbackResp = await getAgentsByIds({
+			agentIds: fallbackAgentIds
+		});
+
+		fallbackAgents = Array.isArray(fallbackResp?.agents)
+			? fallbackResp.agents
+			: [];
+	}
+
+	const allAgentIds = uniqueIds([
+		...memberAgentIds,
+		...fallbackAgents
+			.map(a => a?.agent_id)
+			.filter(id => idKey(id))
+	]);
+
+	const oldAgents = allAgentIds.length > 0
+		? await DB.getAgentsByIds(allAgentIds)
+		: [];
+
 	const oldAgentSet = new Set(
-		(oldAgents || []).map(a => a.agent_id.toString())
+		(oldAgents || []).map(a => idKey(a.agent_id))
 	);
 
 	const memberRows = [];
@@ -123,30 +236,81 @@ async function syncMissingAgents(conId, conShortId, agentIds) {
 
 	for (const a of agents) {
 		const aid = a?.agent_id;
-		if (aid === null || aid === undefined || String(aid) === '') continue;
+		const aidKey = idKey(aid);
+		if (!aidKey) continue;
+
+		const agentName = a.agent_name || 'AI';
 
 		memberRows.push({
 			con_short_id: conShortId,
 			con_id: conId,
 			member_id: aid,
 			member_type: 2,
-			nick_name: a.agent_name || 'AI',
+			nick_name: agentName,
 			privilege: 0,
 			create_time: a.create_time ?? 0,
 			status: a.status ?? 0,
 			extra: a.extra || ''
 		});
 
-		if (!oldAgentSet.has(aid.toString())) {
+		if (!oldAgentSet.has(aidKey)) {
 			agentRows.push({
 				agent_id: aid,
-				agent_name: a.agent_name || 'AI',
+				agent_name: agentName,
 				avatar_uri: a.avatar_uri || AI_DEFAULT_AVATAR,
 				local_avatar_uri: '',
 				description: a.description || '',
+				personality: a.personality || '',
 				owner_id: a.owner_id ?? 0n,
-				modify_time: now
+				create_time: a.create_time ?? 0,
+				modify_time: a.modify_time ?? now,
+				status: a.status ?? 0,
+				extra: a.extra || '',
+				owner_username: a.owner_username || '',
+				owner_avatar: a.owner_avatar || ''
 			});
+
+			oldAgentSet.add(aidKey);
+		}
+	}
+
+	for (const a of fallbackAgents) {
+		const aid = a?.agent_id;
+		const aidKey = idKey(aid);
+		if (!aidKey) continue;
+
+		const agentName = a.agent_name || 'AI';
+
+		memberRows.push({
+			con_short_id: conShortId,
+			con_id: conId,
+			member_id: aid,
+			member_type: 2,
+			nick_name: agentName,
+			privilege: 0,
+			create_time: a.create_time ?? 0,
+			status: 1,
+			extra: a.extra || ''
+		});
+
+		if (!oldAgentSet.has(aidKey)) {
+			agentRows.push({
+				agent_id: aid,
+				agent_name: agentName,
+				avatar_uri: a.avatar_uri || AI_DEFAULT_AVATAR,
+				local_avatar_uri: '',
+				description: a.description || '',
+				personality: a.personality || '',
+				owner_id: a.owner_id ?? 0n,
+				create_time: a.create_time ?? 0,
+				modify_time: a.modify_time ?? now,
+				status: a.status ?? 0,
+				extra: a.extra || '',
+				owner_username: a.owner_username || '',
+				owner_avatar: a.owner_avatar || ''
+			});
+
+			oldAgentSet.add(aidKey);
 		}
 	}
 
@@ -195,14 +359,23 @@ export async function getMemberInfosBySendersEnsure(conId, conShortId, senders) 
 	const localMap = buildInfoMap(localInfos);
 	const missingUserIds = [];
 	const missingAgentIds = [];
+	const missingUserSet = new Set();
+	const missingAgentSet = new Set();
 
 	for (const sender of senders) {
+		if (!sender) continue;
+
 		const key = buildSenderKey(sender.sender_type, sender.sender_id);
 		if (localMap.has(key)) continue;
 
-		if (Number(sender.sender_type) === 1) {
+		const senderIdKey = idKey(sender.sender_id);
+		if (!senderIdKey) continue;
+
+		if (Number(sender.sender_type) === 1 && !missingUserSet.has(senderIdKey)) {
+			missingUserSet.add(senderIdKey);
 			missingUserIds.push(sender.sender_id);
-		} else if (Number(sender.sender_type) === 2) {
+		} else if (Number(sender.sender_type) === 2 && !missingAgentSet.has(senderIdKey)) {
+			missingAgentSet.add(senderIdKey);
 			missingAgentIds.push(sender.sender_id);
 		}
 	}
