@@ -16,20 +16,16 @@
         <!-- 消息列表 -->
         <scroll-view class="chat-messages" scroll-y="true" :scroll-into-view="scrollIntoViewId" @scroll="onScroll">
             <view class="messages">
-                <!-- 加载提示 -->
                 <view v-if="isLoading" class="loading-tip">
                     <view class="loading-spinner"></view>
                     <text class="loading-text">加载中...</text>
                 </view>
 
-                <!-- 消息列表 -->
                 <view v-for="(message, index) in messages" :key="String(message.msg_id || index)" :id="'message-' + String(message.msg_id)">
-                    <!-- 时间戳 -->
                     <view class="message-time" v-if="shouldShowTime(index)">
                         <text class="time-text">{{ formatTime(message.create_time) }}</text>
                     </view>
 
-                    <!-- 我发送的消息 -->
                     <view class="message message-right" v-if="isSelfMessage(message)">
                         <view class="message-content message-content-right">
                             <text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
@@ -39,7 +35,6 @@
                                     <view class="status-loading" v-if="message.status == -1"></view>
                                 </view>
 
-                                <!-- 分享消息 -->
                                 <view
                                     v-if="isShareMessage(message)"
                                     class="share-card share-card-right"
@@ -51,14 +46,8 @@
                                     @longpress.stop="showMessageActions($event, message)"
                                 >
                                     <view class="share-image-wrapper">
-                                        <image
-                                            class="share-card-image"
-                                            :src="getShareCoverUrl(message)"
-                                            mode="aspectFill"
-                                        ></image>
-
+                                        <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
                                         <view class="share-image-gradient"></view>
-
                                         <view class="share-type-badge">
                                             <text>{{ getShareMaterialTypeIcon(message) }}</text>
                                         </view>
@@ -71,18 +60,13 @@
 
                                         <view class="share-card-footer">
                                             <view class="share-card-author" @click.stop="goToShareUserPage(message)">
-                                                <image
-                                                    class="share-author-avatar"
-                                                    :src="getShareAuthorAvatar(message)"
-                                                    mode="aspectFill"
-                                                ></image>
+                                                <image class="share-author-avatar" :src="getShareAuthorAvatar(message)" mode="aspectFill"></image>
                                                 <text class="share-author-name">{{ getShareAuthorName(message) }}</text>
                                             </view>
                                         </view>
                                     </view>
                                 </view>
 
-                                <!-- 普通文本消息 -->
                                 <view
                                     v-else
                                     class="bubble bubble-right"
@@ -102,7 +86,6 @@
                         </view>
                     </view>
 
-                    <!-- 他人/AI 发送的消息 -->
                     <view class="message message-left" v-else-if="isOtherSenderMessage(message)">
                         <view class="avatar-box" @click="goToUserProfile(message)">
                             <image class="avatar" :src="message.avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)" mode="aspectFill"></image>
@@ -111,7 +94,6 @@
                         <view class="message-content message-content-left">
                             <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
 
-                            <!-- 分享消息 -->
                             <view
                                 v-if="isShareMessage(message)"
                                 class="share-card share-card-left"
@@ -123,14 +105,8 @@
                                 @longpress.stop="showMessageActions($event, message)"
                             >
                                 <view class="share-image-wrapper">
-                                    <image
-                                        class="share-card-image"
-                                        :src="getShareCoverUrl(message)"
-                                        mode="aspectFill"
-                                    ></image>
-
+                                    <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
                                     <view class="share-image-gradient"></view>
-
                                     <view class="share-type-badge">
                                         <text>{{ getShareMaterialTypeIcon(message) }}</text>
                                     </view>
@@ -143,18 +119,13 @@
 
                                     <view class="share-card-footer">
                                         <view class="share-card-author" @click.stop="goToShareUserPage(message)">
-                                            <image
-                                                class="share-author-avatar"
-                                                :src="getShareAuthorAvatar(message)"
-                                                mode="aspectFill"
-                                            ></image>
+                                            <image class="share-author-avatar" :src="getShareAuthorAvatar(message)" mode="aspectFill"></image>
                                             <text class="share-author-name">{{ getShareAuthorName(message) }}</text>
                                         </view>
                                     </view>
                                 </view>
                             </view>
 
-                            <!-- 普通文本消息 -->
                             <view
                                 v-else
                                 class="bubble bubble-left"
@@ -169,7 +140,6 @@
                         </view>
                     </view>
 
-                    <!-- 系统消息 -->
                     <view class="message message-center" v-else>
                         <view
                             class="system-message"
@@ -186,27 +156,17 @@
             </view>
         </scroll-view>
 
-        <!-- 长按消息操作菜单 -->
         <view class="message-action-mask" v-if="messageAction.visible" @click="hideMessageActions">
             <view
                 class="message-action-menu"
                 :style="{ left: messageAction.left + 'px', top: messageAction.top + 'px' }"
                 @click.stop
             >
-                <view
-                    class="message-action-item"
-                    v-if="canCopyMessage(messageAction.message)"
-                    @click="copyMessage"
-                >复制</view>
-                <view
-                    class="message-action-item danger-action"
-                    v-if="canRecallMessage(messageAction.message)"
-                    @click="recallSelectedMessage"
-                >撤回</view>
+                <view class="message-action-item" v-if="canCopyMessage(messageAction.message)" @click="copyMessage">复制</view>
+                <view class="message-action-item danger-action" v-if="canRecallMessage(messageAction.message)" @click="recallSelectedMessage">撤回</view>
             </view>
         </view>
 
-        <!-- 输入栏 -->
         <view class="input-bar" v-if="canSendMessage">
             <view class="input-wrapper">
                 <input
@@ -234,6 +194,7 @@ import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
 import { sendMessage, getMessageByConversation, markRead, recallMessage, handleMessageExtra } from '@/request/im.js';
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
+import { enqueueProfileRefresh } from '@/utils/im-cache.js';
 
 export default {
     data() {
@@ -254,6 +215,8 @@ export default {
             userDefaultAvatar: '/static/user_avatar.png',
             aiDefaultAvatar: '/static/ai.png',
             defaultCover: '/static/images/default.png',
+            firstPageProfileRefreshed: false,
+            groupProfileTtlMs: 7 * 24 * 60 * 60 * 1000,
             messageAction: {
                 visible: false,
                 left: 0,
@@ -313,6 +276,8 @@ export default {
                     this.hasMore = false;
                 }
             }
+
+            this.refreshFirstPageGroupProfiles();
 
             if (this.conversation.badge_count - this.conversation.read_badge_count > 0 && this.messages.length > 0) {
                 markRead(
@@ -414,6 +379,55 @@ export default {
     },
 
     methods: {
+        isGroupConversation() {
+            return Number(this.conversation?.con_type) === 2;
+        },
+
+        collectSenderProfileIds(messages) {
+            const userMap = new Map();
+            const agentMap = new Map();
+            const selfUserId = String(this.userId || getApp().globalData.userId || '');
+        
+            for (const message of messages || []) {
+                if (!message) continue;
+                if (message.sender_id === null || message.sender_id === undefined) continue;
+        
+                const senderType = Number(message.sender_type);
+                const senderId = String(message.sender_id);
+                const key = senderId;
+        
+                if (senderType === 1) {
+                    if (selfUserId && senderId === selfUserId) continue;
+                    userMap.set(key, message.sender_id);
+                } else if (senderType === 2) {
+                    agentMap.set(key, message.sender_id);
+                }
+            }
+        
+            return {
+                userIds: Array.from(userMap.values()),
+                agentIds: Array.from(agentMap.values())
+            };
+        },
+
+        refreshFirstPageGroupProfiles() {
+            if (this.firstPageProfileRefreshed) return;
+            if (!this.isGroupConversation()) return;
+            if (!Array.isArray(this.messages) || this.messages.length === 0) return;
+
+            const { userIds, agentIds } = this.collectSenderProfileIds(this.messages);
+
+            if (userIds.length > 0) {
+                enqueueProfileRefresh('user', userIds, this.groupProfileTtlMs);
+            }
+
+            if (agentIds.length > 0) {
+                enqueueProfileRefresh('agent', agentIds, this.groupProfileTtlMs);
+            }
+
+            this.firstPageProfileRefreshed = true;
+        },
+
         async fillSenderInfos(messages) {
             if (!Array.isArray(messages) || messages.length === 0) return;
 
@@ -637,7 +651,7 @@ export default {
             if (!this.canSendMessage) return;
             if (this.inputText.trim() === '') return;
 
-            const clientMsgId = getApp().globalData.msgIdGenerator.nextId();
+            const clientMsgId = getApp().globalData.randomIdGenerator.nextId();
             const sendingText = this.inputText;
 
             const payload = {
@@ -1272,7 +1286,6 @@ export default {
     animation: spin 0.8s linear infinite;
 }
 
-/* 分享消息卡片：参考创作首页卡片，但移除点赞信息 */
 .share-card {
     width: 176px;
     background: #ffffff;

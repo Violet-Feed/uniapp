@@ -167,6 +167,7 @@
 </template>
 
 <script>
+import DB from '@/utils/sqlite.js';
 import { getCreationsByUser, getCreationsByDigg } from '@/request/creation.js'
 import { digg, cancelDigg } from '@/request/action.js'
 import { getUserProfile } from '@/request/user.js'
@@ -224,20 +225,40 @@ export default {
 
 		async loadUserProfile() {
 			const uid = this.userId || getApp().globalData.userId
-			const res = await getUserProfile(uid, true, true)
-
-			if (res) {
-				this.username = res.user_info?.username || ''
-				this.avatar = res.user_info?.avatar || '/static/user_avatar.png'
-				this.followingCount = res.following_count || 0
-				this.followerCount = res.follower_count || 0
-				this.friendCount = res.friend_count || 0
-				return
+			try {
+				const res = await getUserProfile(uid, true, true)
+				if (res) {
+					this.username =
+						res.user_info && res.user_info.username
+							? res.user_info.username
+							: ''
+					this.avatar =
+						res.user_info && res.user_info.avatar
+							? res.user_info.avatar
+							: this.defaultAvatar
+					this.followingCount = res.following_count || 0
+					this.followerCount = res.follower_count || 0
+					this.friendCount = res.friend_count || 0
+					return
+				}
+			} catch (e) {
+				console.error('加载用户资料失败：', e)
 			}
-
-			this.userId = getApp().globalData.userId
-			this.username = getApp().globalData.username
-			this.avatar = getApp().globalData.avatar
+		
+			try {
+				const rows = await DB.getUsersByIds([uid])
+				const user = rows?.[0] || null
+				if (user) {
+					this.username = user.username || getApp().globalData.username || ''
+					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					return
+				}
+			} catch (e) {
+				console.error('读取本地用户资料失败：', e)
+			}
+		
+			this.username = getApp().globalData.username || ''
+			this.avatar = getApp().globalData.avatar || this.defaultAvatar
 		},
 
 		async loadUserWorks(reset = false) {

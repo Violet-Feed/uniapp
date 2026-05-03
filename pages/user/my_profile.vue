@@ -190,6 +190,7 @@
 </template>
 
 <script>
+import DB from '@/utils/sqlite.js';
 import {
 	getCreationsByUser,
 	getCreationsByDigg,
@@ -282,10 +283,9 @@ export default {
 
 		/* ====== 用户资料 ====== */
 		async loadUserProfile() {
+			const uid = this.userId || getApp().globalData.userId
 			try {
-				const uid = this.userId || getApp().globalData.userId
 				const res = await getUserProfile(uid, true, true)
-
 				if (res) {
 					this.username =
 						res.user_info && res.user_info.username
@@ -294,21 +294,28 @@ export default {
 					this.avatar =
 						res.user_info && res.user_info.avatar
 							? res.user_info.avatar
-							: '/static/user_avatar.png'
+							: this.defaultAvatar
 					this.followingCount = res.following_count || 0
 					this.followerCount = res.follower_count || 0
 					this.friendCount = res.friend_count || 0
-
-					getApp().globalData.username = this.username
-					getApp().globalData.avatar = this.avatar
 					return
 				}
 			} catch (e) {
 				console.error('加载用户资料失败：', e)
 			}
-
-			// 请求失败回退 globalData
-			this.userId = getApp().globalData.userId
+		
+			try {
+				const rows = await DB.getUsersByIds([uid])
+				const user = rows?.[0] || null
+				if (user) {
+					this.username = user.username || getApp().globalData.username || ''
+					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					return
+				}
+			} catch (e) {
+				console.error('读取本地用户资料失败：', e)
+			}
+		
 			this.username = getApp().globalData.username || ''
 			this.avatar = getApp().globalData.avatar || this.defaultAvatar
 		},

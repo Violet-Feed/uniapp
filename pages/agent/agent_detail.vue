@@ -21,7 +21,7 @@
 				<view class="profile-card">
 					<image
 						class="avatar"
-						:src="agent.avatar_uri || defaultAgentAvatar"
+						:src="agent.local_avatar_uri || agent.avatar_uri || defaultAgentAvatar"
 						mode="aspectFill"
 					/>
 					<view class="profile-main">
@@ -65,7 +65,7 @@
 							mode="aspectFill"
 						/>
 						<view class="owner-main">
-							<text class="owner-name">{{ agent.owner_username || '未知用户' }}</text>
+							<text class="owner-name">{{ agent.owner_username || '用户' }}</text>
 						</view>
 						<text class="owner-arrow">></text>
 					</view>
@@ -77,6 +77,8 @@
 
 <script>
 import { getAgentsByIds } from '@/request/agent.js';
+import DB from '@/utils/sqlite.js';
+import { enqueueEntityAvatars } from '@/utils/im-cache.js';
 
 export default {
 	data() {
@@ -112,29 +114,100 @@ export default {
 
 			this.loading = true;
 
-			const res = await getAgentsByIds({
-				agentIds: [this.agentId]
-			});
+			try {
+				const res = await getAgentsByIds({
+					agentIds: [this.agentId]
+				});
 
-			if (res === undefined) {
+				if (res === undefined) {
+					await this.loadDetailFromDb();
+					return;
+				}
+
+				const list = Array.isArray(res?.agents) ? res.agents : [];
+				if (list.length === 0) {
+					await this.loadDetailFromDb();
+					return;
+				}
+
+				const item = list[0];
+				const remoteAgent = this.normalizeRemoteAgent(item);
+
+				this.agent = remoteAgent;
+
+				const rows = await DB.getAgentsByIds([this.agentId]);
+				const oldAgent = rows?.[0] || null;
+
+				if (!oldAgent) return;
+
+				const avatarUri = remoteAgent.avatar_uri || this.defaultAgentAvatar;
+				const oldAvatarUri = oldAgent.avatar_uri || this.defaultAgentAvatar;
+				const oldLocalAvatarUri = oldAgent.local_avatar_uri || '';
+				const avatarChanged = avatarUri !== oldAvatarUri;
+
+				const localAvatarUri = avatarUri.startsWith('/static/')
+					? avatarUri
+					: avatarChanged
+						? ''
+						: oldLocalAvatarUri;
+
+				await DB.updateAgent(this.agentId, {
+					agent_name: remoteAgent.agent_name || 'AI',
+					avatar_uri: avatarUri,
+					local_avatar_uri: localAvatarUri,
+					description: remoteAgent.description || '',
+					owner_id: remoteAgent.owner_id || 0n,
+					modify_time: Date.now()
+				});
+
+				if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
+					enqueueEntityAvatars('agent', [this.agentId]);
+				}
+			} catch (err) {
+				console.error('加载智能体详情失败:', err);
+				await this.loadDetailFromDb();
+			} finally {
 				this.loading = false;
 				uni.stopPullDownRefresh();
-				return;
 			}
+		},
 
-			const list = Array.isArray(res?.agents) ? res.agents : [];
-			if (list.length === 0) {
+		async loadDetailFromDb() {
+			try {
+				const rows = await DB.getAgentsByIds([this.agentId]);
+				const agent = rows?.[0] || null;
+
+				if (!agent) {
+					this.agent = null;
+					return;
+				}
+
+				this.agent = {
+					agent_id: agent.agent_id ? String(agent.agent_id) : this.agentId,
+					agent_name: agent.agent_name || '',
+					avatar_uri: agent.avatar_uri || this.defaultAgentAvatar,
+					local_avatar_uri: agent.local_avatar_uri || '',
+					description: agent.description || '',
+					personality: agent.personality || '加载中',
+					owner_id: agent.owner_id ? String(agent.owner_id) : '',
+					owner_avatar: agent.owner_avatar || '',
+					owner_username: agent.owner_username || '',
+					create_time: agent.create_time || 0
+				};
+			} catch (err) {
+				console.error('读取本地智能体详情失败:', err);
 				this.agent = null;
-				this.loading = false;
-				uni.stopPullDownRefresh();
-				return;
 			}
+		},
 
-			const item = list[0];
-			this.agent = {
-				agent_id: item?.agent_id ? String(item.agent_id) : '',
+		normalizeRemoteAgent(item) {
+			const avatarUri = item?.avatar_uri || this.defaultAgentAvatar;
+
+			return {
+				agent_id: item?.agent_id ? String(item.agent_id) : this.agentId,
 				agent_name: item?.agent_name || '',
-				avatar_uri: item?.avatar_uri || '',
+				avatar_uri: avatarUri,
+				local_avatar_uri: '',
 				description: item?.description || '',
 				personality: item?.personality || '',
 				owner_id: item?.owner_id ? String(item.owner_id) : '',
@@ -142,9 +215,6 @@ export default {
 				owner_username: item?.owner_username || '',
 				create_time: item?.create_time || 0
 			};
-
-			this.loading = false;
-			uni.stopPullDownRefresh();
 		},
 
 		getCurrentUserId() {
@@ -340,8 +410,8 @@ export default {
 }
 
 .owner-avatar {
-	width: 88rpx;
-	height: 88rpx;
+	width: 40rpx;
+	height: 40rpx;
 	border-radius: 50%;
 	background: #eef1f6;
 	flex-shrink: 0;
@@ -350,7 +420,7 @@ export default {
 .owner-main {
 	flex: 1;
 	min-width: 0;
-	margin-left: 20rpx;
+	margin-left: 12rpx;
 }
 
 .owner-name {

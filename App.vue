@@ -26,7 +26,7 @@ export default {
 
 		DB.openSqlite()
 		init()
-		getApp().globalData.msgIdGenerator = new Snowflake()
+		getApp().globalData.randomIdGenerator = new Snowflake()
 
 		this.setupDeepLinkListener()
 

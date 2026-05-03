@@ -87,7 +87,9 @@
 
 <script>
 import { getUserProfile, updateUserInfo } from '@/request/user.js'
-import { uploadImage } from '@/request/common.js' // 按你的实际路径调整
+import { uploadImage } from '@/request/common.js'
+import DB from '@/utils/sqlite.js'
+import { enqueueEntityAvatars } from '@/utils/im-cache.js'
 
 export default {
 	data() {
@@ -128,6 +130,20 @@ export default {
 				getApp().globalData.avatar = this.avatar
 			} catch (e) {
 				console.error('获取用户资料失败：', e)
+
+				try {
+					const rows = await DB.getUsersByIds([this.userId])
+					const user = rows?.[0] || null
+
+					if (user) {
+						this.username = user.username || getApp().globalData.username || ''
+						this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+						return
+					}
+				} catch (dbErr) {
+					console.error('读取本地用户资料失败：', dbErr)
+				}
+
 				this.username = getApp().globalData.username || ''
 				this.avatar = getApp().globalData.avatar || this.defaultAvatar
 			}
@@ -153,6 +169,7 @@ export default {
 
 		async submitUsername() {
 			const newUsername = (this.tempUsername || '').trim()
+
 			if (!newUsername) {
 				uni.showToast({
 					title: '用户名不能为空',
@@ -167,6 +184,7 @@ export default {
 			}
 
 			this.submitting = true
+
 			try {
 				const ok = await updateUserInfo({
 					type: 'username',
@@ -179,6 +197,12 @@ export default {
 
 				this.username = newUsername
 				getApp().globalData.username = newUsername
+
+				await DB.updateUser(this.userId, {
+					username: newUsername,
+					modify_time: Date.now()
+				})
+
 				this.closePopup()
 
 				uni.showToast({
@@ -187,6 +211,7 @@ export default {
 				})
 			} catch (e) {
 				console.error('修改用户名失败：', e)
+
 				uni.showToast({
 					title: '修改失败',
 					icon: 'none'
@@ -214,6 +239,7 @@ export default {
 			}
 
 			this.submitting = true
+
 			try {
 				const ok = await updateUserInfo({
 					type: 'password',
@@ -225,12 +251,14 @@ export default {
 				}
 
 				this.closePopup()
+
 				uni.showToast({
 					title: '密码已更新',
 					icon: 'success'
 				})
 			} catch (e) {
 				console.error('修改密码失败：', e)
+
 				uni.showToast({
 					title: '修改失败',
 					icon: 'none'
@@ -260,6 +288,7 @@ export default {
 					if (!filePath) return
 
 					this.submitting = true
+
 					try {
 						const uploadRes = await uploadImage(filePath, 'user_avatar')
 						const sourceUrl =
@@ -283,12 +312,21 @@ export default {
 						this.avatar = sourceUrl
 						getApp().globalData.avatar = sourceUrl
 
+						await DB.updateUser(this.userId, {
+							avatar_uri: sourceUrl,
+							local_avatar_uri: '',
+							modify_time: Date.now()
+						})
+
+						enqueueEntityAvatars('user', [this.userId])
+
 						uni.showToast({
 							title: '头像已更新',
 							icon: 'success'
 						})
 					} catch (e) {
 						console.error('修改头像失败：', e)
+
 						uni.showToast({
 							title: '修改失败',
 							icon: 'none'

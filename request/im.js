@@ -587,7 +587,7 @@ export const handleCommandMessage = async (msg) => {
       				con_id: conId,
       				member_id: aid,
       				member_type: 2,
-      				nick_name: a.agent_name || "AI",
+      				nick_name: "",
       				privilege: 0,
       				create_time: a.create_time ?? 0,
       				status: a.status ?? 0,

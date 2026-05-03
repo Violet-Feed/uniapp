@@ -115,7 +115,7 @@
 // - 已有实体：头像地址变了才重下。
 // - 本地头像为空：视为未完成状态，后续刷新会继续补齐。
 // - 默认头像也是合法的 local_avatar_uri，不是失败状态。
-import JSONbig from 'json-bigint';
+
 import DB from "@/utils/sqlite.js";
 import { getUserInfos } from "@/request/user";
 import {
@@ -138,7 +138,9 @@ function createQueue({ concurrency = 4, worker }) {
       running++;
       Promise.resolve()
         .then(() => worker(task))
-        .catch(() => {})
+        .catch((err) => {
+          console.error("avatar/cache queue task failed", err);
+        })
         .finally(() => {
           running--;
           pump();
@@ -179,38 +181,87 @@ function safeFileId(id) {
   return String(id).replace(/[^\w.-]/g, "_");
 }
 
-/* ------------------------------ PNG 下载 ------------------------------ */
+/* ------------------------------ PNG 下载与旧头像清理 ------------------------------ */
 
 async function ensureAvatarDirOnce() {
   return new Promise((resolve) => {
     if (!(typeof plus !== "undefined" && plus.io)) return resolve();
+
     plus.io.resolveLocalFileSystemURL(
       "_doc/",
-      (root) => root.getDirectory("avatar", { create: true }, () => resolve(), () => resolve()),
+      (root) => root.getDirectory(
+        "avatar",
+        { create: true },
+        () => resolve(),
+        () => resolve()
+      ),
       () => resolve()
     );
   });
 }
 
-async function downloadPng(id, url, prefix = "") {
-  await ensureAvatarDirOnce();
+function shouldRemoveOldLocalAvatar(path) {
+  return !!path &&
+    typeof path === "string" &&
+    path.startsWith(AVATAR_DIR);
+}
+
+function removeLocalFileIfExists(path) {
   return new Promise((resolve) => {
-      const target = `${AVATAR_DIR}${prefix}${safeFileId(id)}.png`;
-      const task = plus.downloader.createDownload(
-        url,
-        { filename: target },
-        (d, status) => {
-          if (status === 200) {
-            console.log("download avatar success", d.filename);
-            resolve(d.filename); // 这里才是真正落盘后的路径
-          } else {
-            console.error("download avatar failed, status =", status);
-            resolve("");
+    if (!shouldRemoveOldLocalAvatar(path)) return resolve();
+    if (!(typeof plus !== "undefined" && plus.io)) return resolve();
+
+    plus.io.resolveLocalFileSystemURL(
+      path,
+      (entry) => {
+        entry.remove(
+          () => {
+            console.log("remove old avatar success", path);
+            resolve();
+          },
+          (err) => {
+            console.warn("remove old avatar failed", path, err);
+            resolve();
           }
+        );
+      },
+      () => resolve()
+    );
+  });
+}
+
+async function cleanupOldLocalAvatar(oldLocal, newLocal) {
+  if (!oldLocal || !newLocal || oldLocal === newLocal) return;
+  await removeLocalFileIfExists(oldLocal);
+}
+
+async function downloadPng(url, prefix = "") {
+  await ensureAvatarDirOnce();
+
+  const avatarFileId = getApp().globalData.randomIdGenerator.nextId();
+  const target = `${AVATAR_DIR}${prefix}${safeFileId(avatarFileId)}.png`;
+
+  return new Promise((resolve) => {
+    const task = plus.downloader.createDownload(
+      url,
+      { filename: target },
+      (d, status) => {
+        if (status === 200) {
+          console.log("download avatar success", d.filename);
+          resolve(d.filename);
+        } else {
+          console.error("download avatar failed", {
+            status,
+            url,
+            target
+          });
+          resolve("");
         }
-      );
-      task.start();
-    });
+      }
+    );
+
+    task.start();
+  });
 }
 
 /* ------------------------------ avatarQueue：统一处理 user / agent / conv 头像 ------------------------------ */
@@ -234,14 +285,15 @@ const avatarQueue = createQueue({
 
       if (avatarUri.startsWith("/static/")) {
         if (oldLocal !== avatarUri) {
-          await DB.updateUserLocalAvatar(task.id, avatarUri);
+          await DB.updateUser(task.id, { local_avatar_uri: avatarUri });
         }
         return;
       }
 
-      const localPath = await downloadPng(task.id, avatarUri, "user_");
+      const localPath = await downloadPng(avatarUri, "user_");
       if (localPath) {
-        await DB.updateUserLocalAvatar(task.id, localPath);
+        await DB.updateUser(task.id, { local_avatar_uri: localPath });
+        await cleanupOldLocalAvatar(oldLocal, localPath);
       }
       return;
     }
@@ -256,14 +308,15 @@ const avatarQueue = createQueue({
 
       if (avatarUri.startsWith("/static/")) {
         if (oldLocal !== avatarUri) {
-          await DB.updateAgentLocalAvatar(task.id, avatarUri);
+          await DB.updateAgent(task.id, { local_avatar_uri: avatarUri });
         }
         return;
       }
 
-      const localPath = await downloadPng(task.id, avatarUri, "agent_");
+      const localPath = await downloadPng(avatarUri, "agent_");
       if (localPath) {
-        await DB.updateAgentLocalAvatar(task.id, localPath);
+        await DB.updateAgent(task.id, { local_avatar_uri: localPath });
+        await cleanupOldLocalAvatar(oldLocal, localPath);
       }
       return;
     }
@@ -281,11 +334,13 @@ const avatarQueue = createQueue({
         }
         return;
       }
-	  
-	  if (avatarUri == oldLocal) return;
-      const localPath = await downloadPng(task.id, avatarUri, "conv_");
+
+      if (avatarUri === oldLocal) return;
+
+      const localPath = await downloadPng(avatarUri, "conv_");
       if (localPath) {
         await DB.updateConversation(task.id, { local_avatar_uri: localPath });
+        await cleanupOldLocalAvatar(oldLocal, localPath);
       }
     }
   }
@@ -310,8 +365,8 @@ export async function ensureUsersCached(userIds) {
   for (const id of ids) {
     if (!existSet.has(id)) missing.push(id);
   }
+
   if (missing.length === 0) return;
-  
   const resp = await getUserInfos({ userIds: missing });
   if (!resp) return;
 
@@ -404,7 +459,7 @@ const profileRefreshQueue = createQueue({
       const oldMap = new Map();
 
       for (const row of rows) {
-        oldMap.set(row.user_id, row);
+        oldMap.set(String(row.user_id), row);
         const mt = Number(row.modify_time || 0);
         const localMissing = !row.local_avatar_uri;
         const needRefresh = !mt || (now - mt) >= ttl || localMissing;
@@ -412,31 +467,32 @@ const profileRefreshQueue = createQueue({
       }
 
       if (refreshIds.length === 0) return;
-
+	  console.log("profileRefreshQueue userId : ",refreshIds.toString())
       const resp = await getUserInfos({ userIds: refreshIds });
       if (!resp) return;
-
+	  
       const infos = resp.user_infos || [];
       if (!Array.isArray(infos) || infos.length === 0) return;
-
+	  
       const infoMap = new Map();
       for (const u of infos) {
         if (!u || u.user_id === null || u.user_id === undefined) continue;
-        infoMap.set(u.user_id, u);
+        infoMap.set(String(u.user_id), u);
       }
 
       const upserts = [];
       const needAvatarIds = [];
 
       for (const uid of refreshIds) {
-        const old = oldMap.get(uid);
-        const nu = infoMap.get(uid);
+		const key = String(uid);
+        const old = oldMap.get(key);
+        const nu = infoMap.get(key);
         if (!old || !nu) continue;
-
+	
         const newAvatar = nu.avatar || "/static/user_avatar.png";
         const oldAvatar = old.avatar_uri || "/static/user_avatar.png";
         const oldLocal = old.local_avatar_uri || "";
-        const avatarChanged = (newAvatar !== oldAvatar);
+        const avatarChanged = newAvatar !== oldAvatar;
         const localMissing = !oldLocal;
 
         upserts.push({
@@ -469,7 +525,7 @@ const profileRefreshQueue = createQueue({
       const oldMap = new Map();
 
       for (const row of rows) {
-        oldMap.set(row.agent_id, row);
+        oldMap.set(String(row.agent_id), row);
         const mt = Number(row.modify_time || 0);
         const localMissing = !row.local_avatar_uri;
         const needRefresh = !mt || (now - mt) >= ttl || localMissing;
@@ -477,7 +533,7 @@ const profileRefreshQueue = createQueue({
       }
 
       if (refreshIds.length === 0) return;
-
+	  console.log("profileRefreshQueue agentId : ",refreshIds.toString())
       const resp = await getAgentsByIds({ agentIds: refreshIds });
       if (!resp) return;
 
@@ -487,21 +543,22 @@ const profileRefreshQueue = createQueue({
       const infoMap = new Map();
       for (const a of infos) {
         if (!a || a.agent_id === null || a.agent_id === undefined) continue;
-        infoMap.set(a.agent_id, a);
+        infoMap.set(String(a.agent_id), a);
       }
 
       const upserts = [];
       const needAvatarIds = [];
 
       for (const aid of refreshIds) {
-        const old = oldMap.get(aid);
-        const na = infoMap.get(aid);
+		const key = String(aid);
+        const old = oldMap.get(key);
+        const na = infoMap.get(key);
         if (!old || !na) continue;
 
         const newAvatar = na.avatar_uri || "/static/ai.png";
         const oldAvatar = old.avatar_uri || "/static/ai.png";
         const oldLocal = old.local_avatar_uri || "";
-        const avatarChanged = (newAvatar !== oldAvatar);
+        const avatarChanged = newAvatar !== oldAvatar;
         const localMissing = !oldLocal;
 
         upserts.push({
@@ -544,8 +601,8 @@ const rosterQueue = createQueue({
     if (userCnt !== 0) return;
 
     const now = Date.now();
-
     const conv = await DB.getConversationById(conId);
+
     if (!conv) return;
 
     const conShortId = conv.con_short_id;
@@ -592,7 +649,9 @@ const rosterQueue = createQueue({
           }
         }
 
-        if (memberRows.length > 0) await DB.upsertMembers(memberRows);
+        if (memberRows.length > 0) {
+          await DB.upsertMembers(memberRows);
+        }
         if (userRows.length > 0) {
           await DB.upsertUsers(userRows);
         }
@@ -623,7 +682,7 @@ const rosterQueue = createQueue({
             con_id: conId,
             member_id: aid,
             member_type: 2,
-            nick_name: a.agent_name || "AI",
+            nick_name: "",
             privilege: 0,
             create_time: a.create_time ?? 0,
             status: a.status ?? 0,
@@ -643,7 +702,9 @@ const rosterQueue = createQueue({
           }
         }
 
-        if (memberRows.length > 0) await DB.upsertMembers(memberRows);
+        if (memberRows.length > 0) {
+          await DB.upsertMembers(memberRows);
+        }
         if (agentRows.length > 0) {
           await DB.upsertAgents(agentRows);
         }

@@ -25,7 +25,13 @@
         </view>
 
         <!-- 会话列表 -->
-        <scroll-view class="conversation-scroll" scroll-y>
+        <scroll-view
+            class="conversation-scroll"
+            scroll-y
+            lower-threshold="40"
+            @scroll="onConversationScroll"
+            @scrolltolower="onConversationScrollToLower"
+        >
             <view class="conversation-list">
                 <!-- 固定通知入口 -->
                 <view class="notice-row">
@@ -73,7 +79,11 @@
                     @longpress.stop="showDeleteConversationAction($event, conversation)"
                 >
                     <view class="avatar-wrapper">
-                        <image class="avatar" :src="conversation.avatar_uri" mode="aspectFill"></image>
+                        <image
+                            class="avatar"
+                            :src="conversation.avatar_uri || '/static/conv_avatar.png'"
+                            mode="aspectFill"
+                        ></image>
                         <view
                             class="unread-badge"
                             v-if="conversation.badge_count - conversation.read_badge_count > 0"
@@ -99,7 +109,15 @@
                     </view>
                 </view>
 
-                <view v-if="conversationList.length === 0" class="empty-state">
+                <view v-if="conversationLoading" class="load-more-state">加载中...</view>
+                <view
+                    v-else-if="!conversationHasMore && conversationList.length > 0"
+                    class="load-more-state"
+                >
+                    没有更多会话了
+                </view>
+
+                <view v-if="conversationList.length === 0 && !conversationLoading" class="empty-state">
                     <text class="empty-icon">💬</text>
                     <text class="empty-hint">开始你的第一次对话吧！</text>
                 </view>
@@ -126,6 +144,7 @@ import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
 import { getNoitceCount, updateConversationSetting, markRead } from '@/request/im.js';
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
+import { enqueueProfileRefresh } from '@/utils/im-cache.js';
 
 export default {
     data() {
@@ -138,6 +157,13 @@ export default {
 
             userConIndex: getApp().globalData.userConIndex,
             conversationList: [],
+            conversationPageSize: 50,
+            conversationLoading: false,
+            conversationHasMore: true,
+            conversationLoadArmed: true,
+            conversationScrollBoxHeight: 0,
+            privateProfileTtlMs: 24 * 60 * 60 * 1000,
+
             showDropdown: false,
             normalListener: null,
             commandListener: null,
@@ -164,14 +190,7 @@ export default {
     },
 
     onLoad() {
-        DB.pullConversation(this.userConIndex)
-            .then((res) => {
-                const list = Array.isArray(res) ? res : [];
-                this.conversationList = list.map(item => this.normalizeConversationPreview(item));
-            })
-            .catch((err) => {
-                console.error('pullConversation err', err);
-            });
+        this.loadMoreConversations(true);
 
         this.normalListener = (data) => {
             if (!data || !data.msg_body) return;
@@ -204,7 +223,9 @@ export default {
             } else {
                 DB.getConversationById(msgBody.con_id).then((res) => {
                     if (res) {
-                        this.conversationList.unshift(this.normalizeConversationPreview(res));
+                        const conversation = this.normalizeConversationPreview(res);
+                        this.conversationList.unshift(conversation);
+                        this.refreshPrivateProfilesInPage([conversation]);
                     }
                 });
             }
@@ -299,6 +320,10 @@ export default {
         this.loadNoticeCounts();
     },
 
+    onReady() {
+        this.updateConversationScrollBoxHeight();
+    },
+
     onUnload() {
         if (this.normalListener) {
             uni.$off('normal', this.normalListener);
@@ -314,6 +339,124 @@ export default {
     },
 
     methods: {
+        updateConversationScrollBoxHeight() {
+            this.$nextTick(() => {
+                const query = uni.createSelectorQuery().in(this);
+                query.select('.conversation-scroll').boundingClientRect(rect => {
+                    this.conversationScrollBoxHeight = Number(rect?.height || 0);
+                }).exec();
+            });
+        },
+
+        onConversationScroll(e) {
+            const detail = e?.detail || {};
+            const scrollTop = Number(detail.scrollTop || 0);
+            const scrollHeight = Number(detail.scrollHeight || 0);
+            const viewHeight = Number(this.conversationScrollBoxHeight || 0);
+
+            if (!scrollHeight || !viewHeight) return;
+
+            const distanceToBottom = scrollHeight - scrollTop - viewHeight;
+
+            if (distanceToBottom > 120) {
+                this.conversationLoadArmed = true;
+            }
+        },
+
+        onConversationScrollToLower() {
+            if (!this.conversationLoadArmed) return;
+            if (this.conversationLoading) return;
+            if (!this.conversationHasMore) return;
+
+            this.conversationLoadArmed = false;
+            this.loadMoreConversations(false);
+        },
+
+        async loadMoreConversations(reset = false) {
+            if (this.conversationLoading) return;
+            if (!reset && !this.conversationHasMore) return;
+
+            this.conversationLoading = true;
+
+            try {
+                let beforeUserConIndex;
+
+                if (reset) {
+                    beforeUserConIndex = this.userConIndex;
+                    this.conversationHasMore = true;
+                    this.conversationLoadArmed = true;
+                    this.updateConversationScrollBoxHeight();
+                } else {
+                    const last = this.conversationList[this.conversationList.length - 1];
+
+                    if (!last || last.user_con_index === null || last.user_con_index === undefined) {
+                        this.conversationHasMore = false;
+                        return;
+                    }
+
+                    beforeUserConIndex = Number(last.user_con_index) - 1;
+
+                    if (!Number.isFinite(beforeUserConIndex) || beforeUserConIndex < 0) {
+                        this.conversationHasMore = false;
+                        return;
+                    }
+                }
+
+                const res = await DB.pullConversation(beforeUserConIndex, this.conversationPageSize);
+                const list = Array.isArray(res) ? res : [];
+                const mapped = list.map(item => this.normalizeConversationPreview(item));
+
+                if (reset) {
+                    this.refreshPrivateProfilesInPage(mapped);
+                    this.conversationList = mapped;
+                } else {
+                    const existSet = new Set(this.conversationList.map(item => String(item.con_id)));
+                    const appendList = mapped.filter(item => !existSet.has(String(item.con_id)));
+
+                    if (appendList.length > 0) {
+                        this.refreshPrivateProfilesInPage(appendList);
+                        this.conversationList = this.conversationList.concat(appendList);
+                    }
+                }
+
+                this.conversationHasMore = list.length >= this.conversationPageSize;
+                this.$nextTick(() => this.updateConversationScrollBoxHeight());
+            } catch (err) {
+                console.error('loadMoreConversations failed', err);
+            } finally {
+                this.conversationLoading = false;
+            }
+        },
+
+        collectPrivateProfileIds(list) {
+            const userIds = [];
+            const agentIds = [];
+
+            for (const item of list || []) {
+                if (!item) continue;
+
+                if (Number(item.con_type) === 1 && item.peer_id !== null && item.peer_id !== undefined) {
+                    userIds.push(item.peer_id);
+                } else if (Number(item.con_type) === 4 && item.peer_id !== null && item.peer_id !== undefined) {
+                    agentIds.push(item.peer_id);
+                }
+            }
+
+            return { userIds, agentIds };
+        },
+
+        refreshPrivateProfilesInPage(list) {
+            const { userIds, agentIds } = this.collectPrivateProfileIds(list);
+
+            if (userIds.length > 0) {
+                enqueueProfileRefresh("user", userIds, this.privateProfileTtlMs);
+            }
+
+            if (agentIds.length > 0) {
+                enqueueProfileRefresh("agent", agentIds, this.privateProfileTtlMs);
+            }
+        },
+
         normalizeConversationPreview(conversation) {
             if (!conversation) return conversation;
 
@@ -605,7 +748,6 @@ export default {
     background: #f8f9fa;
 }
 
-/* ==================== 头部栏 ==================== */
 .header-bar {
     display: flex;
     align-items: center;
@@ -650,7 +792,6 @@ export default {
     color: #fff;
 }
 
-/* ==================== 下拉菜单 ==================== */
 .dropdown-overlay {
     position: fixed;
     top: 0;
@@ -720,14 +861,13 @@ export default {
     white-space: nowrap;
 }
 
-/* ==================== 会话列表 ==================== */
 .conversation-scroll {
     flex: 1;
     overflow: hidden;
 }
 
 .conversation-list {
-    padding: 8px 0;
+    padding: 8px 0 0;
 }
 
 .notice-row {
@@ -874,6 +1014,15 @@ export default {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.load-more-state {
+    padding: 4px 0 0;
+    margin: 0;
+    text-align: center;
+    font-size: 11px;
+    line-height: 14px;
+    color: #999;
 }
 
 .conversation-action-mask {

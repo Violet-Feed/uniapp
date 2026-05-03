@@ -1093,31 +1093,41 @@ async function updateMessage(msgId, data) {
   return execSql(sql);
 }
 
-async function updateUserLocalAvatar(userIdValue, localPath) {
+async function updateUser(userIdValue, data) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
   const { userTable } = getTablesByUser(loginUserId);
 
+  const entries = toEntries(data);
+  if (entries.length === 0) return;
+
+  const setClause = entries.map(([k, v]) => `${k} = ${sqlValue(v)}`).join(', ');
   const sql = `
     UPDATE ${userTable}
-    SET local_avatar_uri = ${sqlValue(localPath)}
+    SET ${setClause}
     WHERE CAST(user_id AS TEXT) = ${sqlValue(String(userIdValue))};
   `;
+
   return execSql(sql);
 }
 
-async function updateAgentLocalAvatar(agentIdValue, localPath) {
+async function updateAgent(agentIdValue, data) {
   await ensureOpen();
 
   const loginUserId = getLoginUserId();
   const { agentTable } = getTablesByUser(loginUserId);
 
+  const entries = toEntries(data);
+  if (entries.length === 0) return;
+
+  const setClause = entries.map(([k, v]) => `${k} = ${sqlValue(v)}`).join(', ');
   const sql = `
     UPDATE ${agentTable}
-    SET local_avatar_uri = ${sqlValue(localPath)}
+    SET ${setClause}
     WHERE CAST(agent_id AS TEXT) = ${sqlValue(String(agentIdValue))};
   `;
+
   return execSql(sql);
 }
 
@@ -1212,8 +1222,8 @@ export default {
   updateConversation,
   updateMember,
   updateMessage,
-  updateUserLocalAvatar,
-  updateAgentLocalAvatar,
+  updateUser,
+  updateAgent,
 
   deleteConversation,
   deleteMessage,

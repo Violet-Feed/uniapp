@@ -85,6 +85,8 @@
 </template>
 
 <script>
+import DB from '@/utils/sqlite.js';
+import { enqueueEntityAvatars } from '@/utils/im-cache.js';
 import { getAgentsByIds, updateAgent } from '@/request/agent.js';
 import { uploadImage } from '@/request/common.js';
 
@@ -266,11 +268,33 @@ export default {
 					throw new Error('updateAgent 返回失败');
 				}
 
+				const avatarUri = this.form.avatarUri || '/static/ai.png';
+				const oldRows = await DB.getAgentsByIds([this.agentId]);
+				const oldAgent = oldRows?.[0] || null;
+				
+				if (oldAgent) {
+					const oldAvatarUri = oldAgent.avatar_uri || '/static/ai.png';
+					const oldLocalAvatarUri = oldAgent.local_avatar_uri || '';
+					const avatarChanged = avatarUri !== oldAvatarUri;
+				
+					await DB.updateAgent(this.agentId, {
+						agent_name: agentName,
+						avatar_uri: avatarUri,
+						local_avatar_uri: avatarChanged ? '' : oldLocalAvatarUri,
+						description: (this.form.description || '').trim(),
+						modify_time: Date.now()
+					});
+				
+					if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
+						enqueueEntityAvatars('agent', [this.agentId]);
+					}
+				}
+				
 				uni.showToast({
 					title: '保存成功',
 					icon: 'success'
 				});
-
+				
 				setTimeout(() => {
 					uni.navigateBack();
 				}, 500);

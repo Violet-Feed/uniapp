@@ -178,6 +178,8 @@
 
 <script>
 import JSONbig from 'json-bigint'
+import DB from '@/utils/sqlite.js'
+import { enqueueEntityAvatars } from '@/utils/im-cache.js'
 import { getUserProfile } from '@/request/user'
 import { getCreationsByUser, getCreationsByDigg } from '@/request/creation'
 import { follow, unfollow, digg, cancelDigg } from '@/request/action'
@@ -254,18 +256,65 @@ export default {
 	},
 	methods: {
 		async loadUserProfile() {
-			// 不要求 try/catch；失败会返回 undefined
-			const res = await getUserProfile(this.userId, true, false)
-			if (!res) return
-
-			this.username = res.user_info?.username || ''
-			this.avatar = res.user_info?.avatar || '/static/user_avatar.png'
-			this.followingCount = res.following_count || 0
-			this.followerCount = res.follower_count || 0
-
-			// 以你最新返回为准
-			this.isFollowing = !!res.is_following
-			this.isFollower = !!res.is_follower
+			const uid = this.userId
+			const res = await getUserProfile(uid, true, false)
+			if (res) {
+				const userInfo = res.user_info || {}
+				const username = userInfo.username || ''
+				const remoteAvatar = userInfo.avatar || ''
+				const avatarUri = remoteAvatar || this.defaultAvatar
+		
+				this.username = username
+				this.avatar = avatarUri
+				this.followingCount = res.following_count || 0
+				this.followerCount = res.follower_count || 0
+				this.isFollowing = !!res.is_following
+				this.isFollower = !!res.is_follower
+		
+				const rows = await DB.getUsersByIds([uid])
+				const oldUser = rows?.[0] || null
+				if (!oldUser) return
+		
+				const oldAvatarUri = oldUser.avatar_uri || ''
+				const oldLocalAvatarUri = oldUser.local_avatar_uri || ''
+				const avatarChanged = remoteAvatar !== '' && avatarUri !== oldAvatarUri
+				const localMissing = remoteAvatar !== '' && !oldLocalAvatarUri
+				const localAvatarUri = avatarUri.startsWith('/static/')
+					? avatarUri
+					: avatarChanged
+						? ''
+						: oldLocalAvatarUri
+		
+				await DB.updateUser(uid, {
+					username,
+					avatar_uri: avatarUri,
+					local_avatar_uri: localAvatarUri,
+					modify_time: Date.now()
+				})
+		
+				if (avatarChanged || localMissing) {
+					enqueueEntityAvatars('user', [uid])
+				}
+				return
+			}
+			try {
+				const rows = await DB.getUsersByIds([uid])
+				const user = rows?.[0] || null
+				if (user) {
+					this.username = user.username || ''
+					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					return
+				}
+			} catch (e) {
+				console.error('读取本地用户资料失败:', e)
+			}
+		
+			this.username = ''
+			this.avatar = this.defaultAvatar
+			this.followingCount = 0
+			this.followerCount = 0
+			this.isFollowing = false
+			this.isFollower = false
 		},
 
 		async loadUserWorks(reset = false) {
