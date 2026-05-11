@@ -1,57 +1,75 @@
 <template>
 	<view class="agent-page">
-		<view class="nav-bar">
-			<view class="nav-left" @click="goBack">
-				<text class="nav-action">返回</text>
-			</view>
-			<view class="nav-title">我的智能体</view>
-			<view class="nav-right" @click="goCreate">
-				<text class="nav-action nav-action-primary">创建</text>
+		<view class="nav-bar" :style="navBarStyle">
+			<view class="nav-content" :style="navContentStyle">
+				<view class="nav-left" @click="goBack">
+					<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
+				</view>
+
+				<view class="nav-title-wrap">
+					<text class="nav-title" :style="navTitleStyle">我的智能体</text>
+				</view>
+
+				<view class="nav-right">
+					<button class="nav-pill-btn" :style="navBtnStyle" @click.stop="goCreate">
+						创建
+					</button>
+				</view>
 			</view>
 		</view>
 
-		<view class="page-body">
+		<view class="page-body" :style="pageBodyStyle">
 			<view class="state-box" v-if="loading && agents.length === 0">
-				<text class="state-text">加载中...</text>
+				<text class="state-text" :style="stateTextStyle">加载中...</text>
 			</view>
 
 			<view class="state-box" v-else-if="!loading && agents.length === 0">
-				<text class="state-text">你还没有创建智能体</text>
+				<text class="state-text" :style="stateTextStyle">你还没有创建智能体</text>
 			</view>
 
 			<view v-else class="list-wrap">
 				<view
 					class="agent-card"
+					:style="agentCardStyle"
 					v-for="item in agents"
 					:key="item.agent_id"
 					@click="goDetail(item)"
-					@longpress="showAgentOptions(item)"
+					@longpress.stop="showAgentOptions(item)"
 				>
 					<image
 						class="avatar"
+						:style="avatarStyle"
 						:src="item.avatar_uri || defaultAvatar"
 						mode="aspectFill"
 					/>
 
-					<view class="agent-main">
-						<view class="agent-top">
-							<text class="agent-name">{{ item.agent_name || '未命名智能体' }}</text>
-						</view>
-
-						<text class="agent-desc">
-							{{ item.description || '暂无描述' }}
+					<view class="agent-main" :style="agentMainStyle">
+						<text class="agent-name" :style="agentNameStyle">
+							{{ item.agent_name || '未命名智能体' }}
 						</text>
 
-						<view class="agent-bottom">
-							<text class="meta-text">{{ formatTime(item.create_time) }}</text>
-						</view>
+						<text class="agent-desc" :style="agentDescStyle">
+							{{ item.description || '暂无描述' }}
+						</text>
 					</view>
 				</view>
 
 				<view class="bottom-status">
-					<text class="bottom-text" v-if="loadingMore">正在加载更多...</text>
-					<text class="bottom-text" v-else-if="finished">没有更多了</text>
-					<text class="bottom-text" v-else>上拉加载更多</text>
+					<text class="bottom-text" :style="stateTextStyle" v-if="loadingMore">正在加载更多...</text>
+					<text class="bottom-text" :style="stateTextStyle" v-else-if="finished">没有更多了</text>
+					<text class="bottom-text" :style="stateTextStyle" v-else>上拉加载更多</text>
+				</view>
+			</view>
+		</view>
+
+		<view class="agent-action-overlay" v-if="showAgentAction" @click="hideAgentActionMenu">
+			<view class="agent-action-menu" @click.stop>
+				<view class="agent-action-item" @click="editSelectedAgent">
+					<text class="agent-action-text">编辑</text>
+				</view>
+
+				<view class="agent-action-item" @click="deleteSelectedAgent">
+					<text class="agent-action-text danger-action-text">删除</text>
 				</view>
 			</view>
 		</view>
@@ -60,6 +78,10 @@
 
 <script>
 import { getAgentsByUser, deleteAgent } from '@/request/agent.js';
+
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value));
+};
 
 export default {
 	data() {
@@ -70,26 +92,190 @@ export default {
 			loadingMore: false,
 			finished: false,
 			firstShowDone: false,
-			defaultAvatar: '/static/ai.png'
+			defaultAvatar: '/static/ai.png',
+
+			showAgentAction: false,
+			selectedAgent: null,
+
+			windowWidth: 375,
+			statusBarHeight: 0,
+			headerContentHeight: 38,
+			headerHeight: 38,
+
+			pagePadding: 14,
+			cardPaddingX: 14,
+			cardPaddingY: 12,
+			cardRadius: 14,
+			cardGap: 10,
+
+			avatarSize: 52,
+			avatarRadius: 12,
+			backIconSize: 19,
+			titleFontSize: 17,
+			btnHeight: 30,
+			btnMinWidth: 58,
+			btnFontSize: 14,
+			agentNameFontSize: 16,
+			agentDescFontSize: 13,
+			stateFontSize: 13,
+			agentMainMargin: 12
 		};
 	},
+
+	computed: {
+		navBarStyle() {
+			return (
+				'height:' + this.headerHeight + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;'
+			);
+		},
+
+		navContentStyle() {
+			return 'height:' + this.headerContentHeight + 'px;';
+		},
+
+		backIconStyle() {
+			return 'font-size:' + this.backIconSize + 'px;';
+		},
+
+		navTitleStyle() {
+			return 'font-size:' + this.titleFontSize + 'px;';
+		},
+
+		navBtnStyle() {
+			return (
+				'height:' + this.btnHeight + 'px;' +
+				'line-height:' + this.btnHeight + 'px;' +
+				'min-width:' + this.btnMinWidth + 'px;' +
+				'border-radius:' + Math.floor(this.btnHeight / 2) + 'px;' +
+				'font-size:' + this.btnFontSize + 'px;'
+			);
+		},
+
+		pageBodyStyle() {
+			return 'padding:' + this.pagePadding + 'px;';
+		},
+
+		agentCardStyle() {
+			return (
+				'padding:' + this.cardPaddingY + 'px ' + this.cardPaddingX + 'px;' +
+				'margin-bottom:' + this.cardGap + 'px;' +
+				'border-radius:' + this.cardRadius + 'px;'
+			);
+		},
+
+		avatarStyle() {
+			return (
+				'width:' + this.avatarSize + 'px;' +
+				'height:' + this.avatarSize + 'px;' +
+				'border-radius:' + this.avatarRadius + 'px;'
+			);
+		},
+
+		agentMainStyle() {
+			return (
+				'min-height:' + this.avatarSize + 'px;' +
+				'margin-left:' + this.agentMainMargin + 'px;'
+			);
+		},
+
+		agentNameStyle() {
+			return 'font-size:' + this.agentNameFontSize + 'px;';
+		},
+
+		agentDescStyle() {
+			return 'font-size:' + this.agentDescFontSize + 'px;';
+		},
+
+		stateTextStyle() {
+			return 'font-size:' + this.stateFontSize + 'px;';
+		}
+	},
+
 	onLoad() {
+		this.initResponsiveLayout();
 		this.refreshList();
 	},
+
 	onShow() {
+		this.initResponsiveLayout();
+
 		if (this.firstShowDone) {
 			this.refreshList();
 			return;
 		}
+
 		this.firstShowDone = true;
 	},
+
 	onPullDownRefresh() {
 		this.refreshList();
 	},
+
 	onReachBottom() {
 		this.loadMore();
 	},
+
 	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync();
+				const windowWidth = Number(sys.windowWidth || 375);
+				const statusBarHeight = Number(sys.statusBarHeight || 0);
+				const smallScreenBoost = windowWidth <= 360 ? 1 : 0;
+
+				this.windowWidth = windowWidth;
+				this.statusBarHeight = statusBarHeight;
+
+				this.headerContentHeight = 38;
+				this.headerHeight = this.statusBarHeight + this.headerContentHeight;
+
+				this.pagePadding = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardPaddingY = clamp(Math.floor(windowWidth * 0.032), 10, 14);
+				this.cardRadius = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardGap = clamp(Math.floor(windowWidth * 0.028), 9, 14);
+
+				this.avatarSize = clamp(Math.floor(windowWidth * 0.14), 48, 58);
+				this.avatarRadius = clamp(Math.floor(this.avatarSize * 0.24), 10, 14);
+
+				this.backIconSize = clamp(Math.floor(this.headerContentHeight * 0.5), 18, 21);
+				this.titleFontSize = clamp(Math.floor(this.headerContentHeight * 0.44) + smallScreenBoost, 16, 18);
+
+				this.btnHeight = clamp(Math.floor(this.headerContentHeight * 0.74), 28, 32);
+				this.btnMinWidth = clamp(Math.floor(windowWidth * 0.155), 56, 70);
+				this.btnFontSize = clamp(Math.floor(windowWidth * 0.036) + smallScreenBoost, 13, 15);
+
+				this.agentNameFontSize = clamp(Math.floor(windowWidth * 0.043) + smallScreenBoost, 16, 18);
+				this.agentDescFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
+				this.stateFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
+				this.agentMainMargin = clamp(Math.floor(windowWidth * 0.032), 10, 14);
+			} catch (err) {
+				this.windowWidth = 375;
+				this.statusBarHeight = 0;
+				this.headerContentHeight = 38;
+				this.headerHeight = 38;
+
+				this.pagePadding = 14;
+				this.cardPaddingX = 14;
+				this.cardPaddingY = 12;
+				this.cardRadius = 14;
+				this.cardGap = 10;
+
+				this.avatarSize = 52;
+				this.avatarRadius = 12;
+				this.backIconSize = 19;
+				this.titleFontSize = 17;
+				this.btnHeight = 30;
+				this.btnMinWidth = 58;
+				this.btnFontSize = 14;
+				this.agentNameFontSize = 16;
+				this.agentDescFontSize = 13;
+				this.stateFontSize = 13;
+				this.agentMainMargin = 12;
+			}
+		},
+
 		async refreshList() {
 			if (this.loading) return;
 
@@ -148,14 +334,14 @@ export default {
 
 		normalizeAgents(list) {
 			if (!Array.isArray(list)) return [];
+
 			return list.map(item => ({
 				agent_id: item?.agent_id ? String(item.agent_id) : '',
 				agent_name: item?.agent_name || '',
 				avatar_uri: item?.avatar_uri || '',
 				description: item?.description || '',
-				personality: item?.personality || '',
-				create_time: item?.create_time || 0
-			}));
+				personality: item?.personality || ''
+			})).filter(item => !!item.agent_id);
 		},
 
 		mergeAgents(oldList, newList) {
@@ -192,28 +378,43 @@ export default {
 		showAgentOptions(item) {
 			if (!item?.agent_id) return;
 
-			uni.showActionSheet({
-				itemList: ['编辑', '删除'],
-				success: (res) => {
-					if (res.tapIndex === 0) {
-						this.goEdit(item);
-					} else if (res.tapIndex === 1) {
-						this.confirmDelete(item);
-					}
-				}
-			});
+			this.selectedAgent = item;
+			this.showAgentAction = true;
 		},
 
-		goEdit(item) {
+		hideAgentActionMenu() {
+			this.showAgentAction = false;
+			this.selectedAgent = null;
+		},
+
+		editSelectedAgent() {
+			const item = this.selectedAgent;
+			this.showAgentAction = false;
+			this.selectedAgent = null;
+
+			if (!item?.agent_id) return;
+
 			uni.navigateTo({
 				url: `/pages/agent/edit_agent?agentId=${encodeURIComponent(item.agent_id)}`
 			});
+		},
+
+		deleteSelectedAgent() {
+			const item = this.selectedAgent;
+			this.showAgentAction = false;
+			this.selectedAgent = null;
+
+			if (item) {
+				this.confirmDelete(item);
+			}
 		},
 
 		confirmDelete(item) {
 			uni.showModal({
 				title: '提示',
 				content: '确定要删除这个智能体吗？',
+				confirmText: '删除',
+				confirmColor: '#ff3b30',
 				success: async (res) => {
 					if (!res.confirm) return;
 
@@ -241,52 +442,49 @@ export default {
 					}
 				}
 			});
-		},
-
-		formatTime(timestamp) {
-			if (!timestamp) return '-';
-
-			let value = Number(timestamp);
-			if (!Number.isFinite(value)) return '-';
-			if (value < 1e12) value *= 1000;
-
-			const date = new Date(value);
-			if (Number.isNaN(date.getTime())) return '-';
-
-			const y = date.getFullYear();
-			const m = String(date.getMonth() + 1).padStart(2, '0');
-			const d = String(date.getDate()).padStart(2, '0');
-			const hh = String(date.getHours()).padStart(2, '0');
-			const mm = String(date.getMinutes()).padStart(2, '0');
-
-			return `${y}-${m}-${d} ${hh}:${mm}`;
 		}
 	}
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .agent-page {
 	min-height: 100vh;
 	background: #f7f8fa;
+	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	box-sizing: border-box;
 }
 
 .nav-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	height: 88rpx;
-	padding: calc(var(--status-bar-height) + 12rpx) 24rpx 12rpx;
+	width: 100%;
 	background: #ffffff;
-	border-bottom: 1rpx solid #eceef2;
-	box-sizing: content-box;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.nav-content {
+	width: 100%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 4px;
+	box-sizing: border-box;
 }
 
 .nav-left,
 .nav-right {
-	min-width: 100rpx;
+	width: 76px;
+	height: 30px;
 	display: flex;
 	align-items: center;
+	flex-shrink: 0;
+	box-sizing: border-box;
 }
 
 .nav-left {
@@ -297,40 +495,62 @@ export default {
 	justify-content: flex-end;
 }
 
+.back-icon {
+	line-height: 1;
+	color: #222;
+	font-weight: 400;
+}
+
+.nav-title-wrap {
+	flex: 1;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
 .nav-title {
-	font-size: 34rpx;
-	font-weight: 600;
-	color: #1f2329;
+	color: #222;
+	font-weight: 400;
+	line-height: 1;
 }
 
-.nav-action {
-	font-size: 28rpx;
-	color: #4e5969;
+.nav-pill-btn {
+	margin: 0;
+	padding: 0 13px;
+	color: #8a5a2b;
+	background: rgba(253, 231, 209, 1);
+	font-weight: 400;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
 }
 
-.nav-action-primary {
-	color: #4f7cff;
-	font-weight: 600;
+.nav-pill-btn::after {
+	border: none;
 }
 
 .page-body {
-	padding: 24rpx;
+	box-sizing: border-box;
 }
 
 .agent-card {
 	display: flex;
-	align-items: stretch;
-	padding: 24rpx;
-	margin-bottom: 20rpx;
+	align-items: center;
 	background: #ffffff;
-	border-radius: 20rpx;
 	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
+	box-sizing: border-box;
+}
+
+.agent-card:active {
+	background: #f8f8f8;
 }
 
 .avatar {
-	width: 104rpx;
-	height: 104rpx;
-	border-radius: 24rpx;
 	background: #eef1f6;
 	flex-shrink: 0;
 }
@@ -338,39 +558,28 @@ export default {
 .agent-main {
 	flex: 1;
 	min-width: 0;
-	height: 104rpx;
-	margin-left: 20rpx;
 	display: flex;
 	flex-direction: column;
-	justify-content: space-between;
-}
-
-.agent-top,
-.agent-bottom {
-	display: flex;
-	align-items: center;
+	justify-content: center;
 }
 
 .agent-name {
-	font-size: 32rpx;
-	font-weight: 600;
+	font-weight: 400;
 	color: #1f2329;
 	line-height: 1.4;
-}
-
-.agent-desc {
-	font-size: 26rpx;
-	line-height: 1.5;
-	color: #4e5969;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.meta-text {
-	font-size: 22rpx;
-	color: #a0a7b4;
-	line-height: 1.4;
+.agent-desc {
+	margin-top: 5px;
+	font-weight: 400;
+	line-height: 1.5;
+	color: #4e5969;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .state-box,
@@ -383,7 +592,57 @@ export default {
 
 .state-text,
 .bottom-text {
-	font-size: 26rpx;
 	color: #98a2b3;
+	font-weight: 400;
+}
+
+.agent-action-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 2600;
+	background: rgba(0, 0, 0, 0.18);
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	padding: 0 12px 18px;
+	box-sizing: border-box;
+}
+
+.agent-action-menu {
+	width: 100%;
+	background: #ffffff;
+	border-radius: 14px;
+	overflow: hidden;
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+.agent-action-item {
+	height: 46px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	border-bottom: 1px solid #f4f4f4;
+}
+
+.agent-action-item:last-child {
+	border-bottom: none;
+}
+
+.agent-action-item:active {
+	background: #f8f8f8;
+}
+
+.agent-action-text {
+	font-size: 15px;
+	color: #333333;
+	font-weight: 400;
+}
+
+.danger-action-text {
+	color: #ff3b30;
 }
 </style>

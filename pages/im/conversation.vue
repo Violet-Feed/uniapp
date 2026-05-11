@@ -4,14 +4,17 @@
         <view class="chat-header" :style="chatHeaderStyle">
             <view class="chat-header-content" :style="chatHeaderContentStyle">
                 <view class="header-left" @click="goBack">
-                    <text class="back-icon">‹</text>
+                    <text class="iconfont icon-fanhui back-icon"></text>
                 </view>
+
                 <view class="header-center">
                     <text class="chat-title">{{ chatName }}</text>
                 </view>
+
                 <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2 && canSendMessage">
-                    <text class="settings-icon">⋮</text>
+                    <text class="iconfont icon-gengduo settings-icon"></text>
                 </view>
+
                 <view class="header-right-placeholder" v-else></view>
             </view>
         </view>
@@ -189,6 +192,7 @@
             <view class="input-wrapper">
                 <input
                     class="input-field"
+                    :style="inputFieldStyle"
                     v-model="inputText"
                     placeholder="说点什么..."
                     placeholder-class="input-placeholder"
@@ -196,8 +200,9 @@
                     confirm-type="send"
                 />
             </view>
-            <view class="send-btn" :class="{ 'send-btn-active': inputText.trim() }" @click="sendMessage">
-                <text class="send-icon">➤</text>
+
+            <view class="send-btn" :class="{ 'send-btn-active': inputText.trim() }" :style="sendButtonStyle" @click="sendMessage">
+                <text class="send-text">发送</text>
             </view>
         </view>
 
@@ -239,19 +244,23 @@ export default {
             groupProfileTtlMs: 7 * 24 * 60 * 60 * 1000,
 
             windowHeight: 667,
+            windowWidth: 375,
             statusBarHeight: 0,
             bottomSafeHeight: 0,
             headerHeight: 60,
             headerContentHeight: 44,
             inputBarHeight: 56,
-            messageUnitHeight: 48,
-            halfMessageHeight: 24,
-            avatarSize: 34,
-            messageGap: 6,
-            shareCardWidth: 176,
-            shareCardHeight: 236,
-            shareImageHeight: 194,
-            shareContentHeight: 42,
+            inputContentHeight: 36,
+            sendButtonHeight: 34,
+            sendButtonWidth: 52,
+            messageUnitHeight: 44,
+            halfMessageHeight: 22,
+            avatarSize: 36,
+            messageGap: 5,
+            shareCardWidth: 172,
+            shareCardHeight: 229,
+            shareImageHeight: 184,
+            shareContentHeight: 45,
 
             messageAction: {
                 visible: false,
@@ -286,6 +295,14 @@ export default {
 
         inputBarStyle() {
             return 'height:' + this.inputBarHeight + 'px;padding-bottom:' + this.bottomSafeHeight + 'px;';
+        },
+
+        inputFieldStyle() {
+            return 'height:' + this.inputContentHeight + 'px;';
+        },
+
+        sendButtonStyle() {
+            return 'width:' + this.sendButtonWidth + 'px;height:' + this.sendButtonHeight + 'px;border-radius:' + Math.floor(this.sendButtonHeight / 2) + 'px;';
         },
 
         messageRowStyle() {
@@ -476,49 +493,93 @@ export default {
         initResponsiveLayout() {
             try {
                 const sys = uni.getSystemInfoSync();
+                const windowWidth = Number(sys.windowWidth || 375);
                 const windowHeight = Number(sys.windowHeight || 667);
                 const statusBarHeight = Number(sys.statusBarHeight || 0);
                 const safeInsets = sys.safeAreaInsets || {};
                 const bottomSafeHeight = Number(safeInsets.bottom || 0);
 
+                this.windowWidth = windowWidth;
                 this.windowHeight = windowHeight;
                 this.statusBarHeight = statusBarHeight;
                 this.bottomSafeHeight = bottomSafeHeight;
 
-                // 视觉高度约束：顶部群名内容区 1H、消息列表 10H、底部输入内容区 1H。
-                // 顶部额外包含状态栏，底部额外包含安全区；H 即一个“头像行”。
-                const usableHeight = Math.max(420, windowHeight - statusBarHeight - bottomSafeHeight);
-                const rawUnitHeight = Math.floor(usableHeight / 12);
+                this.headerContentHeight = Math.max(
+                    40,
+                    Math.min(48, Math.floor(windowWidth * 0.112))
+                );
 
-                this.messageUnitHeight = Math.max(34, Math.min(52, rawUnitHeight));
-                this.messageGap = Math.max(4, Math.min(8, Math.floor(this.messageUnitHeight * 0.16)));
-                this.avatarSize = Math.max(28, Math.min(38, this.messageUnitHeight - this.messageGap));
-                this.halfMessageHeight = Math.max(16, Math.floor(this.messageUnitHeight / 2));
-
-                this.headerContentHeight = this.messageUnitHeight;
                 this.headerHeight = statusBarHeight + this.headerContentHeight;
-                this.inputBarHeight = this.messageUnitHeight + bottomSafeHeight;
 
-                // 分享创作卡片同步首页样式：小圆角、封面占主体、信息区约 1/6。
-                this.shareCardWidth = Math.max(160, Math.min(190, Math.floor(sys.windowWidth * 0.48)));
-                this.shareCardHeight = Math.floor(this.shareCardWidth * 1.34);
-                this.shareContentHeight = Math.max(38, Math.floor(this.shareCardHeight / 6));
+                this.inputContentHeight = Math.max(
+                    34,
+                    Math.min(40, Math.floor(windowWidth * 0.096))
+                );
+
+                this.inputBarHeight = this.inputContentHeight + bottomSafeHeight + 10;
+
+                this.sendButtonHeight = Math.max(
+                    32,
+                    Math.min(38, Math.floor(this.inputContentHeight * 0.96))
+                );
+
+                this.sendButtonWidth = Math.max(
+                    48,
+                    Math.min(56, Math.floor(this.sendButtonHeight * 1.45))
+                );
+
+                this.messageUnitHeight = Math.max(
+                    40,
+                    Math.min(50, Math.floor(windowWidth * 0.112))
+                );
+
+                this.messageGap = Math.max(
+                    4,
+                    Math.min(6, Math.floor(windowWidth * 0.014))
+                );
+
+                this.avatarSize = Math.max(
+                    34,
+                    Math.min(42, Math.floor(windowWidth * 0.098))
+                );
+
+                this.halfMessageHeight = Math.max(
+                    18,
+                    Math.min(24, Math.floor(this.messageUnitHeight * 0.48))
+                );
+
+                this.shareCardWidth = Math.max(
+                    156,
+                    Math.min(188, Math.floor(windowWidth * 0.44))
+                );
+
+                this.shareCardHeight = Math.floor(this.shareCardWidth * 4 / 3);
+
+                this.shareContentHeight = Math.max(
+                    42,
+                    Math.min(50, Math.floor(this.shareCardWidth * 0.26))
+                );
+
                 this.shareImageHeight = this.shareCardHeight - this.shareContentHeight;
             } catch (err) {
                 this.windowHeight = 667;
+                this.windowWidth = 375;
                 this.statusBarHeight = 0;
                 this.bottomSafeHeight = 0;
                 this.headerContentHeight = 44;
                 this.headerHeight = 44;
-                this.inputBarHeight = 44;
+                this.inputContentHeight = 36;
+                this.inputBarHeight = 46;
+                this.sendButtonHeight = 34;
+                this.sendButtonWidth = 52;
                 this.messageUnitHeight = 44;
-                this.messageGap = 6;
-                this.avatarSize = 34;
+                this.messageGap = 5;
+                this.avatarSize = 36;
                 this.halfMessageHeight = 22;
-                this.shareCardWidth = 176;
-                this.shareCardHeight = 236;
-                this.shareContentHeight = 42;
-                this.shareImageHeight = 194;
+                this.shareCardWidth = 172;
+                this.shareCardHeight = 229;
+                this.shareContentHeight = 45;
+                this.shareImageHeight = 184;
             }
         },
 
@@ -530,15 +591,15 @@ export default {
             const userMap = new Map();
             const agentMap = new Map();
             const selfUserId = String(this.userId || getApp().globalData.userId || '');
-        
+
             for (const message of messages || []) {
                 if (!message) continue;
                 if (message.sender_id === null || message.sender_id === undefined) continue;
-        
+
                 const senderType = Number(message.sender_type);
                 const senderId = String(message.sender_id);
                 const key = senderId;
-        
+
                 if (senderType === 1) {
                     if (selfUserId && senderId === selfUserId) continue;
                     userMap.set(key, message.sender_id);
@@ -546,7 +607,7 @@ export default {
                     agentMap.set(key, message.sender_id);
                 }
             }
-        
+
             return {
                 userIds: Array.from(userMap.values()),
                 agentIds: Array.from(agentMap.values())
@@ -1096,15 +1157,15 @@ export default {
             if (!canCopy && !canRecall) return;
 
             const point = this.getLongPressPoint(e);
-            const menuWidth = canCopy && canRecall ? 128 : 72;
-            const menuHeight = 42;
+            const menuWidth = canCopy && canRecall ? 112 : 58;
+            const menuHeight = 34;
             const sys = uni.getSystemInfoSync();
 
             let left = point.x - menuWidth / 2;
-            let top = point.y - menuHeight - 12;
+            let top = point.y - menuHeight - 8;
 
             left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
-            if (top < this.headerHeight) top = point.y + 12;
+            if (top < this.headerHeight) top = point.y + 8;
             top = Math.max(8, Math.min(top, sys.windowHeight - menuHeight - 8));
 
             this.messageAction = {
@@ -1255,12 +1316,17 @@ export default {
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .chat-container {
     position: relative;
     height: 100vh;
-    background: #f0f2f5;
+    background: #fdfdfd;
     overflow: hidden;
+    font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .chat-header {
@@ -1269,8 +1335,8 @@ export default {
     left: 0;
     right: 0;
     z-index: 120;
-    background: #fff;
-    border-bottom: 1px solid #e5e5e5;
+    background: #fdfdfd;
+    border-bottom: none;
     box-sizing: border-box;
 }
 
@@ -1278,15 +1344,15 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 12px;
+    padding: 0 10px;
     box-sizing: border-box;
 }
 
 .header-left,
 .header-right,
 .header-right-placeholder {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1294,10 +1360,10 @@ export default {
 }
 
 .back-icon {
-    font-size: 30px;
-    line-height: 30px;
+    font-size: 18px;
+    line-height: 1;
     color: #333;
-    font-weight: 300;
+    font-weight: 400;
 }
 
 .header-center {
@@ -1309,8 +1375,8 @@ export default {
 }
 
 .chat-title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 400;
     color: #333;
     max-width: 220px;
     overflow: hidden;
@@ -1319,9 +1385,10 @@ export default {
 }
 
 .settings-icon {
-    font-size: 22px;
+    font-size: 20px;
     color: #333;
-    font-weight: 600;
+    font-weight: 400;
+    line-height: 1;
 }
 
 .chat-messages {
@@ -1329,8 +1396,9 @@ export default {
     left: 0;
     right: 0;
     overflow-y: auto;
-    padding: 8px 8px 8px 8px;
+    padding: 6px 8px 6px 8px;
     box-sizing: border-box;
+    background: #fdfdfd;
 }
 
 .messages {
@@ -1343,14 +1411,14 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 .loading-spinner {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     border: 2px solid #f3f3f3;
-    border-top-color: #667eea;
+    border-top-color: #d8a25d;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -1362,8 +1430,8 @@ export default {
 }
 
 .loading-text {
-    font-size: 12px;
-    color: #999;
+    font-size: 11px;
+    color: #d8dce4;
 }
 
 .message-time {
@@ -1376,9 +1444,9 @@ export default {
     font-size: 9px;
     line-height: 12px;
     color: #999;
-    background: rgba(0, 0, 0, 0.05);
-    padding: 1px 8px;
-    border-radius: 9px;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
 }
 
 .message {
@@ -1405,8 +1473,9 @@ export default {
 }
 
 .avatar {
-    border: 2px solid #fff;
+    border: none;
     box-sizing: border-box;
+    background: #f2f2f2;
 }
 
 .message-left .avatar-box {
@@ -1442,6 +1511,7 @@ export default {
     line-height: 11px;
     color: #999;
     margin: 0 0 2px 6px;
+    font-weight: 400;
 }
 
 .sender-name-right {
@@ -1451,30 +1521,30 @@ export default {
 }
 
 .bubble {
-    padding: 5px 10px;
-    border-radius: 13px;
+    padding: 6px 10px;
+    border-radius: 14px;
     word-break: break-word;
     position: relative;
     display: inline-block;
+    box-shadow: none;
 }
 
 .bubble-text {
     font-size: 13px;
     line-height: 18px;
     text-align: left;
+    font-weight: 400;
 }
 
 .bubble-left {
-    background: #fff;
+    background: #f0f2f5;
     color: #333;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     text-align: left;
 }
 
 .bubble-right {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    background: rgba(253, 231, 209, 1);
+    color: #5f4026;
     text-align: left;
 }
 
@@ -1500,14 +1570,13 @@ export default {
 .status-loading {
     width: 11px;
     height: 11px;
-    border: 2px solid rgba(102, 126, 234, 0.3);
-    border-top-color: #667eea;
+    border: 2px solid rgba(216, 162, 93, 0.25);
+    border-top-color: #d8a25d;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
 
 .share-card {
-    background: #ffffff;
     border-radius: 8px;
     overflow: hidden;
     position: relative;
@@ -1519,10 +1588,12 @@ export default {
 
 .share-card-left {
     align-self: flex-start;
+    background: #f0f2f5;
 }
 
 .share-card-right {
     align-self: flex-end;
+    background: rgba(253, 231, 209, 1);
 }
 
 .share-card:active {
@@ -1564,20 +1635,20 @@ export default {
 }
 
 .share-card-content {
-    padding: 4px 6px;
+    padding: 5px 6px 4px;
     box-sizing: border-box;
+	background: #f0f2f5;
 }
 
 .share-card-title-container {
-    height: 16px;
-    margin-bottom: 2px;
+    height: 17px;
 }
 
 .share-card-title {
     font-size: 11px;
     font-weight: 500;
     color: #333;
-    line-height: 16px;
+    line-height: 17px;
     display: block;
     white-space: nowrap;
     overflow: hidden;
@@ -1588,7 +1659,7 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 16px;
+    height: 18px;
 }
 
 .share-card-author {
@@ -1603,7 +1674,7 @@ export default {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    border: 1px solid #f0f0f0;
+    border: 1px solid rgba(240, 240, 240, 0.8);
     flex-shrink: 0;
     background: #f0f0f0;
 }
@@ -1614,20 +1685,22 @@ export default {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: 400;
 }
 
 .system-message {
-    padding: 1px 8px;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 9px;
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
     max-width: 80%;
 }
 
 .system-text {
     font-size: 9px;
     line-height: 12px;
-    color: #666;
+    color: #999;
     text-align: center;
+    font-weight: 400;
 }
 
 .message-action-mask {
@@ -1642,23 +1715,23 @@ export default {
 
 .message-action-menu {
     position: fixed;
-    height: 42px;
+    height: 34px;
     background: #ffffff;
-    border-radius: 8px;
+    border-radius: 7px;
     display: flex;
     align-items: center;
     overflow: hidden;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
 }
 
 .message-action-item {
-    min-width: 64px;
-    height: 42px;
-    padding: 0 12px;
+    min-width: 56px;
+    height: 34px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 13px;
     color: #333333;
     border-right: 1px solid #eeeeee;
     box-sizing: border-box;
@@ -1683,10 +1756,10 @@ export default {
     bottom: 0;
     display: flex;
     align-items: center;
-    padding: 6px 14px 6px;
-    background: #fff;
-    border-top: 1px solid #e5e5e5;
-    gap: 10px;
+    padding: 5px 10px 5px;
+    background: #fdfdfd;
+    border-top: none;
+    gap: 8px;
     box-sizing: border-box;
     z-index: 110;
 }
@@ -1699,9 +1772,9 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 14px;
-    background: #fff;
-    border-top: 1px solid #e5e5e5;
+    padding: 5px 10px;
+    background: #fdfdfd;
+    border-top: none;
     box-sizing: border-box;
     z-index: 110;
 }
@@ -1709,21 +1782,22 @@ export default {
 .disabled-input-text {
     font-size: 13px;
     color: #999;
+    font-weight: 400;
 }
 
 .input-wrapper {
     flex: 1;
     background: #f0f2f5;
-    border-radius: 20px;
+    border-radius: 18px;
     overflow: hidden;
 }
 
 .input-field {
-    height: 36px;
-    padding: 0 14px;
+    padding: 0 13px;
     font-size: 14px;
     color: #333;
     background: transparent;
+    font-weight: 400;
 }
 
 .input-placeholder {
@@ -1731,33 +1805,28 @@ export default {
 }
 
 .send-btn {
-    width: 36px;
-    height: 36px;
-    background: #e0e0e0;
-    border-radius: 50%;
+    background: rgba(253, 231, 209, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s;
+    transition: all 0.2s;
     flex-shrink: 0;
+    box-shadow: none;
 }
 
 .send-btn-active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+    background: rgba(253, 231, 209, 1);
+    box-shadow: 0 2px 8px rgba(253, 231, 209, 0.55);
 }
 
 .send-btn:active {
     transform: scale(0.95);
 }
 
-.send-icon {
-    font-size: 18px;
-    font-weight: bold;
-    color: #999;
-}
-
-.send-btn-active .send-icon {
-    color: #fff;
+.send-text {
+    font-size: 13px;
+    font-weight: 400;
+    color: #8a5a2b;
+    line-height: 1;
 }
 </style>

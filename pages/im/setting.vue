@@ -1,14 +1,18 @@
 <template>
 	<view class="conversation-settings">
 		<!-- 顶部导航栏 -->
-		<view class="setting-header">
-			<view class="header-left" @click="goBack">
-				<text class="back-icon">←</text>
+		<view class="setting-header" :style="headerStyle">
+			<view class="header-content" :style="headerContentStyle">
+				<view class="header-left" @click="goBack">
+					<text class="iconfont icon-fanhui back-icon"></text>
+				</view>
+
+				<view class="header-center">
+					<text class="header-title">群聊设置</text>
+				</view>
+
+				<view class="header-right"></view>
 			</view>
-			<view class="header-center">
-				<text class="header-title">群聊设置</text>
-			</view>
-			<view class="header-right"></view>
 		</view>
 
 		<!-- 群聊成员区域 -->
@@ -20,7 +24,11 @@
 					:key="String(member.user_id || index)"
 					@click="goToUserProfile(member)"
 				>
-					<image class="member-avatar" :src="member.avatar_uri || '/static/user_avatar.png'" mode="aspectFill"></image>
+					<image
+						class="member-avatar"
+						:src="member.avatar_uri || '/static/user_avatar.png'"
+						mode="aspectFill"
+					></image>
 					<text class="member-name">{{ member.nick_name || '未命名' }}</text>
 				</view>
 
@@ -129,6 +137,7 @@
 		<view class="edit-mask" v-if="showEditPopup" @click="closeEditPopup">
 			<view class="edit-popup" :class="{ 'edit-popup-large': editField === 'description' }" @click.stop>
 				<view class="edit-title">{{ editTitle }}</view>
+
 				<textarea
 					v-if="editField === 'description'"
 					class="edit-textarea"
@@ -136,12 +145,14 @@
 					:placeholder="editPlaceholder"
 					maxlength="-1"
 				/>
+
 				<input
 					v-else
 					class="edit-input"
 					v-model="editValue"
 					:placeholder="editPlaceholder"
 				/>
+
 				<view class="edit-actions">
 					<view class="edit-btn cancel-btn" @click="closeEditPopup">取消</view>
 					<view class="edit-btn confirm-btn" @click="confirmEdit">确定</view>
@@ -187,6 +198,11 @@ export default {
 			editValue: '',
 			editPlaceholder: '',
 			updating: false,
+
+			statusBarHeight: 0,
+			headerContentHeight: 38,
+			headerHeight: 38,
+
 			avatarCropper: {
 				visible: false,
 				src: ''
@@ -210,21 +226,56 @@ export default {
 
 			const limit = this.isGroupOwner ? 18 : 19;
 			return this.members.slice(0, limit);
+		},
+
+		headerStyle() {
+			return (
+				'height:' + this.headerHeight + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;'
+			);
+		},
+
+		headerContentStyle() {
+			return 'height:' + this.headerContentHeight + 'px;';
 		}
 	},
 
 	async onLoad(options) {
+		this.initHeaderLayout();
+
 		this.conId = options.conId || '';
 		this.conType = Number(options.conType || 0);
+
 		if (!this.conId) return;
+
 		await this.refreshPage();
 	},
 
+	onShow() {
+		this.initHeaderLayout();
+	},
+
 	methods: {
+		initHeaderLayout() {
+			try {
+				const sys = uni.getSystemInfoSync();
+				const statusBarHeight = Number(sys.statusBarHeight || 0);
+
+				this.statusBarHeight = statusBarHeight;
+				this.headerContentHeight = 38;
+				this.headerHeight = this.statusBarHeight + this.headerContentHeight;
+			} catch (err) {
+				this.statusBarHeight = 0;
+				this.headerContentHeight = 38;
+				this.headerHeight = 38;
+			}
+		},
+
 		async refreshPage() {
 			try {
 				const res = await DB.getConversationById(this.conId);
 				const conversation = Array.isArray(res) ? res[0] : res;
+
 				if (conversation) {
 					this.conShortId = conversation.con_short_id ? String(conversation.con_short_id) : '';
 					this.groupName = conversation.name || '';
@@ -260,13 +311,16 @@ export default {
 
 		goToUserProfile(member) {
 			if (!member.user_id) return;
+
 			const userId = getApp().globalData.userId;
+
 			if (String(member.user_id) === String(userId)) {
 				uni.navigateTo({
 					url: '/pages/user/my_profile_copy'
 				});
 				return;
 			}
+
 			uni.navigateTo({
 				url: `/pages/user/user_profile?userId=${BigInt(member.user_id)}`
 			});
@@ -280,6 +334,7 @@ export default {
 
 		goToRemoveMember() {
 			if (!this.isGroupOwner) return;
+
 			uni.navigateTo({
 				url: `/pages/im/remove_member?conId=${this.conId}&conShortId=${this.conShortId}`
 			});
@@ -317,7 +372,9 @@ export default {
 
 		async onGroupAvatarCropped(filePath) {
 			this.closeAvatarCropper();
+
 			if (!filePath) return;
+
 			await this.updateGroupAvatar(filePath);
 		},
 
@@ -325,6 +382,7 @@ export default {
 			if (!this.conShortId || this.updating) return;
 
 			this.updating = true;
+
 			try {
 				const uploadRes = await uploadImage(filePath, 'conv_avatar');
 				const sourceUrl =
@@ -382,6 +440,7 @@ export default {
 
 		openEditDialog(field) {
 			this.editField = field;
+
 			if (field === 'name') {
 				this.editTitle = '修改群聊名称';
 				this.editValue = this.groupName || '';
@@ -395,6 +454,7 @@ export default {
 				this.editValue = this.selfNickName || '';
 				this.editPlaceholder = '请输入群内昵称';
 			}
+
 			this.showEditPopup = true;
 		},
 
@@ -408,6 +468,7 @@ export default {
 
 		async confirmEdit() {
 			const value = (this.editValue || '').trim();
+
 			if (!value) {
 				uni.showToast({
 					title: '内容不能为空',
@@ -419,6 +480,7 @@ export default {
 			if (!this.conShortId || this.updating) return;
 
 			this.updating = true;
+
 			try {
 				let ok = false;
 
@@ -464,6 +526,7 @@ export default {
 				if (!ok) return;
 
 				this.closeEditPopup();
+
 				uni.showToast({
 					title: '修改成功',
 					icon: 'success'
@@ -486,8 +549,9 @@ export default {
 		},
 
 		goToSearchMessages() {
-			uni.navigateTo({
-				url: `/pages/im/search_messages?conId=${this.conId}&conType=${this.conType}`
+			uni.showToast({
+				title: '开发中',
+				icon: 'none'
 			});
 		},
 
@@ -512,6 +576,7 @@ export default {
 			if (!userId) return;
 
 			this.updating = true;
+
 			try {
 				const ok = await removeConversationMember({
 					conShortId: this.conShortId,
@@ -544,55 +609,76 @@ export default {
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .conversation-settings {
 	min-height: 100vh;
 	background-color: #f5f5f5;
+	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	box-sizing: border-box;
 }
 
 .setting-header {
+	width: 100%;
+	background: #ffffff;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.header-content {
+	width: 100%;
 	display: flex;
-	align-items: center;
+	align-items: flex-end;
 	justify-content: space-between;
-	height: 56px;
-	background: #fff;
-	border-bottom: 1px solid #e5e5e5;
-	padding: 0 16px;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 4px;
+	box-sizing: border-box;
 }
 
 .header-left,
 .header-right {
-	width: 40px;
-	height: 40px;
+	width: 34px;
+	height: 30px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
+	box-sizing: border-box;
 }
 
 .back-icon {
-	font-size: 24px;
-	color: #333;
-	font-weight: 500;
+	font-size: 19px;
+	line-height: 20px;
+	color: #222;
+	font-weight: 400;
 }
 
 .header-center {
 	flex: 1;
+	height: 30px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	box-sizing: border-box;
 }
 
 .header-title {
 	font-size: 17px;
-	font-weight: 600;
-	color: #333;
+	line-height: 20px;
+	font-weight: 400;
+	color: #222;
 }
 
 .members-section {
 	background-color: #ffffff;
-	padding: 20rpx 30rpx;
-	margin-bottom: 20rpx;
+	padding: 24rpx 18rpx 4rpx;
+	margin: 12rpx 18rpx 18rpx;
+	border-radius: 16rpx;
+	box-sizing: border-box;
 }
 
 .members-grid {
@@ -617,6 +703,7 @@ export default {
 
 .member-name {
 	font-size: 24rpx;
+	font-weight: 400;
 	color: #333;
 	margin-top: 10rpx;
 	text-align: center;
@@ -625,6 +712,7 @@ export default {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	padding: 0 5rpx;
+	box-sizing: border-box;
 }
 
 .add-btn .add-icon,
@@ -638,6 +726,7 @@ export default {
 	align-items: center;
 	justify-content: center;
 	background-color: #fafafa;
+	box-sizing: border-box;
 }
 
 .add-icon .icon,
@@ -645,20 +734,24 @@ export default {
 .expand-icon .icon {
 	font-size: 50rpx;
 	color: #999;
-	font-weight: 300;
+	font-weight: 400;
 }
 
 .info-section {
 	background-color: #ffffff;
-	margin-bottom: 20rpx;
+	margin: 0 18rpx 18rpx;
+	border-radius: 16rpx;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
 .info-item {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 30rpx;
+	padding: 30rpx 24rpx;
 	border-bottom: 1rpx solid #f0f0f0;
+	box-sizing: border-box;
 }
 
 .info-item:last-child {
@@ -667,6 +760,7 @@ export default {
 
 .info-label {
 	font-size: 30rpx;
+	font-weight: 400;
 	color: #333;
 }
 
@@ -678,6 +772,7 @@ export default {
 
 .info-value {
 	font-size: 28rpx;
+	font-weight: 400;
 	color: #999;
 	margin-right: 10rpx;
 	overflow: hidden;
@@ -696,11 +791,12 @@ export default {
 .arrow {
 	font-size: 40rpx;
 	color: #ccc;
-	font-weight: 300;
+	font-weight: 400;
 }
 
 .action-section {
-	padding: 30rpx;
+	padding: 0 18rpx 18rpx;
+	box-sizing: border-box;
 }
 
 .quit-btn {
@@ -710,7 +806,8 @@ export default {
 	background-color: #ffffff;
 	color: #ff4444;
 	font-size: 32rpx;
-	border-radius: 10rpx;
+	font-weight: 400;
+	border-radius: 16rpx;
 	border: none;
 }
 
@@ -744,7 +841,7 @@ export default {
 
 .desc-title {
 	font-size: 32rpx;
-	font-weight: 600;
+	font-weight: 400;
 	color: #333;
 	text-align: center;
 	margin-bottom: 24rpx;
@@ -761,6 +858,7 @@ export default {
 
 .desc-content {
 	font-size: 28rpx;
+	font-weight: 400;
 	line-height: 1.7;
 	color: #333;
 	word-break: break-word;
@@ -777,6 +875,7 @@ export default {
 
 .desc-btn {
 	font-size: 28rpx;
+	font-weight: 400;
 	padding: 14rpx 26rpx;
 	border-radius: 10rpx;
 	margin-left: 20rpx;
@@ -788,8 +887,8 @@ export default {
 }
 
 .desc-edit-btn {
-	color: #fff;
-	background: #667eea;
+	color: #8a5a2b;
+	background: rgba(253, 231, 209, 1);
 }
 
 .edit-mask {
@@ -822,7 +921,7 @@ export default {
 
 .edit-title {
 	font-size: 32rpx;
-	font-weight: 600;
+	font-weight: 400;
 	color: #333;
 	text-align: center;
 	margin-bottom: 28rpx;
@@ -834,8 +933,10 @@ export default {
 	border-radius: 12rpx;
 	padding: 0 24rpx;
 	font-size: 28rpx;
+	font-weight: 400;
 	color: #333;
 	margin-bottom: 28rpx;
+	box-sizing: border-box;
 }
 
 .edit-textarea {
@@ -846,6 +947,7 @@ export default {
 	border-radius: 14rpx;
 	padding: 24rpx;
 	font-size: 28rpx;
+	font-weight: 400;
 	line-height: 1.7;
 	color: #333;
 	margin-bottom: 28rpx;
@@ -860,6 +962,7 @@ export default {
 
 .edit-btn {
 	font-size: 28rpx;
+	font-weight: 400;
 	padding: 14rpx 26rpx;
 	border-radius: 10rpx;
 	margin-left: 20rpx;
@@ -871,7 +974,7 @@ export default {
 }
 
 .confirm-btn {
-	color: #fff;
-	background: #667eea;
+	color: #8a5a2b;
+	background: rgba(253, 231, 209, 1);
 }
 </style>

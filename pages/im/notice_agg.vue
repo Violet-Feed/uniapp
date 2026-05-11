@@ -1,17 +1,17 @@
 <template>
   <view class="notice-container">
-    <!-- 顶部栏：状态栏 + 一个列表项高度 -->
+    <!-- 顶部栏：参考关系列表，状态栏 + 自适应内容高度 -->
     <view class="header-bar" :style="headerStyle">
       <view class="header-content" :style="headerContentStyle">
         <view class="back-btn" @click="goBack">
-          <text class="back-icon">‹</text>
+          <text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
         </view>
-        <text class="header-title">{{ pageTitle }}</text>
+        <text class="header-title" :style="titleStyle">{{ pageTitle }}</text>
         <view class="header-right"></view>
       </view>
     </view>
 
-    <!-- 列表：一屏约 10 条 -->
+    <!-- 列表：按设备宽度自适应，不固定一屏数量 -->
     <scroll-view
       class="notice-scroll"
       :style="scrollStyle"
@@ -42,19 +42,19 @@
 
           <view class="notice-content">
             <view class="row-top">
-              <text class="username" @click.stop="goToUser(n.sender_id)">
+              <text class="username" :style="usernameStyle" @click.stop="goToUser(n.sender_id)">
                 {{ n.sender_username || '未知用户' }}
               </text>
             </view>
 
             <view class="row-mid">
-              <text class="notice-text">
+              <text class="notice-text" :style="noticeTextStyle">
                 {{ noticeText }}
               </text>
             </view>
 
             <view class="row-bottom">
-              <text class="time">{{ n._display_time }}</text>
+              <text class="time" :style="timeStyle">{{ n._display_time }}</text>
             </view>
           </view>
 
@@ -64,11 +64,11 @@
         </view>
 
         <view v-if="!loading && notices.length === 0" class="empty">
-          <text class="empty-icon">🔔</text>
-          <text class="empty-text">暂无记录</text>
+          <text class="empty-icon" :style="emptyIconStyle">🔔</text>
+          <text class="empty-text" :style="emptyTextStyle">暂无记录</text>
         </view>
 
-        <view v-if="notices.length > 0" class="footer">
+        <view v-if="notices.length > 0" class="footer" :style="footerStyle">
           <text v-if="loadingMore">加载中...</text>
           <text v-else-if="!hasMore">没有更多了</text>
         </view>
@@ -79,6 +79,10 @@
 
 <script>
 import { getNoticeAggList } from '@/request/im.js'
+
+const clamp = (value, min, max) => {
+  return Math.max(min, Math.min(max, value))
+}
 
 export default {
   data() {
@@ -102,11 +106,22 @@ export default {
       refresherTriggered: false,
 
       windowHeight: 667,
+      windowWidth: 375,
       statusBarHeight: 0,
-      rowHeight: 58,
-      headerHeight: 58,
-      avatarSize: 40,
-      refCoverSize: 42
+      safeBottom: 0,
+      rowHeight: 74,
+      headerContentHeight: 44,
+      headerHeight: 44,
+      avatarSize: 48,
+      refCoverSize: 50,
+      backIconFontSize: 19,
+      titleFontSize: 16,
+      usernameFontSize: 16,
+      noticeTextFontSize: 13,
+      timeFontSize: 11,
+      emptyIconFontSize: 56,
+      emptyTextFontSize: 15,
+      footerFontSize: 13
     }
   },
 
@@ -133,7 +148,10 @@ export default {
     },
 
     headerContentStyle() {
-      return 'height:' + this.headerHeight + 'px;padding-top:' + this.statusBarHeight + 'px;'
+      return (
+        'height:' + this.headerContentHeight + 'px;' +
+        'margin-top:' + this.statusBarHeight + 'px;'
+      )
     },
 
     scrollStyle() {
@@ -152,6 +170,38 @@ export default {
 
     refCoverStyle() {
       return 'width:' + this.refCoverSize + 'px;height:' + this.refCoverSize + 'px;'
+    },
+
+    backIconStyle() {
+      return 'font-size:' + this.backIconFontSize + 'px;'
+    },
+
+    titleStyle() {
+      return 'font-size:' + this.titleFontSize + 'px;'
+    },
+
+    usernameStyle() {
+      return 'font-size:' + this.usernameFontSize + 'px;'
+    },
+
+    noticeTextStyle() {
+      return 'font-size:' + this.noticeTextFontSize + 'px;'
+    },
+
+    timeStyle() {
+      return 'font-size:' + this.timeFontSize + 'px;'
+    },
+
+    emptyIconStyle() {
+      return 'font-size:' + this.emptyIconFontSize + 'px;'
+    },
+
+    emptyTextStyle() {
+      return 'font-size:' + this.emptyTextFontSize + 'px;'
+    },
+
+    footerStyle() {
+      return 'font-size:' + this.footerFontSize + 'px;'
     }
   },
 
@@ -180,26 +230,109 @@ export default {
       try {
         const sys = uni.getSystemInfoSync()
         const windowHeight = Number(sys.windowHeight || 667)
+        const windowWidth = Number(sys.windowWidth || 375)
         const statusBarHeight = Number(sys.statusBarHeight || 0)
+        const safeAreaInsets = sys.safeAreaInsets || {}
 
         this.windowHeight = windowHeight
+        this.windowWidth = windowWidth
         this.statusBarHeight = statusBarHeight
+        this.safeBottom = Number(safeAreaInsets.bottom || 0)
 
-        // 状态栏之外：顶部内容 1 行 + 列表 10 行 = 11 行
-        const availableHeight = Math.max(520, windowHeight - statusBarHeight)
-        const rowHeight = Math.floor(availableHeight / 11)
+        const smallScreenBoost = windowWidth <= 360 ? 1 : 0
+        const tinyScreenBoost = windowWidth <= 330 ? 1 : 0
 
-        this.rowHeight = Math.max(52, Math.min(72, rowHeight))
-        this.headerHeight = this.statusBarHeight + this.rowHeight
-        this.avatarSize = Math.max(34, Math.min(46, Math.floor(this.rowHeight * 0.68)))
-        this.refCoverSize = Math.max(36, Math.min(48, Math.floor(this.rowHeight * 0.72)))
+        this.headerContentHeight = clamp(
+          Math.floor(windowWidth * 0.112),
+          42,
+          48
+        )
+
+        this.headerHeight = this.statusBarHeight + this.headerContentHeight
+
+        this.rowHeight = clamp(
+          Math.floor(windowWidth * 0.198),
+          72,
+          84
+        )
+
+        this.avatarSize = clamp(
+          Math.floor(this.rowHeight * 0.64),
+          44,
+          52
+        )
+
+        this.refCoverSize = clamp(
+          Math.floor(this.rowHeight * 0.66),
+          46,
+          56
+        )
+
+        this.backIconFontSize = clamp(
+          Math.floor(this.headerContentHeight * 0.45) + smallScreenBoost,
+          18,
+          21
+        )
+
+        this.titleFontSize = clamp(
+          Math.floor(this.headerContentHeight * 0.36) + smallScreenBoost,
+          15,
+          17
+        )
+
+        this.usernameFontSize = clamp(
+          Math.floor(this.rowHeight * 0.215) + smallScreenBoost + tinyScreenBoost,
+          15,
+          17
+        )
+
+        this.noticeTextFontSize = clamp(
+          Math.floor(this.rowHeight * 0.18) + smallScreenBoost,
+          13,
+          15
+        )
+
+        this.timeFontSize = clamp(
+          Math.floor(this.rowHeight * 0.15),
+          11,
+          12
+        )
+
+        this.emptyIconFontSize = clamp(
+          Math.floor(windowWidth * 0.15),
+          54,
+          64
+        )
+
+        this.emptyTextFontSize = clamp(
+          Math.floor(windowWidth * 0.04) + smallScreenBoost,
+          15,
+          17
+        )
+
+        this.footerFontSize = clamp(
+          Math.floor(windowWidth * 0.032) + smallScreenBoost,
+          12,
+          14
+        )
       } catch (err) {
         this.windowHeight = 667
+        this.windowWidth = 375
         this.statusBarHeight = 0
-        this.rowHeight = 58
-        this.headerHeight = 58
-        this.avatarSize = 40
-        this.refCoverSize = 42
+        this.safeBottom = 0
+        this.rowHeight = 74
+        this.headerContentHeight = 44
+        this.headerHeight = 44
+        this.avatarSize = 48
+        this.refCoverSize = 50
+        this.backIconFontSize = 19
+        this.titleFontSize = 16
+        this.usernameFontSize = 16
+        this.noticeTextFontSize = 13
+        this.timeFontSize = 11
+        this.emptyIconFontSize = 56
+        this.emptyTextFontSize = 15
+        this.footerFontSize = 13
       }
     },
 
@@ -360,12 +493,17 @@ export default {
 }
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .notice-container {
   height: 100vh;
-  background: #f8f9fa;
+  background: #fdfdfd;
   position: relative;
   overflow: hidden;
+  font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .header-bar {
@@ -373,8 +511,8 @@ export default {
   left: 0;
   right: 0;
   top: 0;
-  z-index: 100;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  z-index: 20;
+  background: transparent;
   box-sizing: border-box;
 }
 
@@ -382,8 +520,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-left: 14px;
-  padding-right: 14px;
+  padding-left: 10px;
+  padding-right: 10px;
   box-sizing: border-box;
 }
 
@@ -397,18 +535,17 @@ export default {
 }
 
 .back-icon {
-  font-size: 30px;
-  line-height: 30px;
-  color: #fff;
-  font-weight: 300;
+  line-height: 1;
+  color: #222;
+  font-weight: 400;
 }
 
 .header-title {
   flex: 1;
   text-align: center;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 400;
+  color: #222;
+  line-height: 1;
 }
 
 .header-right {
@@ -422,24 +559,25 @@ export default {
   left: 0;
   right: 0;
   overflow: hidden;
-  background: #f8f9fa;
+  background: #fdfdfd;
 }
 
 .notice-list {
-  padding: 0;
+  padding: 0 10px;
+  box-sizing: border-box;
 }
 
 .notice-item {
   display: flex;
   align-items: center;
-  padding: 0 14px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0 2px;
+  background: #fdfdfd;
+  border-bottom: none;
   box-sizing: border-box;
 }
 
 .notice-item:active {
-  background: #f5f5f5;
+  background: #f8f8f8;
 }
 
 .avatar-wrapper {
@@ -448,7 +586,7 @@ export default {
 }
 
 .avatar {
-  border: 2px solid #f0f0f0;
+  border: none;
   box-sizing: border-box;
   background: #f3f3f3;
 }
@@ -459,7 +597,7 @@ export default {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1px;
+  gap: 3px;
   overflow: hidden;
 }
 
@@ -472,34 +610,45 @@ export default {
 }
 
 .username {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  display: block;
+  font-weight: 400;
+  color: #222;
+  line-height: 1.15;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.agg-prefix {
+  color: #f5a623;
+  font-weight: 400;
+  line-height: 1.15;
+  flex-shrink: 0;
+  margin-right: 3px;
+}
+
 .notice-text {
-  font-size: 12px;
+  font-weight: 400;
   color: #666;
+  line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .time {
-  font-size: 10px;
+  font-weight: 400;
   color: #999;
+  line-height: 1.15;
 }
 
 .ref-cover {
-  border-radius: 7px;
+  border-radius: 8px;
   overflow: hidden;
   margin-left: 10px;
   flex-shrink: 0;
-  border: 1px solid #f0f0f0;
+  border: none;
   box-sizing: border-box;
   background: #f3f3f3;
 }
@@ -520,12 +669,12 @@ export default {
 }
 
 .empty-icon {
-  font-size: 56px;
   margin-bottom: 10px;
+  font-weight: 400;
 }
 
 .empty-text {
-  font-size: 14px;
+  font-weight: 400;
 }
 
 .footer {
@@ -533,7 +682,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
   color: #999;
+  font-weight: 400;
 }
 </style>

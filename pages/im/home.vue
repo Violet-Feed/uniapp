@@ -3,10 +3,10 @@
         <!-- 顶部消息栏：包含状态栏 / 刘海区域，消息和加号位于下半部分 -->
         <view class="header-bar" :style="headerBarStyle">
             <view class="header-content" :style="headerContentStyle">
-                <text class="header-title">消息</text>
+                <text class="header-title" :style="headerTitleDynamicStyle">消息</text>
                 <view class="header-actions">
                     <view class="action-btn" :style="actionButtonStyle" @click="showDropdown = !showDropdown">
-                        <text class="action-icon">➕</text>
+                        <text class="iconfont icon-jiahao action-icon" :style="actionIconDynamicStyle"></text>
                     </view>
                 </view>
             </view>
@@ -16,12 +16,12 @@
         <view class="dropdown-overlay" v-if="showDropdown" @click="showDropdown = false">
             <view class="dropdown-menu" :style="dropdownMenuStyle" @click.stop>
                 <view class="dropdown-item" @click="goToCreateConversationPage">
-                    <text class="item-icon">👥</text>
+                    <text class="iconfont icon-qunliaox item-icon"></text>
                     <text class="item-text">创建群聊</text>
                 </view>
                 <view class="dropdown-item" @click="goToAgentPage">
-                    <text class="item-icon">🤖</text>
-                    <text class="item-text">管理智能体</text>
+                    <text class="iconfont icon-zhinengti item-icon"></text>
+                    <text class="item-text">智能体管理</text>
                 </view>
             </view>
         </view>
@@ -36,40 +36,49 @@
             @scrolltolower="onConversationScrollToLower"
         >
             <view class="conversation-list">
-                <!-- 固定通知入口：高度为会话高度的 1.5 倍 -->
+                <!-- 固定通知入口 -->
                 <view class="notice-row" :style="noticeRowStyle">
-                    <view class="notice-card" @click="openNotice(NOTICE_GROUP.SYSTEM)">
-                        <view class="notice-avatar-wrapper" :style="noticeAvatarStyle">
-                            <image class="notice-avatar" :style="noticeAvatarStyle" src="/static/notice.png" mode="aspectFill"></image>
-                            <view class="unread-badge" v-if="systemNoticeCount > 0">
-                                {{ systemNoticeCount > 99 ? '99+' : systemNoticeCount }}
-                            </view>
+                    <view class="notice-card notice-card-system" @click="openNotice(NOTICE_GROUP.SYSTEM)">
+                        <view class="notice-dot" v-if="systemNoticeCount > 0"></view>
+
+                        <view class="notice-icon-circle notice-icon-system" :style="noticeAvatarStyle">
+                            <text
+                                class="iconfont icon-tongzhi notice-entry-icon system-icon"
+                                :style="systemIconDynamicStyle"
+                            ></text>
                         </view>
-                        <text class="notice-name">系统通知</text>
+
+                        <text class="notice-name" :style="noticeNameDynamicStyle">系统通知</text>
                     </view>
 
-                    <view class="notice-card" @click="openNotice(NOTICE_GROUP.FOLLOW)">
-                        <view class="notice-avatar-wrapper" :style="noticeAvatarStyle">
-                            <image class="notice-avatar" :style="noticeAvatarStyle" src="/static/notice.png" mode="aspectFill"></image>
-                            <view class="unread-badge" v-if="followNoticeCount > 0">
-                                {{ followNoticeCount > 99 ? '99+' : followNoticeCount }}
-                            </view>
+                    <view class="notice-card notice-card-follow" @click="openNotice(NOTICE_GROUP.FOLLOW)">
+                        <view class="notice-dot" v-if="followNoticeCount > 0"></view>
+
+                        <view class="notice-icon-circle notice-icon-follow" :style="noticeAvatarStyle">
+                            <text
+                                class="iconfont icon-wode notice-entry-icon follow-icon"
+                                :style="noticeIconDynamicStyle"
+                            ></text>
                         </view>
-                        <text class="notice-name">关注通知</text>
+
+                        <text class="notice-name" :style="noticeNameDynamicStyle">关注通知</text>
                     </view>
 
-                    <view class="notice-card" @click="openNotice(NOTICE_GROUP.ACTION)">
-                        <view class="notice-avatar-wrapper" :style="noticeAvatarStyle">
-                            <image class="notice-avatar" :style="noticeAvatarStyle" src="/static/notice.png" mode="aspectFill"></image>
-                            <view class="unread-badge" v-if="actionNoticeCount > 0">
-                                {{ actionNoticeCount > 99 ? '99+' : actionNoticeCount }}
-                            </view>
+                    <view class="notice-card notice-card-action" @click="openNotice(NOTICE_GROUP.ACTION)">
+                        <view class="notice-dot" v-if="actionNoticeCount > 0"></view>
+
+                        <view class="notice-icon-circle notice-icon-action" :style="noticeAvatarStyle">
+                            <text
+                                class="iconfont icon-comment notice-entry-icon comment-icon"
+                                :style="noticeIconDynamicStyle"
+                            ></text>
                         </view>
-                        <text class="notice-name">互动通知</text>
+
+                        <text class="notice-name" :style="noticeNameDynamicStyle">互动通知</text>
                     </view>
                 </view>
 
-                <!-- 普通会话列表：一屏约显示 8 个 -->
+                <!-- 普通会话列表 -->
                 <view
                     class="conversation-item"
                     v-for="(conversation, index) in conversationList"
@@ -89,27 +98,38 @@
                             :src="conversation.avatar_uri || '/static/conv_avatar.png'"
                             mode="aspectFill"
                         ></image>
-                        <view
-                            class="unread-badge"
-                            v-if="conversation.badge_count - conversation.read_badge_count > 0"
-                        >
-                            {{
-                                conversation.badge_count - conversation.read_badge_count > 99
-                                    ? '99+'
-                                    : conversation.badge_count - conversation.read_badge_count
-                            }}
-                        </view>
                     </view>
 
                     <view class="conversation-content">
-                        <view class="conversation-header">
-                            <text class="conversation-name">{{ conversation.name }}</text>
-                            <text class="conversation-time" v-if="conversation.last_message_time">
-                                {{ formatTime(conversation.last_message_time) }}
+                        <view class="conversation-main">
+                            <text class="conversation-name" :style="conversationNameDynamicStyle">
+                                {{ conversation.name }}
+                            </text>
+                            <text class="last-message" :style="lastMessageDynamicStyle">
+                                {{ conversation.last_message || '' }}
                             </text>
                         </view>
-                        <view class="conversation-message">
-                            <text class="last-message">{{ conversation.last_message || '' }}</text>
+
+                        <view class="conversation-side" :style="conversationSideStyle">
+                            <text
+                                class="conversation-time"
+                                :style="conversationTimeDynamicStyle"
+                                v-if="conversation.last_message_time"
+                            >
+                                {{ formatTime(conversation.last_message_time) }}
+                            </text>
+
+                            <view
+                                class="side-unread-badge"
+                                :style="unreadBadgeDynamicStyle"
+                                v-if="conversation.badge_count - conversation.read_badge_count > 0"
+                            >
+                                {{
+                                    conversation.badge_count - conversation.read_badge_count > 99
+                                        ? '99+'
+                                        : conversation.badge_count - conversation.read_badge_count
+                                }}
+                            </view>
                         </view>
                     </view>
                 </view>
@@ -123,9 +143,11 @@
                 </view>
 
                 <view v-if="conversationList.length === 0 && !conversationLoading" class="empty-state">
-                    <text class="empty-icon">💬</text>
+                    <text class="iconfont icon-xiaoxi empty-icon"></text>
                     <text class="empty-hint">开始你的第一次对话吧！</text>
                 </view>
+
+                <view class="bottom-spacer" :style="bottomSpacerStyle"></view>
             </view>
         </scroll-view>
 
@@ -141,7 +163,8 @@
                 </view>
             </view>
         </view>
-		<custom-tabbar active-path="pages/im/home" />
+
+        <custom-tabbar active-path="pages/im/home" />
     </view>
 </template>
 
@@ -170,15 +193,33 @@ export default {
             conversationScrollBoxHeight: 0,
             privateProfileTtlMs: 24 * 60 * 60 * 1000,
 
-            // 布局高度：会话一屏约 8 个，通知栏与会话同高，顶栏与会话同高
             windowHeight: 667,
+            windowWidth: 375,
             statusBarHeight: 0,
-            headerHeight: 60,
-            noticeRowHeight: 60,
-            conversationItemHeight: 60,
+            safeBottom: 0,
+
+            headerHeight: 56,
+            noticeRowHeight: 84,
+            conversationItemHeight: 70,
             avatarSize: 46,
-            noticeAvatarSize: 38,
-            actionButtonSize: 36,
+            noticeAvatarSize: 44,
+            actionButtonSize: 32,
+            tabbarSpacerHeight: 64,
+
+            headerTitleFontSize: 16,
+            actionIconFontSize: 23,
+
+            conversationNameFontSize: 16,
+            lastMessageFontSize: 13,
+            conversationTimeFontSize: 11,
+            unreadBadgeFontSize: 10,
+            unreadBadgeHeight: 16,
+            unreadBadgeMinWidth: 18,
+
+            noticeNameFontSize: 12,
+            noticeIconFontSize: 21,
+            systemIconFontSize: 23,
+            conversationSideWidth: 50,
 
             showDropdown: false,
             normalListener: null,
@@ -211,8 +252,16 @@ export default {
         },
 
         headerContentStyle() {
-            const contentHeight = Math.max(32, this.headerHeight - this.statusBarHeight)
-            return 'height:' + contentHeight + 'px;margin-top:' + this.statusBarHeight + 'px;'
+            const contentHeight = Math.max(32, this.headerHeight - this.statusBarHeight);
+            return 'height:' + contentHeight + 'px;margin-top:' + this.statusBarHeight + 'px;';
+        },
+
+        headerTitleDynamicStyle() {
+            return 'font-size:' + this.headerTitleFontSize + 'px;';
+        },
+
+        actionIconDynamicStyle() {
+            return 'font-size:' + this.actionIconFontSize + 'px;';
         },
 
         conversationScrollStyle() {
@@ -222,7 +271,7 @@ export default {
         },
 
         dropdownMenuStyle() {
-            return 'top:' + (this.headerHeight + 8) + 'px;';
+            return 'top:' + (this.headerHeight + 2) + 'px;';
         },
 
         noticeRowStyle() {
@@ -243,6 +292,56 @@ export default {
 
         actionButtonStyle() {
             return 'width:' + this.actionButtonSize + 'px;height:' + this.actionButtonSize + 'px;border-radius:' + Math.floor(this.actionButtonSize / 2) + 'px;';
+        },
+
+        bottomSpacerStyle() {
+            return 'height:' + this.tabbarSpacerHeight + 'px;';
+        },
+
+        conversationNameDynamicStyle() {
+            return (
+                'font-size:' + this.conversationNameFontSize + 'px;' +
+                'line-height:' + (this.conversationNameFontSize + 5) + 'px;'
+            );
+        },
+
+        lastMessageDynamicStyle() {
+            return (
+                'font-size:' + this.lastMessageFontSize + 'px;' +
+                'line-height:' + (this.lastMessageFontSize + 5) + 'px;'
+            );
+        },
+
+        conversationTimeDynamicStyle() {
+            return (
+                'font-size:' + this.conversationTimeFontSize + 'px;' +
+                'line-height:' + (this.conversationTimeFontSize + 4) + 'px;'
+            );
+        },
+
+        unreadBadgeDynamicStyle() {
+            return (
+                'min-width:' + this.unreadBadgeMinWidth + 'px;' +
+                'height:' + this.unreadBadgeHeight + 'px;' +
+                'border-radius:' + Math.floor(this.unreadBadgeHeight / 2) + 'px;' +
+                'font-size:' + this.unreadBadgeFontSize + 'px;'
+            );
+        },
+
+        noticeNameDynamicStyle() {
+            return 'font-size:' + this.noticeNameFontSize + 'px;';
+        },
+
+        systemIconDynamicStyle() {
+            return 'font-size:' + this.systemIconFontSize + 'px;';
+        },
+
+        noticeIconDynamicStyle() {
+            return 'font-size:' + this.noticeIconFontSize + 'px;';
+        },
+
+        conversationSideStyle() {
+            return 'width:' + this.conversationSideWidth + 'px;';
         }
     },
 
@@ -405,32 +504,145 @@ export default {
         initResponsiveLayout() {
             try {
                 const sys = uni.getSystemInfoSync();
+                const windowWidth = Number(sys.windowWidth || 375);
                 const windowHeight = Number(sys.windowHeight || 667);
                 const statusBarHeight = Number(sys.statusBarHeight || 0);
+                const safeAreaInsets = sys.safeAreaInsets || {};
 
+                this.windowWidth = windowWidth;
                 this.windowHeight = windowHeight;
                 this.statusBarHeight = statusBarHeight;
+                this.safeBottom = Number(safeAreaInsets.bottom || 0);
 
-                // 顶栏总高度包含状态栏 / 刘海区域，并且等于一个会话高度。
-                // 整屏约为：顶栏 1H + 列表 8H = 9H；列表 8H 中包含通知栏。
-                const rowHeight = Math.floor(windowHeight / 9);
-
-                this.conversationItemHeight = Math.max(statusBarHeight + 38, rowHeight);
-                this.headerHeight = this.conversationItemHeight;
-                this.noticeRowHeight = this.conversationItemHeight;
-
-                this.avatarSize = Math.max(38, Math.min(52, Math.floor(this.conversationItemHeight * 0.64)));
-                this.noticeAvatarSize = Math.max(34, Math.min(46, Math.floor(this.conversationItemHeight * 0.56)));
-                this.actionButtonSize = Math.max(28, Math.min(36, Math.floor(this.conversationItemHeight * 0.46)));
+                const layoutWidth = Math.min(windowWidth, 390);
+                
+                const smallScreenBoost = layoutWidth <= 360 ? 1 : 0;
+                const tinyScreenBoost = layoutWidth <= 330 ? 1 : 0;
+                
+                const tabbarBaseHeight = Math.max(
+                    48,
+                    Math.min(52, Math.floor(layoutWidth * 0.134))
+                );
+                
+                this.tabbarSpacerHeight = tabbarBaseHeight + this.safeBottom + 10;
+                
+                const headerContentHeight = Math.max(
+                    38,
+                    Math.min(42, Math.floor(layoutWidth * 0.108))
+                );
+                
+                this.headerHeight = statusBarHeight + headerContentHeight;
+                
+                this.conversationItemHeight = Math.max(
+                    66,
+                    Math.min(72, Math.floor(layoutWidth * 0.176))
+                );
+                
+                this.noticeRowHeight = Math.max(
+                    78,
+                    Math.min(86, Math.floor(layoutWidth * 0.222))
+                );
+                
+                this.avatarSize = Math.max(
+                    44,
+                    Math.min(48, Math.floor(this.conversationItemHeight * 0.67))
+                );
+                
+                this.noticeAvatarSize = Math.max(
+                    42,
+                    Math.min(46, Math.floor(this.noticeRowHeight * 0.53))
+                );
+                
+                this.actionButtonSize = Math.max(
+                    30,
+                    Math.min(32, Math.floor(headerContentHeight * 0.74))
+                );
+                
+                this.headerTitleFontSize = Math.max(
+                    16,
+                    Math.min(17, Math.floor(headerContentHeight * 0.38) + smallScreenBoost)
+                );
+                
+                this.actionIconFontSize = Math.max(
+                    22,
+                    Math.min(24, Math.floor(headerContentHeight * 0.54) + smallScreenBoost)
+                );
+                
+                this.conversationNameFontSize = Math.max(
+                    16,
+                    Math.min(17, Math.floor(this.conversationItemHeight * 0.235) + smallScreenBoost + tinyScreenBoost)
+                );
+                
+                this.lastMessageFontSize = Math.max(
+                    12,
+                    Math.min(13, Math.floor(this.conversationItemHeight * 0.172) + smallScreenBoost)
+                );
+                
+                this.conversationTimeFontSize = Math.max(
+                    10,
+                    Math.min(11, Math.floor(this.conversationItemHeight * 0.148) + smallScreenBoost)
+                );
+                
+                this.unreadBadgeFontSize = Math.max(
+                    9,
+                    Math.min(10, Math.floor(this.conversationItemHeight * 0.14) + smallScreenBoost)
+                );
+                
+                this.unreadBadgeHeight = Math.max(
+                    16,
+                    Math.min(17, Math.floor(this.conversationItemHeight * 0.235))
+                );
+                
+                this.unreadBadgeMinWidth = Math.max(
+                    18,
+                    Math.min(20, Math.floor(this.conversationItemHeight * 0.29))
+                );
+                
+                this.noticeNameFontSize = Math.max(
+                    12,
+                    Math.min(13, Math.floor(this.noticeRowHeight * 0.148) + smallScreenBoost)
+                );
+                
+                this.noticeIconFontSize = Math.max(
+                    20,
+                    Math.min(22, Math.floor(this.noticeAvatarSize * 0.48) + smallScreenBoost)
+                );
+                
+                this.systemIconFontSize = Math.max(
+                    22,
+                    Math.min(24, Math.floor(this.noticeAvatarSize * 0.52) + smallScreenBoost)
+                );
+                
+                this.conversationSideWidth = Math.max(
+                    48,
+                    Math.min(52, Math.floor(layoutWidth * 0.13))
+                );
             } catch (err) {
                 this.windowHeight = 667;
+                this.windowWidth = 375;
                 this.statusBarHeight = 0;
-                this.conversationItemHeight = 60;
-                this.headerHeight = 60;
-                this.noticeRowHeight = 60;
-                this.avatarSize = 42;
-                this.noticeAvatarSize = 34;
-                this.actionButtonSize = 30;
+                this.safeBottom = 0;
+
+                this.conversationItemHeight = 70;
+                this.headerHeight = 42;
+                this.noticeRowHeight = 84;
+                this.avatarSize = 46;
+                this.noticeAvatarSize = 44;
+                this.actionButtonSize = 32;
+                this.tabbarSpacerHeight = 64;
+
+                this.headerTitleFontSize = 16;
+                this.actionIconFontSize = 23;
+                this.conversationNameFontSize = 16;
+                this.lastMessageFontSize = 13;
+                this.conversationTimeFontSize = 11;
+                this.unreadBadgeFontSize = 10;
+                this.unreadBadgeHeight = 16;
+                this.unreadBadgeMinWidth = 18;
+                this.noticeNameFontSize = 12;
+                this.noticeIconFontSize = 21;
+                this.systemIconFontSize = 23;
+                this.conversationSideWidth = 50;
             }
         },
 
@@ -687,17 +899,17 @@ export default {
             if (!conversation?.con_short_id || this.deletingConId) return;
 
             const point = this.getLongPressPoint(e);
-            const menuWidth = 72;
-            const menuHeight = 42;
+            const menuWidth = 56;
+            const menuHeight = 34;
             const sys = uni.getSystemInfoSync();
 
             let left = point.x - menuWidth / 2;
-            let top = point.y - menuHeight - 12;
+            let top = point.y - menuHeight - 8;
 
             left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
 
             const minTop = this.statusBarHeight + 8;
-            if (top < minTop) top = point.y + 12;
+            if (top < minTop) top = point.y + 8;
             top = Math.max(minTop, Math.min(top, sys.windowHeight - menuHeight - 8));
 
             this.conversationAction = {
@@ -837,12 +1049,17 @@ export default {
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .conversation-container {
     height: 100vh;
-    background: #f8f9fa;
+    background: #fdfdfd;
     position: relative;
     overflow: hidden;
+    font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .header-bar {
@@ -852,46 +1069,54 @@ export default {
     right: 0;
     z-index: 120;
     box-sizing: border-box;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #fdfdfd;
 }
 
 .header-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding-left: 16px;
-    padding-right: 16px;
+    justify-content: center;
+    padding-left: 12px;
+    padding-right: 12px;
     box-sizing: border-box;
+    position: relative;
 }
 
 .header-title {
-    font-size: 18px;
-    font-weight: bold;
-    color: #fff;
+    font-size: 16px;
+    font-weight: 400;
+    color: #111;
+    line-height: 1;
 }
 
 .header-actions {
-    display: flex;
-    gap: 12px;
-}
-
-.action-btn {
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
+    position: absolute;
+    right: 10px;
+    top: 0;
+    bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s;
+}
+
+.action-btn {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-sizing: border-box;
 }
 
 .action-btn:active {
-    transform: scale(0.95);
-    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0.94);
 }
 
 .action-icon {
-    font-size: 15px;
-    color: #fff;
+    font-size: 23px;
+    color: #8f9098;
+    line-height: 1;
 }
 
 .dropdown-overlay {
@@ -900,9 +1125,9 @@ export default {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.02);
     z-index: 999;
-    animation: fadeIn 0.2s ease;
+    animation: fadeIn 0.18s ease;
 }
 
 @keyframes fadeIn {
@@ -916,18 +1141,21 @@ export default {
 
 .dropdown-menu {
     position: absolute;
-    right: 16px;
+    right: 6px;
     background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border-radius: 10px;
+    box-shadow: 0 7px 20px rgba(0, 0, 0, 0.10);
     overflow: hidden;
-    animation: slideDown 0.3s ease;
+    animation: slideDown 0.2s ease;
+    padding: 3px 0;
+    box-sizing: border-box;
+    min-width: 122px;
 }
 
 @keyframes slideDown {
     from {
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateY(-6px);
     }
     to {
         opacity: 1;
@@ -936,28 +1164,29 @@ export default {
 }
 
 .dropdown-item {
+    height: 36px;
     display: flex;
     align-items: center;
-    padding: 14px 20px;
-    gap: 12px;
+    justify-content: flex-start;
+    padding: 0 9px;
+    gap: 6px;
     transition: background 0.2s;
-    border-bottom: 1px solid #f0f0f0;
-}
-
-.dropdown-item:last-child {
-    border-bottom: none;
+    box-sizing: border-box;
 }
 
 .dropdown-item:active {
-    background: #f5f5f5;
+    background: #f7f7f8;
 }
 
 .item-icon {
-    font-size: 20px;
+    font-size: 15px;
+    color: #777;
+    line-height: 1;
 }
 
 .item-text {
-    font-size: 15px;
+    font-size: 12px;
+    font-weight: 400;
     color: #333;
     white-space: nowrap;
 }
@@ -967,19 +1196,19 @@ export default {
     left: 0;
     right: 0;
     overflow: hidden;
-    background: #f8f9fa;
+    background: #fdfdfd;
 }
 
 .conversation-list {
-    padding: 0;
+    padding: 0 8px 0;
+    box-sizing: border-box;
 }
 
 .notice-row {
     display: flex;
     align-items: center;
-    background: #fff;
-    margin-bottom: 5px;
-    padding: 0 16px;
+    gap: 6px;
+    margin-bottom: 4px;
     box-sizing: border-box;
 }
 
@@ -990,129 +1219,192 @@ export default {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    border-radius: 13px;
+    position: relative;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.012);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.012);
+}
+
+.notice-card-system {
+    background: rgba(253, 231, 209, 0.13);
+}
+
+.notice-card-follow {
+    background: rgba(225, 239, 255, 0.18);
+}
+
+.notice-card-action {
+    background: rgba(255, 225, 229, 0.22);
 }
 
 .notice-card:active {
-    opacity: 0.75;
+    opacity: 0.78;
 }
 
-.notice-avatar-wrapper {
-    position: relative;
-    margin-bottom: 3px;
+.notice-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ff3b30;
 }
 
-.notice-avatar {
-    border: 2px solid #f0f0f0;
+.notice-icon-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+    box-sizing: border-box;
+    background: #ffffff !important;
+}
+
+.notice-icon-system {
+    border: 1px solid rgba(240, 160, 51, 0.18);
+}
+
+.notice-icon-follow {
+    border: 1px solid rgba(141, 149, 178, 0.20);
+}
+
+.notice-icon-action {
+    border: 1px solid rgba(255, 92, 112, 0.22);
+}
+
+.notice-entry-icon {
+    line-height: 1;
+}
+
+.system-icon {
+    font-size: 23px;
+    color: #f0a033;
+}
+
+.follow-icon {
+    font-size: 21px;
+    color: #8d95b2;
+}
+
+.comment-icon {
+    font-size: 21px;
+    color: #ff6b7d;
 }
 
 .notice-name {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 400;
-    color: #333;
-    line-height: 1.25;
+    color: #222;
+    line-height: 1.1;
 }
 
 .conversation-item {
     position: relative;
     display: flex;
     align-items: center;
-    padding: 0 16px;
+    padding: 0 10px;
     background: #fff;
-    margin-bottom: 0;
-    transition: background 0.2s;
+    margin-bottom: 4px;
+    border-radius: 12px;
+    transition: background 0.18s;
     box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.008);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.008);
 }
 
 .conversation-item::after {
-    content: '';
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 0;
-    height: 1px;
-    background: linear-gradient(to right, transparent 0%, #e1e4e8 14%, #e1e4e8 86%, transparent 100%);
-    pointer-events: none;
+    display: none;
 }
 
 .conversation-item:active {
-    background: #f5f5f5;
+    background: #f8f8f8;
 }
 
 .avatar-wrapper {
     position: relative;
     flex-shrink: 0;
-    margin-right: 12px;
+    margin-right: 10px;
 }
 
 .avatar {
-    border: 2px solid #f0f0f0;
-}
-
-.unread-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    min-width: 17px;
-    height: 17px;
-    padding: 0 4px;
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 400;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid #fff;
-    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+    border: none;
+    background: #f2f2f2;
 }
 
 .conversation-content {
     flex: 1;
-    overflow: hidden;
-}
-
-.conversation-header {
+    min-width: 0;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 4px;
+    overflow: hidden;
+}
+
+.conversation-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 6px;
+    box-sizing: border-box;
 }
 
 .conversation-name {
-    flex: 1;
-    min-width: 0;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 400;
-    color: #333;
+    color: #111;
+    line-height: 21px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.conversation-time {
-    font-size: 11px;
-    font-weight: 400;
-    color: #999;
-    margin-left: 8px;
-    flex-shrink: 0;
-}
-
-.conversation-message {
-    display: flex;
-    align-items: center;
-    min-height: 16px;
 }
 
 .last-message {
-    min-height: 16px;
-    line-height: 16px;
+    margin-top: 1px;
     font-size: 12px;
     font-weight: 400;
-    color: #666;
+    line-height: 17px;
+    color: #8f9098;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.conversation-side {
+    width: 50px;
+    height: 100%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.conversation-time {
+    font-size: 10px;
+    font-weight: 400;
+    color: #8f9098;
+    line-height: 14px;
+    margin-bottom: 3px;
+}
+
+.side-unread-badge {
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    background: #ff3b30;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 400;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    line-height: 1;
 }
 
 .load-more-state {
@@ -1122,6 +1414,11 @@ export default {
     font-size: 11px;
     line-height: 14px;
     color: #999;
+}
+
+.bottom-spacer {
+    width: 100%;
+    flex-shrink: 0;
 }
 
 .conversation-action-mask {
@@ -1136,23 +1433,23 @@ export default {
 
 .conversation-action-menu {
     position: fixed;
-    height: 42px;
+    height: 34px;
     background: #ffffff;
-    border-radius: 8px;
+    border-radius: 7px;
     display: flex;
     align-items: center;
     overflow: hidden;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
 }
 
 .conversation-action-item {
-    min-width: 64px;
-    height: 42px;
-    padding: 0 12px;
+    min-width: 56px;
+    height: 34px;
+    padding: 0 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 13px;
     color: #333333;
     box-sizing: border-box;
 }
@@ -1170,16 +1467,17 @@ export default {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 100px 20px;
+    padding: 80px 20px;
 }
 
 .empty-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
+    font-size: 50px;
+    margin-bottom: 12px;
+    color: #c7c7cc;
 }
 
 .empty-hint {
-    font-size: 14px;
+    font-size: 13px;
     color: #999;
 }
 </style>

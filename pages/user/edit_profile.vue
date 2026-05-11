@@ -1,37 +1,43 @@
 <template>
 	<view class="container">
 		<!-- 自定义导航栏 -->
-		<view class="nav-bar">
-			<view class="nav-back" @click="goBack">
-				<text class="nav-back-icon">←</text>
-				<text class="nav-back-text">返回</text>
+		<view class="nav-bar" :style="navBarStyle">
+			<view class="nav-content" :style="navContentStyle">
+				<view class="nav-left" @click="goBack">
+					<text class="iconfont icon-fanhui nav-back-icon" :style="navBackIconStyle"></text>
+				</view>
+
+				<view class="nav-title-wrap">
+					<text class="nav-title" :style="navTitleStyle">编辑资料</text>
+				</view>
+
+				<view class="nav-right"></view>
 			</view>
-			<view class="nav-title">编辑资料</view>
 		</view>
 
-		<view class="content">
-			<view class="card">
-				<view class="cell" @click="handleEditAvatar">
-					<text class="cell-label">头像</text>
+		<view class="content" :style="contentStyle">
+			<view class="card" :style="cardStyle">
+				<view class="cell" :style="cellStyle" @click="handleEditAvatar">
+					<text class="cell-label" :style="cellLabelStyle">头像</text>
 					<view class="cell-right">
-						<image class="avatar" :src="avatar || defaultAvatar" mode="aspectFill"></image>
-						<text class="cell-arrow">›</text>
+						<image class="avatar" :style="avatarStyle" :src="avatar || defaultAvatar" mode="aspectFill"></image>
+						<text class="cell-arrow" :style="cellArrowStyle">›</text>
 					</view>
 				</view>
 
-				<view class="cell" @click="openUsernamePopup">
-					<text class="cell-label">用户名</text>
+				<view class="cell" :style="cellStyle" @click="openUsernamePopup">
+					<text class="cell-label" :style="cellLabelStyle">用户名</text>
 					<view class="cell-right">
-						<text class="cell-value">{{ username || '未设置' }}</text>
-						<text class="cell-arrow">›</text>
+						<text class="cell-value" :style="cellValueStyle">{{ username || '未设置' }}</text>
+						<text class="cell-arrow" :style="cellArrowStyle">›</text>
 					</view>
 				</view>
 
-				<view class="cell no-border" @click="openPasswordPopup">
-					<text class="cell-label">密码</text>
+				<view class="cell no-border" :style="cellStyle" @click="openPasswordPopup">
+					<text class="cell-label" :style="cellLabelStyle">密码</text>
 					<view class="cell-right">
-						<text class="cell-value">点击修改</text>
-						<text class="cell-arrow">›</text>
+						<text class="cell-value" :style="cellValueStyle">点击修改</text>
+						<text class="cell-arrow" :style="cellArrowStyle">›</text>
 					</view>
 				</view>
 			</view>
@@ -39,27 +45,29 @@
 
 		<!-- 用户名弹窗 -->
 		<view class="popup-mask" v-if="popupType === 'username'" @click="closePopup">
-			<view class="popup-card" @click.stop>
-				<view class="popup-title">修改用户名</view>
+			<view class="popup-card" :style="popupCardStyle" @click.stop>
+				<view class="popup-title" :style="popupTitleStyle">修改用户名</view>
 				<input
 					class="popup-input"
+					:style="popupInputStyle"
 					v-model.trim="tempUsername"
 					placeholder="请输入新用户名"
 					maxlength="20"
 				/>
 				<view class="popup-actions">
-					<view class="popup-btn cancel" @click="closePopup">取消</view>
-					<view class="popup-btn confirm" @click="submitUsername">确定</view>
+					<view class="popup-btn cancel" :style="popupBtnStyle" @click="closePopup">取消</view>
+					<view class="popup-btn confirm" :style="popupBtnStyle" @click="submitUsername">确定</view>
 				</view>
 			</view>
 		</view>
 
 		<!-- 密码弹窗 -->
 		<view class="popup-mask" v-if="popupType === 'password'" @click="closePopup">
-			<view class="popup-card" @click.stop>
-				<view class="popup-title">修改密码</view>
+			<view class="popup-card" :style="popupCardStyle" @click.stop>
+				<view class="popup-title" :style="popupTitleStyle">修改密码</view>
 				<input
 					class="popup-input"
+					:style="popupInputStyle"
 					v-model="tempPassword"
 					type="password"
 					password
@@ -67,14 +75,15 @@
 				/>
 				<input
 					class="popup-input"
+					:style="popupInputStyle"
 					v-model="tempConfirmPassword"
 					type="password"
 					password
 					placeholder="请再次输入新密码"
 				/>
 				<view class="popup-actions">
-					<view class="popup-btn cancel" @click="closePopup">取消</view>
-					<view class="popup-btn confirm" @click="submitPassword">确定</view>
+					<view class="popup-btn cancel" :style="popupBtnStyle" @click="closePopup">取消</view>
+					<view class="popup-btn confirm" :style="popupBtnStyle" @click="submitPassword">确定</view>
 				</view>
 			</view>
 		</view>
@@ -90,7 +99,7 @@
 		/>
 
 		<view class="loading-mask" v-if="submitting">
-			<view class="loading-box">提交中...</view>
+			<view class="loading-box" :style="loadingBoxStyle">提交中...</view>
 		</view>
 	</view>
 </template>
@@ -101,6 +110,10 @@ import { uploadImage } from '@/request/common.js'
 import DB from '@/utils/sqlite.js'
 import { enqueueEntityAvatars } from '@/utils/im-cache.js'
 import AvatarCropper from '@/components/avatar-cropper.vue'
+
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value))
+}
 
 export default {
 	components: {
@@ -124,16 +137,231 @@ export default {
 				src: ''
 			},
 
-			submitting: false
+			submitting: false,
+
+			windowWidth: 375,
+			statusBarHeight: 0,
+			safeBottom: 0,
+
+			navContentHeight: 38,
+			navHeight: 38,
+
+			contentPaddingX: 14,
+			contentPaddingTop: 12,
+
+			cardRadius: 14,
+			cardPaddingX: 14,
+			cellHeight: 54,
+
+			avatarSize: 40,
+
+			navBackIconSize: 19,
+			navTitleFontSize: 17,
+			cellLabelFontSize: 15,
+			cellValueFontSize: 14,
+			cellArrowFontSize: 22,
+
+			popupWidth: 312,
+			popupRadius: 18,
+			popupPaddingX: 14,
+			popupPaddingY: 18,
+			popupTitleFontSize: 16,
+			popupInputHeight: 42,
+			popupInputFontSize: 14,
+			popupBtnHeight: 40,
+			popupBtnFontSize: 14,
+			loadingFontSize: 14
+		}
+	},
+
+	computed: {
+		navBarStyle() {
+			return (
+				'height:' + this.navHeight + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;'
+			)
+		},
+
+		navContentStyle() {
+			return 'height:' + this.navContentHeight + 'px;'
+		},
+
+		navBackIconStyle() {
+			return 'font-size:' + this.navBackIconSize + 'px;'
+		},
+
+		navTitleStyle() {
+			return 'font-size:' + this.navTitleFontSize + 'px;'
+		},
+
+		contentStyle() {
+			return (
+				'padding:' +
+				(this.navHeight + this.contentPaddingTop) +
+				'px ' +
+				this.contentPaddingX +
+				'px ' +
+				(24 + this.safeBottom) +
+				'px;'
+			)
+		},
+
+		cardStyle() {
+			return (
+				'border-radius:' + this.cardRadius + 'px;' +
+				'padding-left:' + this.cardPaddingX + 'px;' +
+				'padding-right:' + this.cardPaddingX + 'px;'
+			)
+		},
+
+		cellStyle() {
+			return 'min-height:' + this.cellHeight + 'px;'
+		},
+
+		cellLabelStyle() {
+			return 'font-size:' + this.cellLabelFontSize + 'px;'
+		},
+
+		cellValueStyle() {
+			return 'font-size:' + this.cellValueFontSize + 'px;'
+		},
+
+		cellArrowStyle() {
+			return 'font-size:' + this.cellArrowFontSize + 'px;'
+		},
+
+		avatarStyle() {
+			const radius = Math.floor(this.avatarSize / 2)
+			return (
+				'width:' + this.avatarSize + 'px;' +
+				'height:' + this.avatarSize + 'px;' +
+				'border-radius:' + radius + 'px;'
+			)
+		},
+
+		popupCardStyle() {
+			return (
+				'width:' + this.popupWidth + 'px;' +
+				'border-radius:' + this.popupRadius + 'px;' +
+				'padding:' + this.popupPaddingY + 'px ' + this.popupPaddingX + 'px;'
+			)
+		},
+
+		popupTitleStyle() {
+			return 'font-size:' + this.popupTitleFontSize + 'px;'
+		},
+
+		popupInputStyle() {
+			return (
+				'height:' + this.popupInputHeight + 'px;' +
+				'font-size:' + this.popupInputFontSize + 'px;'
+			)
+		},
+
+		popupBtnStyle() {
+			return (
+				'height:' + this.popupBtnHeight + 'px;' +
+				'line-height:' + this.popupBtnHeight + 'px;' +
+				'border-radius:' + Math.floor(this.popupBtnHeight / 2) + 'px;' +
+				'font-size:' + this.popupBtnFontSize + 'px;'
+			)
+		},
+
+		loadingBoxStyle() {
+			return 'font-size:' + this.loadingFontSize + 'px;'
 		}
 	},
 
 	onLoad() {
+		this.initResponsiveLayout()
 		this.userId = getApp().globalData.userId
 		this.loadUserProfile()
 	},
 
+	onShow() {
+		this.initResponsiveLayout()
+	},
+
 	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync()
+				const windowWidth = Number(sys.windowWidth || 375)
+				const statusBarHeight = Number(sys.statusBarHeight || 0)
+				const safeAreaInsets = sys.safeAreaInsets || {}
+				const smallScreenBoost = windowWidth <= 360 ? 1 : 0
+
+				this.windowWidth = windowWidth
+				this.statusBarHeight = statusBarHeight
+				this.safeBottom = Number(safeAreaInsets.bottom || 0)
+
+				this.navContentHeight = 38
+				this.navHeight = this.statusBarHeight + this.navContentHeight
+
+				this.contentPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.contentPaddingTop = clamp(Math.floor(windowWidth * 0.032), 10, 14)
+
+				this.cardRadius = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.cellHeight = clamp(Math.floor(windowWidth * 0.144), 52, 60)
+
+				this.avatarSize = clamp(Math.floor(windowWidth * 0.106), 38, 44)
+
+				this.navBackIconSize = clamp(Math.floor(this.navContentHeight * 0.5), 18, 21)
+				this.navTitleFontSize = clamp(Math.floor(this.navContentHeight * 0.44) + smallScreenBoost, 16, 18)
+
+				this.cellLabelFontSize = clamp(Math.floor(windowWidth * 0.04) + smallScreenBoost, 15, 16)
+				this.cellValueFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 14, 15)
+				this.cellArrowFontSize = clamp(Math.floor(windowWidth * 0.058), 20, 24)
+
+				this.popupWidth = clamp(Math.floor(windowWidth * 0.82), 292, 336)
+				this.popupRadius = clamp(Math.floor(windowWidth * 0.046), 16, 20)
+				this.popupPaddingX = clamp(Math.floor(windowWidth * 0.038), 14, 18)
+				this.popupPaddingY = clamp(Math.floor(windowWidth * 0.048), 16, 22)
+
+				this.popupTitleFontSize = clamp(Math.floor(windowWidth * 0.043) + smallScreenBoost, 16, 18)
+				this.popupInputHeight = clamp(Math.floor(windowWidth * 0.112), 40, 46)
+				this.popupInputFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 14, 15)
+
+				this.popupBtnHeight = clamp(Math.floor(windowWidth * 0.106), 38, 44)
+				this.popupBtnFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 14, 15)
+				this.loadingFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 14, 15)
+			} catch (err) {
+				this.windowWidth = 375
+				this.statusBarHeight = 0
+				this.safeBottom = 0
+
+				this.navContentHeight = 38
+				this.navHeight = 38
+
+				this.contentPaddingX = 14
+				this.contentPaddingTop = 12
+
+				this.cardRadius = 14
+				this.cardPaddingX = 14
+				this.cellHeight = 54
+
+				this.avatarSize = 40
+
+				this.navBackIconSize = 19
+				this.navTitleFontSize = 17
+				this.cellLabelFontSize = 15
+				this.cellValueFontSize = 14
+				this.cellArrowFontSize = 22
+
+				this.popupWidth = 312
+				this.popupRadius = 18
+				this.popupPaddingX = 14
+				this.popupPaddingY = 18
+				this.popupTitleFontSize = 16
+				this.popupInputHeight = 42
+				this.popupInputFontSize = 14
+				this.popupBtnHeight = 40
+				this.popupBtnFontSize = 14
+				this.loadingFontSize = 14
+			}
+		},
+
 		goBack() {
 			uni.navigateBack()
 		},
@@ -384,10 +612,16 @@ export default {
 }
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .container {
-	background-color: #f5f5f7;
+	background-color: #f7f8fa;
 	min-height: 100vh;
+	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	box-sizing: border-box;
 }
 
 .nav-bar {
@@ -395,56 +629,79 @@ export default {
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 88rpx;
-	padding: 0 16rpx;
-	display: flex;
-	align-items: center;
 	background-color: #ffffff;
-	box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
 	z-index: 100;
+	box-sizing: border-box;
+	overflow: hidden;
 }
 
-.nav-back {
+.nav-content {
+	width: 100%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 4px;
+	box-sizing: border-box;
+}
+
+.nav-left,
+.nav-right {
+	width: 76px;
+	height: 30px;
 	display: flex;
 	align-items: center;
-	padding: 10rpx 10rpx 10rpx 0;
+	flex-shrink: 0;
+	box-sizing: border-box;
+}
+
+.nav-left {
+	justify-content: flex-start;
+}
+
+.nav-right {
+	justify-content: flex-end;
 }
 
 .nav-back-icon {
-	font-size: 34rpx;
-	margin-right: 4rpx;
+	line-height: 1;
+	color: #222;
+	font-weight: 400;
 }
 
-.nav-back-text {
-	font-size: 28rpx;
+.nav-title-wrap {
+	flex: 1;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	box-sizing: border-box;
 }
 
 .nav-title {
-	flex: 1;
-	text-align: center;
-	font-size: 32rpx;
-	font-weight: 600;
-	margin-right: 80rpx;
+	color: #222;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .content {
-	padding: 110rpx 24rpx 24rpx;
 	box-sizing: border-box;
 }
 
 .card {
-	background: #fff;
-	border-radius: 16rpx;
-	padding: 0 24rpx;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+	background: #ffffff;
+	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
+	box-sizing: border-box;
 }
 
 .cell {
-	min-height: 108rpx;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	border-bottom: 1px solid #f2f2f2;
+	box-sizing: border-box;
 }
 
 .cell.no-border {
@@ -452,37 +709,37 @@ export default {
 }
 
 .cell-label {
-	font-size: 30rpx;
 	color: #222;
-	font-weight: 500;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .cell-right {
 	display: flex;
 	align-items: center;
 	max-width: 70%;
+	min-width: 0;
 }
 
 .cell-value {
-	font-size: 28rpx;
 	color: #666;
 	max-width: 320rpx;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	font-weight: 400;
 }
 
 .cell-arrow {
-	font-size: 34rpx;
-	color: #bbb;
-	margin-left: 12rpx;
+	color: #bbbbbb;
+	margin-left: 10px;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .avatar {
-	width: 76rpx;
-	height: 76rpx;
-	border-radius: 50%;
 	background: #f2f2f2;
+	flex-shrink: 0;
 }
 
 .popup-mask,
@@ -500,45 +757,40 @@ export default {
 }
 
 .popup-card {
-	width: 78%;
-	background: #fff;
-	border-radius: 20rpx;
-	padding: 32rpx 24rpx;
+	background: #ffffff;
 	box-sizing: border-box;
 }
 
 .popup-title {
-	font-size: 32rpx;
-	font-weight: 600;
+	font-weight: 400;
 	color: #222;
 	text-align: center;
-	margin-bottom: 24rpx;
+	margin-bottom: 16px;
+	line-height: 1.4;
 }
 
 .popup-input {
-	height: 84rpx;
 	background: #f7f8fa;
-	border-radius: 12rpx;
-	padding: 0 20rpx;
-	font-size: 28rpx;
-	margin-bottom: 20rpx;
+	border-radius: 12px;
+	padding: 0 12px;
+	color: #222;
+	font-weight: 400;
+	margin-bottom: 12px;
 	box-sizing: border-box;
 }
 
 .popup-actions {
 	display: flex;
 	justify-content: space-between;
-	gap: 20rpx;
-	margin-top: 12rpx;
+	gap: 12px;
+	margin-top: 4px;
 }
 
 .popup-btn {
 	flex: 1;
-	height: 80rpx;
-	line-height: 80rpx;
 	text-align: center;
-	border-radius: 40rpx;
-	font-size: 28rpx;
+	font-weight: 400;
+	box-sizing: border-box;
 }
 
 .popup-btn.cancel {
@@ -547,15 +799,16 @@ export default {
 }
 
 .popup-btn.confirm {
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-	color: #fff;
+	background: rgba(253, 231, 209, 1);
+	color: #8a5a2b;
 }
 
 .loading-box {
-	background: #fff;
-	color: #333;
-	padding: 28rpx 36rpx;
-	border-radius: 16rpx;
-	font-size: 28rpx;
+	background: #ffffff;
+	color: #333333;
+	padding: 14px 18px;
+	border-radius: 14px;
+	font-weight: 400;
+	box-sizing: border-box;
 }
 </style>

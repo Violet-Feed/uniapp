@@ -1,474 +1,638 @@
 <template>
-    <view class="create-group-container">
-        <!-- 顶部栏 -->
-        <view class="header-bar">
-            <view class="back-btn" @click="goBack">
-                <text class="back-icon">←</text>
-            </view>
-            <text class="header-title">选择联系人</text>
-            <view 
-                class="confirm-btn" 
-                :class="{ 'confirm-btn-active': selectedCount > 0 }"
-                @click="createConversation"
-            >
-                <text class="confirm-text">创建</text>
-                <text class="confirm-count" v-if="selectedCount > 0">({{ selectedCount }})</text>
-            </view>
-        </view>
-        
-        <!-- 已选择成员预览 -->
-        <view class="selected-preview" v-if="selectedCount > 0">
-            <scroll-view class="selected-scroll" scroll-x>
-                <view class="selected-list">
-                    <view 
-                        class="selected-item" 
-                        v-for="(user, index) in userList.filter(u => u.selected)" 
-                        :key="index"
-                    >
-                        <view class="selected-avatar-wrapper">
-                            <image class="selected-avatar" :src="user.avatar" mode="aspectFill"></image>
-                            <view class="remove-badge" @click.stop="toggleUserSelection(userList.indexOf(user))">
-                                <text class="remove-icon">✕</text>
-                            </view>
-                        </view>
-                        <text class="selected-name">{{ user.username }}</text>
-                    </view>
-                </view>
-            </scroll-view>
-        </view>
-        
-        <!-- 好友列表 -->
-        <scroll-view
-            class="friend-scroll"
-            scroll-y
-            :lower-threshold="120"
-            @scrolltolower="loadMore"
-            refresher-enabled
-            :refresher-triggered="refreshing"
-            @refresherrefresh="onRefresh"
-        >
-            <view class="friend-list">
-                <view 
-                    class="friend-item" 
-                    v-for="(user, index) in userList" 
-                    :key="index"
-                    @click="toggleUserSelection(index)"
-                >
-                    <!-- 头像 -->
-                    <view class="avatar-wrapper">
-                        <image class="avatar" :src="user.avatar" mode="aspectFill"></image>
-                    </view>
-                    
-                    <!-- 用户信息 -->
-                    <view class="user-info">
-                        <text class="user-name">{{ user.username }}</text>
-                        <text class="user-bio" v-if="user.bio">{{ user.bio }}</text>
-                    </view>
-                    
-                    <!-- 选择框 -->
-                    <view class="checkbox-wrapper">
-                        <view class="custom-checkbox" :class="{ 'checkbox-checked': user.selected }">
-                            <text class="checkbox-icon" v-if="user.selected">✓</text>
-                        </view>
-                    </view>
-                </view>
-                
-                <!-- 空状态 -->
-                <view v-if="userList.length === 0" class="empty-state">
-                    <text class="empty-icon">👥</text>
-                    <text class="empty-text">暂无好友</text>
-                    <text class="empty-hint">快去添加好友吧！</text>
-                </view>
-            </view>
-        </scroll-view>
-    </view>
+	<view class="create-group-container">
+		<!-- 顶部栏 -->
+		<view class="nav-bar" :style="navBarStyle">
+			<view class="nav-content" :style="navContentStyle">
+				<view class="nav-left" @click="goBack">
+					<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
+				</view>
+
+				<view class="nav-title-wrap">
+					<text class="nav-title" :style="navTitleStyle">选择好友</text>
+				</view>
+
+				<view class="nav-right">
+					<button
+						class="create-btn"
+						:class="{ 'create-btn-disabled': selectedCount === 0 || creating }"
+						:style="createBtnStyle"
+						@click.stop="createConversation"
+					>
+						<text class="create-btn-text">
+							{{ creating ? '创建中' : '创建' }}
+						</text>
+						<text class="create-btn-text" v-if="selectedCount > 0">
+							({{ selectedCount }})
+						</text>
+					</button>
+				</view>
+			</view>
+		</view>
+
+		<!-- 好友列表 -->
+		<scroll-view
+			class="friend-scroll"
+			scroll-y
+			:lower-threshold="120"
+			@scrolltolower="loadMore"
+			refresher-enabled
+			:refresher-triggered="refreshing"
+			@refresherrefresh="onRefresh"
+		>
+			<view class="friend-list" :style="friendListStyle">
+				<view
+					class="friend-item"
+					:style="friendItemStyle"
+					v-for="(user, index) in userList"
+					:key="String(user.user_id || index)"
+					@click="toggleUserSelection(index)"
+				>
+					<text
+						class="iconfont select-icon"
+						:class="user.selected ? 'icon-gouxuan' : 'icon-gouxuan1'"
+						:style="selectIconStyle(user)"
+					></text>
+
+					<image
+						class="avatar"
+						:style="avatarStyle"
+						:src="user.avatar"
+						mode="aspectFill"
+					></image>
+
+					<view class="user-info" :style="userInfoStyle">
+						<text class="user-name" :style="userNameStyle">{{ user.username }}</text>
+						<text class="user-bio" :style="userBioStyle" v-if="user.bio">{{ user.bio }}</text>
+					</view>
+				</view>
+
+				<view v-if="!loading && userList.length === 0" class="empty-state">
+					<text class="empty-icon" :style="emptyIconStyle">👥</text>
+					<text class="empty-text" :style="emptyTextStyle">暂无好友</text>
+					<text class="empty-hint" :style="emptyHintStyle">快去添加好友吧！</text>
+				</view>
+
+				<view v-if="userList.length > 0" class="bottom-status">
+					<text class="bottom-text" :style="bottomTextStyle" v-if="loadingMore">正在加载更多...</text>
+					<text class="bottom-text" :style="bottomTextStyle" v-else-if="!hasMore">没有更多了</text>
+					<text class="bottom-text" :style="bottomTextStyle" v-else>上拉加载更多</text>
+				</view>
+			</view>
+		</scroll-view>
+	</view>
 </template>
 
 <script>
-import JSONbig from 'json-bigint';
-import DB from '@/utils/sqlite.js'
 import { getFriendList } from '@/request/action.js';
 import { createConversation } from '@/request/im';
 
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value));
+};
+
 export default {
-    data() {
-        return {
-            userList: [],
+	data() {
+		return {
+			userList: [],
 
-            // 分页
-            page: 1,
-            hasMore: true,
-            pageSize: 20,
+			page: 1,
+			hasMore: true,
+			pageSize: 20,
 
-            loading: false,
-            loadingMore: false,
-            refreshing: false
-        };
-    },
-    computed: {
-        selectedCount() {
-            return this.userList.filter(user => user.selected).length;
-        }
-    },
-    onLoad() {
-        this.loadFriendList(true);
-    },
-    methods: {
-        goBack() {
-            uni.navigateBack();
-        },
+			loading: false,
+			loadingMore: false,
+			refreshing: false,
+			creating: false,
 
-        toggleUserSelection(index) {
-            this.userList[index].selected = !this.userList[index].selected;
-        },
+			windowWidth: 375,
+			statusBarHeight: 0,
+			headerContentHeight: 38,
+			headerHeight: 38,
 
-        async onRefresh() {
-            this.refreshing = true;
-            const p = this.loadFriendList(true);
-            Promise.resolve(p).finally(() => {
-                this.refreshing = false;
-            });
-        },
+			pagePadding: 14,
+			cardPaddingX: 14,
+			cardPaddingY: 12,
+			cardRadius: 14,
+			cardGap: 10,
 
-        loadMore() {
-            this.loadFriendList(false);
-        },
+			avatarSize: 48,
+			selectIconSize: 22,
+			backIconSize: 19,
+			titleFontSize: 17,
 
-        async loadFriendList(reset = false) {
-            if (this.loading || this.loadingMore) return;
-            if (!reset && !this.hasMore) return;
+			createBtnHeight: 30,
+			createBtnMinWidth: 62,
+			createBtnFontSize: 14,
 
-            if (reset) {
-                this.page = 1;
-                this.hasMore = true;
-                this.loading = true;
-            } else {
-                this.loadingMore = true;
-            }
+			userNameFontSize: 16,
+			userBioFontSize: 13,
+			userInfoMargin: 10,
 
-            const payload = {
-                userId: String(getApp().globalData.userId || ''),
-                page: this.page
-            };
+			emptyIconFontSize: 56,
+			emptyTextFontSize: 16,
+			emptyHintFontSize: 14,
+			bottomTextFontSize: 13
+		};
+	},
 
-            let res;
-            try {
-                res = await getFriendList(payload);
-            } catch (e) {
-                res = undefined;
-            }
+	computed: {
+		selectedCount() {
+			return this.userList.filter(user => user.selected).length;
+		},
 
-            const list = res && Array.isArray(res.user_infos) ? res.user_infos : [];
+		navBarStyle() {
+			return (
+				'height:' + this.headerHeight + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;'
+			);
+		},
 
-            if (reset) this.userList = [];
+		navContentStyle() {
+			return 'height:' + this.headerContentHeight + 'px;';
+		},
 
-            if (list.length === 0) {
-                this.hasMore = false;
-                this.loading = false;
-                this.loadingMore = false;
-                this.refreshing = false;
-                return;
-            }
+		backIconStyle() {
+			return 'font-size:' + this.backIconSize + 'px;';
+		},
 
-            // 去重（防止分页重复）
-            const exist = new Set(this.userList.map(u => String(u.user_id || u.userId || '')));
-            const mapped = list
-                .map((u) => ({
-                    // 兼容下划线字段
-                    user_id: String(u.user_id || u.userId || ''),
-                    username: u.username || '未知用户',
-                    avatar: u.avatar && u.avatar !== '' ? u.avatar : '/static/user_avatar.png',
-                    bio: u.bio,
-                    selected: false
-                }))
-                .filter(u => u.user_id && !exist.has(u.user_id));
+		navTitleStyle() {
+			return 'font-size:' + this.titleFontSize + 'px;';
+		},
 
-            this.userList = this.userList.concat(mapped);
+		createBtnStyle() {
+			return (
+				'height:' + this.createBtnHeight + 'px;' +
+				'line-height:' + this.createBtnHeight + 'px;' +
+				'min-width:' + this.createBtnMinWidth + 'px;' +
+				'border-radius:' + Math.floor(this.createBtnHeight / 2) + 'px;' +
+				'font-size:' + this.createBtnFontSize + 'px;'
+			);
+		},
 
-            this.hasMore = list.length >= this.pageSize;
-            this.page += 1;
+		friendListStyle() {
+			return 'padding:' + this.pagePadding + 'px;';
+		},
 
-            this.loading = false;
-            this.loadingMore = false;
-            this.refreshing = false;
-        },
+		friendItemStyle() {
+			return (
+				'padding:' + this.cardPaddingY + 'px ' + this.cardPaddingX + 'px;' +
+				'margin-bottom:' + this.cardGap + 'px;' +
+				'border-radius:' + this.cardRadius + 'px;'
+			);
+		},
 
-        async createConversation() {
-          const selectedUserIds = this.userList
-            .filter(user => user.selected)
-            .map(user => user.user_id);
-          if (selectedUserIds.length === 0) {
-            uni.showToast({
-              title: "请至少选择一位好友",
-              icon: "none"
-            });
-            return;
-          }
-        
-          const res = await createConversation({
-            members: selectedUserIds
-          });
-          if (!res) return;
-        
-          uni.showToast({
-            title: "创建成功",
-            icon: "success"
-          });
-          setTimeout(() => {
-            uni.redirectTo({
-              url: `/pages/im/conversation?conId=${res.con_id}&name=群聊&conType=${res.con_type}`
-            });
-          }, 200);
-        }
-    }
+		avatarStyle() {
+			const radius = Math.floor(this.avatarSize / 2);
+			return (
+				'width:' + this.avatarSize + 'px;' +
+				'height:' + this.avatarSize + 'px;' +
+				'border-radius:' + radius + 'px;'
+			);
+		},
+
+		userInfoStyle() {
+			return 'margin-left:' + this.userInfoMargin + 'px;';
+		},
+
+		userNameStyle() {
+			return 'font-size:' + this.userNameFontSize + 'px;';
+		},
+
+		userBioStyle() {
+			return 'font-size:' + this.userBioFontSize + 'px;';
+		},
+
+		emptyIconStyle() {
+			return 'font-size:' + this.emptyIconFontSize + 'px;';
+		},
+
+		emptyTextStyle() {
+			return 'font-size:' + this.emptyTextFontSize + 'px;';
+		},
+
+		emptyHintStyle() {
+			return 'font-size:' + this.emptyHintFontSize + 'px;';
+		},
+
+		bottomTextStyle() {
+			return 'font-size:' + this.bottomTextFontSize + 'px;';
+		}
+	},
+
+	onLoad() {
+		this.initResponsiveLayout();
+		this.loadFriendList(true);
+	},
+
+	onShow() {
+		this.initResponsiveLayout();
+	},
+
+	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync();
+				const windowWidth = Number(sys.windowWidth || 375);
+				const statusBarHeight = Number(sys.statusBarHeight || 0);
+				const smallScreenBoost = windowWidth <= 360 ? 1 : 0;
+				const tinyScreenBoost = windowWidth <= 330 ? 1 : 0;
+
+				this.windowWidth = windowWidth;
+				this.statusBarHeight = statusBarHeight;
+
+				this.headerContentHeight = 38;
+				this.headerHeight = this.statusBarHeight + this.headerContentHeight;
+
+				this.pagePadding = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardPaddingY = clamp(Math.floor(windowWidth * 0.032), 10, 14);
+				this.cardRadius = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardGap = clamp(Math.floor(windowWidth * 0.028), 9, 14);
+
+				this.avatarSize = clamp(Math.floor(windowWidth * 0.128), 44, 54);
+				this.selectIconSize = clamp(Math.floor(windowWidth * 0.058), 20, 24);
+				this.backIconSize = clamp(Math.floor(this.headerContentHeight * 0.5), 18, 21);
+				this.titleFontSize = clamp(Math.floor(this.headerContentHeight * 0.44) + smallScreenBoost, 16, 18);
+
+				this.createBtnHeight = clamp(Math.floor(this.headerContentHeight * 0.74), 28, 32);
+				this.createBtnMinWidth = clamp(Math.floor(windowWidth * 0.165), 60, 74);
+				this.createBtnFontSize = clamp(Math.floor(windowWidth * 0.036) + smallScreenBoost, 13, 15);
+
+				this.userNameFontSize = clamp(
+					Math.floor(windowWidth * 0.043) + smallScreenBoost + tinyScreenBoost,
+					16,
+					18
+				);
+				this.userBioFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
+				this.userInfoMargin = clamp(Math.floor(windowWidth * 0.03), 10, 14);
+
+				this.emptyIconFontSize = clamp(Math.floor(windowWidth * 0.15), 52, 64);
+				this.emptyTextFontSize = clamp(Math.floor(windowWidth * 0.04) + smallScreenBoost, 15, 17);
+				this.emptyHintFontSize = clamp(Math.floor(windowWidth * 0.035) + smallScreenBoost, 13, 15);
+				this.bottomTextFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
+			} catch (err) {
+				this.windowWidth = 375;
+				this.statusBarHeight = 0;
+				this.headerContentHeight = 38;
+				this.headerHeight = 38;
+
+				this.pagePadding = 14;
+				this.cardPaddingX = 14;
+				this.cardPaddingY = 12;
+				this.cardRadius = 14;
+				this.cardGap = 10;
+
+				this.avatarSize = 48;
+				this.selectIconSize = 22;
+				this.backIconSize = 19;
+				this.titleFontSize = 17;
+
+				this.createBtnHeight = 30;
+				this.createBtnMinWidth = 62;
+				this.createBtnFontSize = 14;
+
+				this.userNameFontSize = 16;
+				this.userBioFontSize = 13;
+				this.userInfoMargin = 10;
+
+				this.emptyIconFontSize = 56;
+				this.emptyTextFontSize = 16;
+				this.emptyHintFontSize = 14;
+				this.bottomTextFontSize = 13;
+			}
+		},
+
+		goBack() {
+			uni.navigateBack();
+		},
+
+		selectIconStyle(user) {
+			const color = user && user.selected ? '#22c55e' : '#c9ced6';
+			return (
+				'font-size:' + this.selectIconSize + 'px;' +
+				'color:' + color + ';'
+			);
+		},
+
+		toggleUserSelection(index) {
+			if (!this.userList[index]) return;
+			this.userList[index].selected = !this.userList[index].selected;
+		},
+
+		async onRefresh() {
+			this.refreshing = true;
+			const p = this.loadFriendList(true);
+			Promise.resolve(p).finally(() => {
+				this.refreshing = false;
+			});
+		},
+
+		loadMore() {
+			this.loadFriendList(false);
+		},
+
+		async loadFriendList(reset = false) {
+			if (this.loading || this.loadingMore) return;
+			if (!reset && !this.hasMore) return;
+
+			if (reset) {
+				this.page = 1;
+				this.hasMore = true;
+				this.loading = true;
+			} else {
+				this.loadingMore = true;
+			}
+
+			const payload = {
+				userId: String(getApp().globalData.userId || ''),
+				page: this.page
+			};
+
+			let res;
+			try {
+				res = await getFriendList(payload);
+			} catch (e) {
+				res = undefined;
+			}
+
+			const list = res && Array.isArray(res.user_infos) ? res.user_infos : [];
+
+			if (reset) this.userList = [];
+
+			if (list.length === 0) {
+				this.hasMore = false;
+				this.loading = false;
+				this.loadingMore = false;
+				this.refreshing = false;
+				return;
+			}
+
+			const exist = new Set(this.userList.map(u => String(u.user_id || u.userId || '')));
+
+			const mapped = list
+				.map(u => ({
+					user_id: String(u.user_id || u.userId || ''),
+					username: u.username || '未知用户',
+					avatar: u.avatar && u.avatar !== '' ? u.avatar : '/static/user_avatar.png',
+					bio: u.bio,
+					selected: false
+				}))
+				.filter(u => u.user_id && !exist.has(u.user_id));
+
+			this.userList = this.userList.concat(mapped);
+
+			this.hasMore = list.length >= this.pageSize;
+			this.page += 1;
+
+			this.loading = false;
+			this.loadingMore = false;
+			this.refreshing = false;
+		},
+
+		async createConversation() {
+			if (this.creating) return;
+
+			const selectedUserIds = this.userList
+				.filter(user => user.selected)
+				.map(user => user.user_id);
+
+			if (selectedUserIds.length === 0) {
+				uni.showToast({
+					title: '请至少选择一位好友',
+					icon: 'none'
+				});
+				return;
+			}
+
+			this.creating = true;
+
+			try {
+				const res = await createConversation({
+					members: selectedUserIds
+				});
+
+				if (!res) return;
+
+				uni.showToast({
+					title: '创建成功',
+					icon: 'success'
+				});
+
+				setTimeout(() => {
+					uni.redirectTo({
+						url: `/pages/im/conversation?conId=${res.con_id}&name=群聊&conType=${res.con_type}`
+					});
+				}, 200);
+			} finally {
+				this.creating = false;
+			}
+		}
+	}
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .create-group-container {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background: #f8f9fa;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	background: #f7f8fa;
+	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	box-sizing: border-box;
 }
 
-/* ==================== 顶部栏 ==================== */
-.header-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+.nav-bar {
+	width: 100%;
+	background: #ffffff;
+	box-sizing: border-box;
+	overflow: hidden;
+	flex-shrink: 0;
 }
 
-.back-btn {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.nav-content {
+	width: 100%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 4px;
+	box-sizing: border-box;
+}
+
+.nav-left,
+.nav-right {
+	width: 76px;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	box-sizing: border-box;
+}
+
+.nav-left {
+	justify-content: flex-start;
+}
+
+.nav-right {
+	justify-content: flex-end;
 }
 
 .back-icon {
-    font-size: 24px;
-    color: #fff;
+	line-height: 1;
+	color: #222;
+	font-weight: 400;
 }
 
-.header-title {
-    font-size: 17px;
-    font-weight: bold;
-    color: #fff;
+.nav-title-wrap {
+	flex: 1;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	box-sizing: border-box;
 }
 
-.confirm-btn {
-    padding: 6px 16px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    transition: all 0.3s;
+.nav-title {
+	color: #222;
+	font-weight: 400;
+	line-height: 1;
 }
 
-.confirm-btn-active {
-    background: #fff;
+.create-btn {
+	margin: 0;
+	padding: 0 13px;
+	color: #8a5a2b;
+	background: rgba(253, 231, 209, 1);
+	font-weight: 400;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	gap: 2px;
 }
 
-.confirm-btn-active .confirm-text,
-.confirm-btn-active .confirm-count {
-    color: #667eea;
+.create-btn::after {
+	border: none;
 }
 
-.confirm-text {
-    font-size: 14px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.8);
+.create-btn-disabled {
+	opacity: 0.62;
 }
 
-.confirm-count {
-    font-size: 14px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.8);
+.create-btn-text {
+	color: #8a5a2b;
+	font-weight: 400;
+	line-height: 1;
 }
 
-/* ==================== 已选择预览 ==================== */
-.selected-preview {
-    background: #fff;
-    padding: 12px 0;
-    border-bottom: 1px solid #e5e5e5;
-}
-
-.selected-scroll {
-    white-space: nowrap;
-}
-
-.selected-list {
-    display: inline-flex;
-    padding: 6px 16px 0;
-    gap: 16px;
-}
-
-.selected-item {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-}
-
-.selected-avatar-wrapper {
-    position: relative;
-    overflow: visible;
-}
-
-.selected-avatar {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: 2px solid #667eea;
-}
-
-.remove-badge {
-    position: absolute;
-    top: -2px;
-    right: -4px;
-    width: 18px;
-    height: 18px;
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid #fff;
-    box-sizing: border-box;
-}
-
-.remove-icon {
-    font-size: 10px;
-    color: #fff;
-    font-weight: bold;
-}
-
-.selected-name {
-    font-size: 12px;
-    color: #666;
-    max-width: 50px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* ==================== 好友列表 ==================== */
 .friend-scroll {
-    flex: 1;
-    overflow: hidden;
+	flex: 1;
+	overflow: hidden;
+	background: #f7f8fa;
 }
 
 .friend-list {
-    padding: 8px 0;
+	box-sizing: border-box;
 }
 
 .friend-item {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-    background: #fff;
-    margin-bottom: 1px;
-    transition: background 0.2s;
+	display: flex;
+	align-items: center;
+	background: #ffffff;
+	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
+	box-sizing: border-box;
 }
 
 .friend-item:active {
-    background: #f5f5f5;
+	background: #f8f8f8;
 }
 
-/* 头像 */
-.avatar-wrapper {
-    flex-shrink: 0;
-    margin-right: 12px;
+.select-icon {
+	flex-shrink: 0;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-right: 10px;
+	font-weight: 400;
 }
 
 .avatar {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: 2px solid #f0f0f0;
+	background: #eef1f6;
+	flex-shrink: 0;
 }
 
-/* 用户信息 */
 .user-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    overflow: hidden;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	overflow: hidden;
+	min-width: 0;
 }
 
 .user-name {
-    font-size: 15px;
-    font-weight: 600;
-    color: #333;
+	font-weight: 400;
+	color: #1f2329;
+	line-height: 1.4;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .user-bio {
-    font-size: 13px;
-    color: #999;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+	font-weight: 400;
+	color: #999;
+	line-height: 1.35;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-/* 选择框 */
-.checkbox-wrapper {
-    flex-shrink: 0;
-    margin-left: 12px;
-}
-
-.custom-checkbox {
-    width: 22px;
-    height: 22px;
-    border: 2px solid #ddd;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s;
-}
-
-.checkbox-checked {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-color: #667eea;
-}
-
-.checkbox-icon {
-    font-size: 14px;
-    font-weight: bold;
-    color: #fff;
-}
-
-/* ==================== 空状态 ==================== */
 .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 100px 20px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 90px 20px;
+	box-sizing: border-box;
 }
 
 .empty-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
+	line-height: 1;
+	margin-bottom: 14px;
 }
 
 .empty-text {
-    font-size: 16px;
-    color: #666;
-    margin-bottom: 8px;
+	color: #666;
+	font-weight: 400;
+	margin-bottom: 8px;
 }
 
 .empty-hint {
-    font-size: 14px;
-    color: #999;
+	color: #999;
+	font-weight: 400;
+	text-align: center;
+}
+
+.bottom-status {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 28rpx 0;
+}
+
+.bottom-text {
+	color: #98a2b3;
+	font-weight: 400;
 }
 </style>

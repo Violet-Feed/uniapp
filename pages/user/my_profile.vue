@@ -12,10 +12,10 @@
 			</view>
 		</view>
 
-		<!-- 顶部区域：占屏幕五分之二，包含刘海 / 状态栏 -->
+		<!-- 顶部用户信息区域：高度按屏幕宽度决定，内部比例相对固定 -->
 		<view class="profile-header" :style="profileHeaderStyle">
 			<view class="setting-btn" :style="topActionBtnStyle" @click="showSettingMenu">
-				<text class="setting-icon">⚙️</text>
+				<text class="iconfont icon-shezhi setting-icon"></text>
 			</view>
 
 			<view class="profile-header-content" :style="profileHeaderContentStyle">
@@ -49,25 +49,25 @@
 			</view>
 		</view>
 
-		<!-- 原始 Tab：滚动到顶部时粘在用户信息栏下方，与信息栏合并成共同顶栏 -->
+		<!-- 作品 / 点赞选项：滚动到顶部时与上方信息栏合并为共同顶栏 -->
 		<view class="tab-bar" :style="tabBarStyle">
 			<view
 				class="tab-item"
 				:class="{ active: activeTab === 'works' }"
 				@click="switchTab('works')"
 			>
-				<text class="tab-icon">🎬</text>
+				<text class="iconfont icon-neirongchuangzuo tab-icon"></text>
 				<text class="tab-text">作品</text>
 				<view class="tab-indicator" v-if="activeTab === 'works'"></view>
 			</view>
 			<view
-				class="tab-item"
+				class="tab-item like-tab"
 				:class="{ active: activeTab === 'likes' }"
 				@click="switchTab('likes')"
 			>
-				<text class="tab-icon">❤️</text>
+				<text class="iconfont icon-xihuan tab-icon"></text>
 				<text class="tab-text">点赞</text>
-				<view class="tab-indicator" v-if="activeTab === 'likes'"></view>
+				<view class="tab-indicator like-indicator" v-if="activeTab === 'likes'"></view>
 			</view>
 		</view>
 
@@ -90,7 +90,6 @@
 								mode="aspectFill"
 								@error="onCoverError(work)"
 							/>
-							<view class="image-gradient"></view>
 						</view>
 
 						<view class="card-content" :style="cardContentStyle">
@@ -103,9 +102,10 @@
 									<text class="author-name">{{ work.username }}</text>
 								</view>
 								<view class="card-likes" @click.stop="toggleDigg('works', index)">
-									<text class="like-icon" :class="{ active: work.is_digg }">
-										{{ work.is_digg ? '♥️' : '♡' }}
-									</text>
+									<text
+										class="iconfont like-icon"
+										:class="work.is_digg ? 'icon-xihuan active' : 'icon-xihuan1'"
+									></text>
 									<text class="like-count">{{ formatNumber(work.digg_count) }}</text>
 								</view>
 							</view>
@@ -114,7 +114,7 @@
 				</view>
 
 				<view v-if="worksList.length === 0 && !loading" class="empty-state">
-					<text class="empty-icon">🎨</text>
+					<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
 					<text class="empty-text">还没有发布作品</text>
 					<text class="empty-hint">快去创作第一个作品吧！</text>
 				</view>
@@ -137,7 +137,6 @@
 								mode="aspectFill"
 								@error="onCoverError(item)"
 							/>
-							<view class="image-gradient"></view>
 						</view>
 
 						<view class="card-content" :style="cardContentStyle">
@@ -150,9 +149,10 @@
 									<text class="author-name">{{ item.username }}</text>
 								</view>
 								<view class="card-likes" @click.stop="toggleDigg('likes', index)">
-									<text class="like-icon" :class="{ active: item.is_digg }">
-										{{ item.is_digg ? '❤️' : '🤍' }}
-									</text>
+									<text
+										class="iconfont like-icon"
+										:class="item.is_digg ? 'icon-xihuan active' : 'icon-xihuan1'"
+									></text>
 									<text class="like-count">{{ formatNumber(item.digg_count) }}</text>
 								</view>
 							</view>
@@ -161,7 +161,7 @@
 				</view>
 
 				<view v-if="likesList.length === 0 && !loading" class="empty-state">
-					<text class="empty-icon">💔</text>
+					<text class="iconfont icon-xihuan empty-icon like-empty-icon"></text>
 					<text class="empty-text">还没有点赞内容</text>
 					<text class="empty-hint">去发现更多精彩作品吧！</text>
 				</view>
@@ -170,6 +170,18 @@
 			<view v-if="loading" class="loading-more">
 				<view class="loading-spinner"></view>
 				<text class="loading-text">加载中...</text>
+			</view>
+		</view>
+
+		<!-- 长按作品操作菜单：不显示取消 -->
+		<view class="work-action-overlay" v-if="showWorkAction" @click="hideWorkActionMenu">
+			<view class="work-action-menu" @click.stop>
+				<view class="work-action-item" @click="editSelectedWork">
+					<text class="work-action-text">编辑</text>
+				</view>
+				<view class="work-action-item danger-work-action" @click="deleteSelectedWork">
+					<text class="work-action-text danger-work-text">删除</text>
+				</view>
 			</view>
 		</view>
 
@@ -183,7 +195,7 @@
 
 				<view class="menu-list">
 					<view class="menu-item" @click="goToEditProfile">
-						<text class="menu-icon">✏️</text>
+						<text class="iconfont icon-bianji menu-icon"></text>
 						<text class="menu-text">编辑资料</text>
 						<text class="menu-arrow">›</text>
 					</view>
@@ -209,17 +221,26 @@ import {
 import { digg, cancelDigg } from '@/request/action.js'
 import { getUserProfile } from '@/request/user.js'
 
-const TAB_BAR_HEIGHT = 48
-const COMPACT_PROFILE_HEIGHT = 40
 const GRID_GAP = 6
-const CONTENT_PADDING_TOP = 8
+const CONTENT_PADDING_TOP = 6
 const CONTENT_PADDING_X = 8
 const CONTENT_PADDING_BOTTOM = 10
-const MIN_HEADER_HEIGHT = 240
-const MIN_CARD_HEIGHT = 118
+
+const MIN_PROFILE_BODY_HEIGHT = 190
+const MAX_PROFILE_BODY_HEIGHT = 238
+
+const MIN_TAB_BAR_HEIGHT = 34
+const MAX_TAB_BAR_HEIGHT = 40
+
+const MIN_COMPACT_HEIGHT = 34
+const MAX_COMPACT_HEIGHT = 40
+
 const MIN_CARD_CONTENT_HEIGHT = 36
 const MAX_CARD_CONTENT_HEIGHT = 44
-const MIN_IMAGE_HEIGHT = 76
+
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value))
+}
 
 export default {
 	data() {
@@ -245,19 +266,24 @@ export default {
 			defaultImage: '/static/images/default.png',
 			defaultAvatar: '/static/user_avatar.png',
 			showSetting: false,
+			showWorkAction: false,
+			selectedWork: null,
 			pageReady: false,
 
+			windowWidth: 375,
 			windowHeight: 667,
 			statusBarHeight: 0,
 			safeBottom: 0,
 
-			profileHeaderHeight: 267,
-			profileHeaderContentHeight: 267,
-			avatarSize: 86,
+			profileHeaderHeight: 230,
+			profileBodyHeight: 206,
+			compactProfileHeight: 36,
+			tabBarHeight: 36,
+			avatarSize: 72,
 
-			creationCardHeight: 160,
-			imageHeight: 118,
-			cardContentHeight: 42,
+			creationCardHeight: 148,
+			imageHeight: 110,
+			cardContentHeight: 38,
 
 			stickyHeaderVisible: false,
 			stickyHeaderProgress: 0
@@ -270,47 +296,58 @@ export default {
 		},
 
 		profileHeaderContentStyle() {
-			return 'height:' + this.profileHeaderContentHeight + 'px;padding-top:' + this.statusBarHeight + 'px;'
+			return (
+				'height:' + this.profileBodyHeight + 'px;' +
+				'margin-top:' + this.statusBarHeight + 'px;'
+			)
 		},
 
 		topActionBtnStyle() {
-			return 'top:' + (this.statusBarHeight + 10) + 'px;'
+			return 'top:' + (this.statusBarHeight + 8) + 'px;'
 		},
 
 		avatarStyle() {
-			return 'width:' + this.avatarSize + 'px;height:' + this.avatarSize + 'px;border-radius:' + Math.floor(this.avatarSize / 2) + 'px;'
+			return (
+				'width:' + this.avatarSize + 'px;' +
+				'height:' + this.avatarSize + 'px;' +
+				'border-radius:' + Math.floor(this.avatarSize / 2) + 'px;'
+			)
 		},
 
 		compactStickyHeaderStyle() {
-			const totalHeight = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
-			const bgAlpha = Math.max(0, Math.min(0.96, this.stickyHeaderProgress * 0.96))
-			const shadowAlpha = Math.max(0, Math.min(0.10, this.stickyHeaderProgress * 0.10))
+			const totalHeight = this.statusBarHeight + this.compactProfileHeight
+			const bgAlpha = clamp(this.stickyHeaderProgress * 0.98, 0, 0.98)
 
 			return (
 				'height:' + totalHeight + 'px;' +
-				'background:rgba(255,255,255,' + bgAlpha + ');' +
-				'box-shadow:0 2px 12px rgba(0,0,0,' + shadowAlpha + ');'
+				'background:rgba(253,231,209,' + bgAlpha + ');' +
+				'box-shadow:none;'
 			)
 		},
 
 		compactProfileRowStyle() {
-			const totalHeight = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
-			return 'height:' + totalHeight + 'px;padding-top:' + this.statusBarHeight + 'px;'
+			return (
+				'height:' + this.compactProfileHeight + 'px;' +
+				'margin-top:' + this.statusBarHeight + 'px;'
+			)
 		},
 
 		tabBarStyle() {
-			const stickyTop = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
-			const shadowAlpha = Math.max(0, Math.min(0.08, this.stickyHeaderProgress * 0.08))
+			const stickyTop = this.statusBarHeight + this.compactProfileHeight
 
 			return (
-				'height:' + TAB_BAR_HEIGHT + 'px;' +
+				'height:' + this.tabBarHeight + 'px;' +
 				'top:' + stickyTop + 'px;' +
-				'box-shadow:0 2px 10px rgba(0,0,0,' + shadowAlpha + ');'
+				'box-shadow:none;'
 			)
 		},
 
 		contentContainerStyle() {
-			return 'padding:' + CONTENT_PADDING_TOP + 'px ' + CONTENT_PADDING_X + 'px ' + CONTENT_PADDING_BOTTOM + 'px;'
+			return (
+				'padding:' + CONTENT_PADDING_TOP + 'px ' +
+				CONTENT_PADDING_X + 'px ' +
+				(CONTENT_PADDING_BOTTOM + this.safeBottom) + 'px;'
+			)
 		},
 
 		creationCardStyle() {
@@ -349,10 +386,10 @@ export default {
 
 	onPageScroll(e) {
 		const scrollTop = Number(e && e.scrollTop ? e.scrollTop : 0)
-		const infoBarHeight = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
-		const start = Math.max(0, this.profileHeaderHeight - infoBarHeight - 160)
+		const infoBarHeight = this.statusBarHeight + this.compactProfileHeight
+		const start = Math.max(0, this.profileHeaderHeight - infoBarHeight - 150)
 		const end = Math.max(start + 1, this.profileHeaderHeight - infoBarHeight)
-		const progress = Math.max(0, Math.min(1, (scrollTop - start) / (end - start)))
+		const progress = clamp((scrollTop - start) / (end - start), 0, 1)
 
 		this.stickyHeaderProgress = progress
 		this.stickyHeaderVisible = progress > 0.01
@@ -375,43 +412,71 @@ export default {
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync()
+				const windowWidth = Number(sys.windowWidth || 375)
 				const windowHeight = Number(sys.windowHeight || 667)
 				const statusBarHeight = Number(sys.statusBarHeight || 0)
 				const safeAreaInsets = sys.safeAreaInsets || {}
 
+				this.windowWidth = windowWidth
 				this.windowHeight = windowHeight
 				this.statusBarHeight = statusBarHeight
 				this.safeBottom = Number(safeAreaInsets.bottom || 0)
 
-				this.profileHeaderHeight = Math.max(MIN_HEADER_HEIGHT, Math.floor(windowHeight * 2 / 5))
-				this.profileHeaderContentHeight = this.profileHeaderHeight
-
-				const headerUsableHeight = Math.max(180, this.profileHeaderHeight - statusBarHeight)
-				this.avatarSize = Math.max(68, Math.min(92, Math.floor(headerUsableHeight * 0.28)))
-
-				const availableGridHeight = windowHeight - CONTENT_PADDING_TOP - CONTENT_PADDING_BOTTOM
-				const nextCardHeight = Math.floor((availableGridHeight - GRID_GAP * 3) / 4)
-
-				this.creationCardHeight = Math.max(MIN_CARD_HEIGHT, nextCardHeight)
-
-				const nextContentHeight = Math.floor(this.creationCardHeight / 3.8)
-				this.cardContentHeight = Math.max(
-					MIN_CARD_CONTENT_HEIGHT,
-					Math.min(MAX_CARD_CONTENT_HEIGHT, nextContentHeight)
+				this.profileBodyHeight = clamp(
+					Math.floor(windowWidth * 0.55),
+					MIN_PROFILE_BODY_HEIGHT,
+					MAX_PROFILE_BODY_HEIGHT
 				)
-				this.imageHeight = Math.max(MIN_IMAGE_HEIGHT, this.creationCardHeight - this.cardContentHeight)
+
+				this.profileHeaderHeight = this.statusBarHeight + this.profileBodyHeight
+
+				this.compactProfileHeight = clamp(
+					Math.floor(windowWidth * 0.098),
+					MIN_COMPACT_HEIGHT,
+					MAX_COMPACT_HEIGHT
+				)
+
+				this.tabBarHeight = clamp(
+					Math.floor(windowWidth * 0.096),
+					MIN_TAB_BAR_HEIGHT,
+					MAX_TAB_BAR_HEIGHT
+				)
+
+				this.avatarSize = clamp(
+					Math.floor(this.profileBodyHeight * 0.34),
+					62,
+					82
+				)
+
+				const gridWidth = windowWidth - CONTENT_PADDING_X * 2
+				const cardWidth = Math.floor((gridWidth - GRID_GAP * 2) / 3)
+
+				// 整个创作卡片按宽度决定，高宽比 4:3。
+				this.creationCardHeight = Math.floor(cardWidth * 4 / 3)
+
+				// 信息区沿用首页策略：按卡片宽度轻微缩放，并限制上下限。
+				this.cardContentHeight = clamp(
+					Math.floor(cardWidth * 0.32),
+					MIN_CARD_CONTENT_HEIGHT,
+					MAX_CARD_CONTENT_HEIGHT
+				)
+
+				this.imageHeight = Math.max(0, this.creationCardHeight - this.cardContentHeight)
 			} catch (err) {
+				this.windowWidth = 375
 				this.windowHeight = 667
 				this.statusBarHeight = 0
 				this.safeBottom = 0
 
-				this.profileHeaderHeight = 267
-				this.profileHeaderContentHeight = 267
-				this.avatarSize = 86
+				this.profileBodyHeight = 206
+				this.profileHeaderHeight = 206
+				this.compactProfileHeight = 36
+				this.tabBarHeight = 36
+				this.avatarSize = 72
 
-				this.creationCardHeight = 160
-				this.cardContentHeight = 42
-				this.imageHeight = 118
+				this.creationCardHeight = 148
+				this.cardContentHeight = 38
+				this.imageHeight = 110
 			}
 		},
 
@@ -621,21 +686,52 @@ export default {
 			this.showSetting = true
 		},
 
+		showWorkOptions(work) {
+			if (!work || !work.creation_id) return
+			this.selectedWork = work
+			this.showWorkAction = true
+		},
+
+		hideWorkActionMenu() {
+			this.showWorkAction = false
+			this.selectedWork = null
+		},
+
+		editSelectedWork() {
+			const work = this.selectedWork
+			this.showWorkAction = false
+			this.selectedWork = null
+
+			if (work) {
+				this.goToEditCreation(work)
+			}
+		},
+
+		deleteSelectedWork() {
+			const work = this.selectedWork
+			this.showWorkAction = false
+			this.selectedWork = null
+
+			if (work) {
+				this.confirmDeleteWork(work)
+			}
+		},
+
 		goToFriendList() {
 			uni.navigateTo({
-				url: `/pages/user/friend_list?userId=${this.userId}`
+				url: `/pages/user/follow_list?userId=${this.userId}&tab=friend`
 			})
 		},
-
+		
 		goToFollowingList() {
 			uni.navigateTo({
-				url: `/pages/user/following_list?userId=${this.userId}`
+				url: `/pages/user/follow_list?userId=${this.userId}&tab=following`
 			})
 		},
-
+		
 		goToFollowerList() {
 			uni.navigateTo({
-				url: `/pages/user/follower_list?userId=${this.userId}`
+				url: `/pages/user/follow_list?userId=${this.userId}&tab=follower`
 			})
 		},
 
@@ -649,18 +745,6 @@ export default {
 
 			uni.navigateTo({
 				url: `${basePath}?creationId=${creationId}&userId=${userId}`
-			})
-		},
-
-		showWorkOptions(work) {
-			if (!work || !work.creation_id) return
-
-			uni.showActionSheet({
-				itemList: ['编辑', '删除'],
-				success: (res) => {
-					if (res.tapIndex === 0) this.goToEditCreation(work)
-					else if (res.tapIndex === 1) this.confirmDeleteWork(work)
-				}
 			})
 		},
 
@@ -747,10 +831,15 @@ export default {
 }
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .user-profile-container {
 	min-height: 100vh;
 	background: #f8f9fa;
+	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .compact-sticky-header {
@@ -762,30 +851,31 @@ export default {
 	box-sizing: border-box;
 	pointer-events: auto;
 	backdrop-filter: blur(12px);
+	border-bottom: none;
 }
 
 .compact-profile-row {
 	display: flex;
 	align-items: center;
-	padding-left: 14px;
-	padding-right: 14px;
+	padding-left: 12px;
+	padding-right: 12px;
 	box-sizing: border-box;
 }
 
 .compact-avatar {
-	width: 26px;
-	height: 26px;
-	border-radius: 13px;
-	border: 1px solid rgba(0, 0, 0, 0.08);
-	margin-right: 8px;
+	width: 24px;
+	height: 24px;
+	border-radius: 12px;
+	border: 1px solid rgba(138, 90, 43, 0.08);
+	margin-right: 7px;
 	background: rgba(0, 0, 0, 0.04);
 	flex-shrink: 0;
 }
 
 .compact-username {
-	font-size: 14px;
-	font-weight: 600;
-	color: #333;
+	font-size: 13px;
+	font-weight: 400;
+	color: #51371f;
 	max-width: 220px;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -794,7 +884,9 @@ export default {
 
 .profile-header {
 	position: relative;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background:
+		radial-gradient(circle at 0% 0%, rgba(248, 211, 174, 0.96) 0%, rgba(253, 231, 209, 0.86) 25%, rgba(255, 250, 244, 0.2) 52%, rgba(255, 250, 244, 0) 70%),
+		linear-gradient(135deg, rgba(255, 246, 235, 1) 0%, rgba(253, 231, 209, 1) 62%, rgba(248, 211, 174, 1) 100%);
 	overflow: hidden;
 	box-sizing: border-box;
 }
@@ -811,45 +903,49 @@ export default {
 
 .setting-btn {
 	position: absolute;
-	right: 16px;
-	width: 34px;
-	height: 34px;
-	background: rgba(255, 255, 255, 0.24);
+	right: 14px;
+	width: 32px;
+	height: 32px;
+	background: rgba(255, 255, 255, 0.68);
 	backdrop-filter: blur(10px);
-	border-radius: 17px;
+	border-radius: 16px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	z-index: 10;
+	box-shadow: 0 2px 8px rgba(138, 90, 43, 0.08);
 }
 
 .setting-icon {
-	font-size: 18px;
+	font-size: 17px;
+	color: #8a5a2b;
+	line-height: 1;
 }
 
 .avatar-section {
 	display: flex;
 	justify-content: center;
-	margin-bottom: 12px;
+	margin-bottom: 10px;
 }
 
 .avatar {
-	border: 4px solid rgba(255, 255, 255, 0.3);
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+	border: 3px solid rgba(255, 255, 255, 0.74);
+	box-shadow: 0 4px 16px rgba(138, 90, 43, 0.14);
 	box-sizing: border-box;
+	background: #f3f3f3;
 }
 
 .user-info {
 	text-align: center;
-	margin-bottom: 16px;
+	margin-bottom: 13px;
 }
 
 .username {
 	display: block;
-	font-size: 21px;
-	font-weight: bold;
-	color: #fff;
-	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	font-size: 20px;
+	font-weight: 500;
+	color: #51371f;
+	text-shadow: none;
 }
 
 .stats-section {
@@ -869,23 +965,23 @@ export default {
 }
 
 .stat-number {
-	font-size: 19px;
-	font-weight: bold;
-	color: #fff;
-	margin-bottom: 4px;
-	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	font-size: 18px;
+	font-weight: 500;
+	color: #51371f;
+	margin-bottom: 3px;
+	text-shadow: none;
 }
 
 .stat-label {
-	font-size: 12px;
-	color: rgba(255, 255, 255, 0.85);
+	font-size: 11px;
+	color: rgba(81, 55, 31, 0.68);
 }
 
 .tab-bar {
 	display: flex;
 	align-items: center;
-	background: #fff;
-	border-bottom: 1px solid #f0f0f0;
+	background: #f8f9fa;
+	border-bottom: none;
 	position: sticky;
 	top: 0;
 	z-index: 90;
@@ -894,36 +990,49 @@ export default {
 
 .tab-item {
 	flex: 1;
-	height: 48px;
+	height: 100%;
 	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	transition: all 0.3s;
+	gap: 4px;
+	transition: all 0.24s;
+	color: #666;
+	box-sizing: border-box;
+	background: #f8f9fa;
 }
 
 .tab-item.active {
-	color: #667eea;
+	color: #8a5a2b;
+}
+
+.like-tab .tab-icon {
+	color: #ff4d67;
 }
 
 .tab-icon {
-	font-size: 17px;
+	font-size: 15px;
+	line-height: 1;
 }
 
 .tab-text {
-	font-size: 14px;
-	font-weight: 500;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .tab-indicator {
 	position: absolute;
 	bottom: 0;
-	width: 32px;
-	height: 3px;
-	background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+	width: 24px;
+	height: 2px;
+	background: rgba(253, 231, 209, 1);
 	border-radius: 2px;
-	animation: slideIn 0.3s ease;
+	animation: slideIn 0.24s ease;
+}
+
+.like-indicator {
+	background: rgba(255, 77, 103, 0.82);
 }
 
 @keyframes slideIn {
@@ -932,13 +1041,14 @@ export default {
 		opacity: 0;
 	}
 	to {
-		width: 32px;
+		width: 24px;
 		opacity: 1;
 	}
 }
 
 .content-container {
 	box-sizing: border-box;
+	background: #f8f9fa;
 }
 
 .creation-grid {
@@ -951,12 +1061,13 @@ export default {
 	background: #fff;
 	border-radius: 8px;
 	overflow: hidden;
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.045);
+	box-sizing: border-box;
 }
 
 .creation-card:active {
 	transform: translateY(-1px);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .image-wrapper {
@@ -975,23 +1086,15 @@ export default {
 	object-position: center center;
 }
 
-.image-gradient {
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	height: 26px;
-	background: linear-gradient(to top, rgba(0, 0, 0, 0.18), transparent);
-}
-
 .card-content {
-	padding: 4px 5px;
+	padding: 4px 5px 4px;
 	box-sizing: border-box;
 	overflow: hidden;
+	background: #fff;
 }
 
 .card-title-container {
-	height: 15px;
+	height: 16px;
 	margin-bottom: 2px;
 }
 
@@ -999,7 +1102,7 @@ export default {
 	font-size: 10px;
 	font-weight: 500;
 	color: #333;
-	line-height: 15px;
+	line-height: 16px;
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
@@ -1010,7 +1113,7 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 15px;
+	height: 16px;
 }
 
 .card-author {
@@ -1047,12 +1150,15 @@ export default {
 }
 
 .like-icon {
-	font-size: 10px;
+	font-size: 11px;
+	line-height: 1;
+	color: #ff4d67;
 	transition: transform 0.15s ease;
 }
 
 .like-icon.active {
 	transform: scale(1.1);
+	color: #ff4d67;
 }
 
 .like-count {
@@ -1068,8 +1174,14 @@ export default {
 }
 
 .empty-icon {
-	font-size: 60px;
+	font-size: 58px;
 	margin-bottom: 12px;
+	color: #d8a25d;
+	line-height: 1;
+}
+
+.like-empty-icon {
+	color: #ff4d67;
 }
 
 .empty-text {
@@ -1096,7 +1208,7 @@ export default {
 	width: 20px;
 	height: 20px;
 	border: 2px solid #f3f3f3;
-	border-top-color: #667eea;
+	border-top-color: #d8a25d;
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 }
@@ -1112,17 +1224,74 @@ export default {
 	}
 }
 
+.work-action-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 2600;
+	background: rgba(0, 0, 0, 0.18);
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	padding: 0 12px 18px;
+	box-sizing: border-box;
+}
+
+.work-action-menu {
+	width: 100%;
+	background: #fff;
+	border-radius: 14px;
+	overflow: hidden;
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+.work-action-item {
+	height: 46px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	box-sizing: border-box;
+	border-bottom: 1px solid #f4f4f4;
+}
+
+.work-action-item:last-child {
+	border-bottom: none;
+}
+
+.work-action-item:active {
+	background: #f8f8f8;
+}
+
+.work-action-icon {
+	font-size: 16px;
+	color: #333;
+	line-height: 1;
+}
+
+.work-action-text {
+	font-size: 15px;
+	color: #333;
+	font-weight: 400;
+}
+
+.danger-work-text {
+	color: #ff3b30;
+}
+
 .setting-overlay {
 	position: fixed;
 	top: 0;
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background: rgba(0, 0, 0, 0.5);
+	background: rgba(0, 0, 0, 0.45);
 	z-index: 3000;
 	display: flex;
 	align-items: flex-end;
-	animation: fadeIn 0.3s ease;
+	animation: fadeIn 0.24s ease;
 }
 
 @keyframes fadeIn {
@@ -1138,8 +1307,8 @@ export default {
 	width: 100%;
 	background: #fff;
 	border-radius: 16px 16px 0 0;
-	padding: 20px;
-	animation: slideUp 0.3s ease;
+	padding: 18px;
+	animation: slideUp 0.24s ease;
 	box-sizing: border-box;
 	max-height: 72vh;
 	overflow-y: auto;
@@ -1158,39 +1327,41 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-bottom: 20px;
+	margin-bottom: 16px;
 }
 
 .menu-title {
-	font-size: 18px;
-	font-weight: bold;
+	font-size: 17px;
+	font-weight: 500;
 	color: #333;
 }
 
 .menu-close {
-	width: 32px;
-	height: 32px;
+	width: 30px;
+	height: 30px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 24px;
+	font-size: 22px;
 	color: #999;
 }
 
 .menu-list {
-	margin-bottom: 20px;
+	margin-bottom: 18px;
 }
 
 .menu-item {
 	display: flex;
 	align-items: center;
-	padding: 16px 0;
+	padding: 14px 0;
 	border-bottom: 1px solid #f0f0f0;
 }
 
 .menu-icon {
-	font-size: 20px;
-	margin-right: 12px;
+	font-size: 18px;
+	margin-right: 10px;
+	color: #8a5a2b;
+	line-height: 1;
 }
 
 .menu-text {
@@ -1206,17 +1377,17 @@ export default {
 
 .logout-btn {
 	width: 100%;
-	height: 48px;
+	height: 46px;
 	background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-	border-radius: 24px;
+	border-radius: 23px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+	box-shadow: 0 4px 12px rgba(255, 107, 107, 0.32);
 }
 
 .logout-text {
-	font-size: 16px;
+	font-size: 15px;
 	font-weight: 500;
 	color: #fff;
 }

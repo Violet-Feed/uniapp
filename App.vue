@@ -444,4 +444,26 @@ export default {
 </script>
 
 <style>
+@font-face {
+	font-family: "VioletSans";
+	src: url("/static/fonts/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
+	font-weight: 400;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "VioletSans";
+	src: url("/static/fonts/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
+	font-weight: 500;
+	font-style: normal;
+}
+
+page,
+view,
+text,
+input,
+textarea,
+button {
+	font-family: "VioletSans", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
 </style>

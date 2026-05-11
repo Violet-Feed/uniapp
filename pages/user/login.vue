@@ -1,82 +1,88 @@
 <template>
-	<view class="login-container">
-		<!-- 背景装饰 -->
-		<view class="background-decoration">
-			<view class="circle circle-1"></view>
-			<view class="circle circle-2"></view>
-			<view class="circle circle-3"></view>
+	<view class="login-container" :style="containerStyle">
+		<view class="bg-layer">
+			<view class="bg-circle bg-circle-left" :style="leftCircleStyle"></view>
+			<view class="bg-circle bg-circle-right" :style="rightCircleStyle"></view>
+			<view class="bg-circle bg-circle-top" :style="topCircleStyle"></view>
+			<view class="brush brush-logo"></view>
 		</view>
-		
-		<!-- 顶部Logo区域 -->
-		<view class="logo-section">
-			<view class="logo-icon">
-				<text class="logo-text">🎬</text>
-			</view>
-			<text class="app-name">欢迎回来</text>
-			<text class="app-slogan">登录你的账号</text>
-		</view>
-		
-		<!-- 登录表单 -->
-		<view class="form-section">
-			<!-- 用户名输入框 -->
-			<view class="input-wrapper">
-				<view class="input-icon">
-					<text class="icon">👤</text>
+
+		<view class="login-main" :style="mainStyle">
+			<view class="logo-section" :style="logoSectionStyle">
+				<view class="brand-wrap">
+					<text class="brand-text" :style="brandTextStyle">Violet</text>
+					<view class="brand-dot" :style="brandDotStyle"></view>
 				</view>
-				<input 
-					class="input-field" 
-					v-model="username" 
-					placeholder="请输入用户名"
-					placeholder-class="input-placeholder"
-					@focus="onFocus('username')"
-					@blur="onBlur"
-				/>
-			</view>
-			
-			<!-- 密码输入框 -->
-			<view class="input-wrapper">
-				<view class="input-icon">
-					<text class="icon">🔒</text>
+
+				<view class="slogan-row" :style="sloganRowStyle">
+					<text class="slogan-mark" :style="sloganMarkStyle">≺</text>
+					<text class="slogan-text" :style="sloganTextStyle">
+						让每一次灵感，都有机会变成一次互动
+					</text>
+					<text class="slogan-mark" :style="sloganMarkStyle">≻</text>
 				</view>
-				<input 
-					class="input-field" 
-					v-model="password" 
-					type="password" 
-					placeholder="请输入密码"
-					placeholder-class="input-placeholder"
-					@focus="onFocus('password')"
-					@blur="onBlur"
-				/>
 			</view>
-			
-			<!-- 登录按钮 -->
-			<button 
-				class="login-btn" 
-				:class="{ 'btn-loading': isLoading }"
-				@click="login"
-				:disabled="isLoading"
-			>
-				<view v-if="isLoading" class="loading-spinner"></view>
-				<text v-else class="btn-text">登录</text>
-			</button>
-			
-			<!-- 底部链接 -->
-			<view class="footer-links">
-				<text class="link-text">还没有账号？</text>
-				<text class="link-btn" @click="goToRegister">立即注册</text>
+
+			<view class="form-section" :style="formSectionStyle">
+				<view class="input-wrapper" :style="inputWrapperStyle">
+					<view class="input-icon-wrap" :style="inputIconWrapStyle">
+						<text class="iconfont icon-wode input-line-icon" :style="inputIconStyle"></text>
+					</view>
+					<input
+						class="input-field"
+						:style="inputFieldStyle"
+						v-model="username"
+						placeholder="用户名"
+						placeholder-class="input-placeholder"
+						@focus="onFocus('username')"
+						@blur="onBlur"
+					/>
+				</view>
+
+				<view class="input-wrapper" :style="inputWrapperStyle">
+					<view class="input-icon-wrap" :style="inputIconWrapStyle">
+						<text class="iconfont icon-ziyuanxhdpi input-line-icon" :style="inputIconStyle"></text>
+					</view>
+					<input
+						class="input-field"
+						:style="inputFieldStyle"
+						v-model="password"
+						type="password"
+						placeholder="密码"
+						placeholder-class="input-placeholder"
+						@focus="onFocus('password')"
+						@blur="onBlur"
+					/>
+				</view>
+
+				<button
+					class="login-btn"
+					:class="{ 'login-btn-loading': isLoading }"
+					:style="loginBtnStyle"
+					@click="login"
+					:disabled="isLoading"
+				>
+					<view v-if="isLoading" class="loading-spinner"></view>
+					<text v-else class="btn-text" :style="btnTextStyle">登录</text>
+				</button>
+
+				<view class="footer-links" :style="footerStyle">
+					<text class="link-text" :style="footerTextStyle">没有账号？</text>
+					<text class="link-btn" :style="footerLinkStyle" @click="goToRegister">注册账号</text>
+				</view>
 			</view>
 		</view>
-		
-		<!-- 装饰波浪 -->
-		<view class="wave-decoration"></view>
 	</view>
 </template>
 
 <script>
-import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
 import { init } from '@/utils/init.js';
 import { login } from '@/request/user.js';
+
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value));
+};
 
 export default {
 	data() {
@@ -84,18 +90,285 @@ export default {
 			username: '',
 			password: '',
 			isLoading: false,
-			focusedField: ''
+			focusedField: '',
+
+			windowWidth: 375,
+			windowHeight: 667,
+			statusBarHeight: 0,
+			safeBottom: 0,
+
+			pagePaddingX: 40,
+			mainTop: 140,
+			logoBottom: 66,
+			formWidth: 320,
+
+			brandFontSize: 54,
+			brandDotWidth: 22,
+			brandDotHeight: 8,
+			brandDotTop: 4,
+
+			sloganFontSize: 15,
+			sloganMarkFontSize: 27,
+			sloganGap: 10,
+
+			inputHeight: 58,
+			inputRadius: 23,
+			inputGap: 16,
+			inputIconWidth: 54,
+			inputIconFontSize: 25,
+			inputFontSize: 17,
+
+			loginBtnHeight: 58,
+			loginBtnRadius: 20,
+			loginBtnMarginTop: 26,
+			btnFontSize: 20,
+
+			footerMarginTop: 26,
+			footerFontSize: 16,
+
+			leftCircleSize: 170,
+			rightCircleSize: 48,
+			topCircleSize: 70
 		};
 	},
+
+	computed: {
+		containerStyle() {
+			return (
+				'padding-left:' + this.pagePaddingX + 'px;' +
+				'padding-right:' + this.pagePaddingX + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;' +
+				'padding-bottom:' + (24 + this.safeBottom) + 'px;'
+			);
+		},
+
+		mainStyle() {
+			return 'padding-top:' + this.mainTop + 'px;';
+		},
+
+		logoSectionStyle() {
+			return 'margin-bottom:' + this.logoBottom + 'px;';
+		},
+
+		brandTextStyle() {
+			return 'font-size:' + this.brandFontSize + 'px;';
+		},
+
+		brandDotStyle() {
+			return (
+				'width:' + this.brandDotWidth + 'px;' +
+				'height:' + this.brandDotHeight + 'px;' +
+				'border-radius:' + Math.floor(this.brandDotHeight / 2) + 'px;' +
+				'top:' + this.brandDotTop + 'px;'
+			);
+		},
+
+		sloganRowStyle() {
+			return (
+				'margin-top:' + Math.floor(this.brandFontSize * 0.42) + 'px;' +
+				'gap:' + this.sloganGap + 'px;'
+			);
+		},
+
+		sloganTextStyle() {
+			return 'font-size:' + this.sloganFontSize + 'px;';
+		},
+
+		sloganMarkStyle() {
+			return 'font-size:' + this.sloganMarkFontSize + 'px;';
+		},
+
+		formSectionStyle() {
+			return 'width:' + this.formWidth + 'px;';
+		},
+
+		inputWrapperStyle() {
+			return (
+				'height:' + this.inputHeight + 'px;' +
+				'border-radius:' + this.inputRadius + 'px;' +
+				'margin-bottom:' + this.inputGap + 'px;'
+			);
+		},
+
+		inputIconWrapStyle() {
+			return 'width:' + this.inputIconWidth + 'px;';
+		},
+
+		inputIconStyle() {
+			return 'font-size:' + this.inputIconFontSize + 'px;';
+		},
+
+		inputFieldStyle() {
+			return (
+				'height:' + this.inputHeight + 'px;' +
+				'font-size:' + this.inputFontSize + 'px;'
+			);
+		},
+
+		loginBtnStyle() {
+			return (
+				'height:' + this.loginBtnHeight + 'px;' +
+				'line-height:' + this.loginBtnHeight + 'px;' +
+				'border-radius:' + this.loginBtnRadius + 'px;' +
+				'margin-top:' + this.loginBtnMarginTop + 'px;'
+			);
+		},
+
+		btnTextStyle() {
+			return 'font-size:' + this.btnFontSize + 'px;';
+		},
+
+		footerStyle() {
+			return 'margin-top:' + this.footerMarginTop + 'px;';
+		},
+
+		footerTextStyle() {
+			return 'font-size:' + this.footerFontSize + 'px;';
+		},
+
+		footerLinkStyle() {
+			return 'font-size:' + this.footerFontSize + 'px;';
+		},
+
+		leftCircleStyle() {
+			return (
+				'width:' + this.leftCircleSize + 'px;' +
+				'height:' + this.leftCircleSize + 'px;' +
+				'border-radius:' + Math.floor(this.leftCircleSize / 2) + 'px;'
+			);
+		},
+
+		rightCircleStyle() {
+			return (
+				'width:' + this.rightCircleSize + 'px;' +
+				'height:' + this.rightCircleSize + 'px;' +
+				'border-radius:' + Math.floor(this.rightCircleSize / 2) + 'px;'
+			);
+		},
+
+		topCircleStyle() {
+			return (
+				'width:' + this.topCircleSize + 'px;' +
+				'height:' + this.topCircleSize + 'px;' +
+				'border-radius:' + Math.floor(this.topCircleSize / 2) + 'px;'
+			);
+		}
+	},
+
+	onLoad() {
+		this.initResponsiveLayout();
+	},
+
+	onShow() {
+		this.initResponsiveLayout();
+	},
+
 	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync();
+				const windowWidth = Number(sys.windowWidth || 375);
+				const windowHeight = Number(sys.windowHeight || 667);
+				const statusBarHeight = Number(sys.statusBarHeight || 0);
+				const safeAreaInsets = sys.safeAreaInsets || {};
+				const isShort = windowHeight <= 680;
+
+				this.windowWidth = windowWidth;
+				this.windowHeight = windowHeight;
+				this.statusBarHeight = statusBarHeight;
+				this.safeBottom = Number(safeAreaInsets.bottom || 0);
+
+				this.pagePaddingX = clamp(Math.floor(windowWidth * 0.108), 28, 46);
+				this.formWidth = clamp(windowWidth - this.pagePaddingX * 2, 288, 340);
+
+				this.mainTop = clamp(
+					Math.floor(windowHeight * (isShort ? 0.145 : 0.185)),
+					isShort ? 94 : 128,
+					isShort ? 116 : 158
+				);
+
+				this.logoBottom = clamp(
+					Math.floor(windowHeight * (isShort ? 0.06 : 0.08)),
+					isShort ? 34 : 52,
+					isShort ? 48 : 74
+				);
+
+				this.brandFontSize = clamp(Math.floor(windowWidth * 0.145), 46, 58);
+				this.brandDotWidth = clamp(Math.floor(windowWidth * 0.06), 18, 24);
+				this.brandDotHeight = clamp(Math.floor(windowWidth * 0.02), 7, 9);
+				this.brandDotTop = clamp(Math.floor(windowWidth * 0.01), 3, 5);
+
+				this.sloganFontSize = clamp(Math.floor(windowWidth * 0.04), 14, 16);
+				this.sloganMarkFontSize = clamp(Math.floor(windowWidth * 0.072), 24, 30);
+				this.sloganGap = clamp(Math.floor(windowWidth * 0.024), 8, 12);
+
+				this.inputHeight = clamp(Math.floor(windowWidth * 0.155), 52, 60);
+				this.inputRadius = clamp(Math.floor(this.inputHeight * 0.39), 20, 24);
+				this.inputGap = clamp(Math.floor(windowHeight * 0.021), 12, 18);
+				this.inputIconWidth = clamp(Math.floor(windowWidth * 0.145), 48, 58);
+				this.inputIconFontSize = clamp(Math.floor(windowWidth * 0.066), 22, 26);
+				this.inputFontSize = clamp(Math.floor(windowWidth * 0.044), 15, 17);
+
+				this.loginBtnHeight = clamp(Math.floor(windowWidth * 0.155), 52, 60);
+				this.loginBtnRadius = clamp(Math.floor(this.loginBtnHeight * 0.36), 18, 22);
+				this.loginBtnMarginTop = clamp(Math.floor(windowHeight * 0.033), isShort ? 18 : 22, isShort ? 24 : 30);
+				this.btnFontSize = clamp(Math.floor(windowWidth * 0.052), 18, 21);
+
+				this.footerMarginTop = clamp(Math.floor(windowHeight * 0.036), isShort ? 18 : 22, isShort ? 26 : 32);
+				this.footerFontSize = clamp(Math.floor(windowWidth * 0.043), 15, 17);
+
+				this.leftCircleSize = clamp(Math.floor(windowWidth * 0.45), 140, 186);
+				this.rightCircleSize = clamp(Math.floor(windowWidth * 0.128), 42, 54);
+				this.topCircleSize = clamp(Math.floor(windowWidth * 0.18), 58, 72);
+			} catch (err) {
+				this.windowWidth = 375;
+				this.windowHeight = 667;
+				this.statusBarHeight = 0;
+				this.safeBottom = 0;
+
+				this.pagePaddingX = 40;
+				this.mainTop = 140;
+				this.logoBottom = 66;
+				this.formWidth = 320;
+
+				this.brandFontSize = 54;
+				this.brandDotWidth = 22;
+				this.brandDotHeight = 8;
+				this.brandDotTop = 4;
+
+				this.sloganFontSize = 15;
+				this.sloganMarkFontSize = 27;
+				this.sloganGap = 10;
+
+				this.inputHeight = 58;
+				this.inputRadius = 23;
+				this.inputGap = 16;
+				this.inputIconWidth = 54;
+				this.inputIconFontSize = 25;
+				this.inputFontSize = 17;
+
+				this.loginBtnHeight = 58;
+				this.loginBtnRadius = 20;
+				this.loginBtnMarginTop = 26;
+				this.btnFontSize = 20;
+
+				this.footerMarginTop = 26;
+				this.footerFontSize = 16;
+
+				this.leftCircleSize = 170;
+				this.rightCircleSize = 48;
+				this.topCircleSize = 70;
+			}
+		},
+
 		onFocus(field) {
 			this.focusedField = field;
 		},
-		
+
 		onBlur() {
 			this.focusedField = '';
 		},
-		
+
 		async login() {
 			if (!this.username || !this.password) {
 				uni.showToast({
@@ -104,35 +377,40 @@ export default {
 				});
 				return;
 			}
-			
+
 			this.isLoading = true;
-			let res = await login(this.username,this.password);
-			if(res){
-				uni.setStorageSync('token', res.token);
-				uni.setStorageSync('user_id', res.user_id);
-	
-				try {
-					await DB.createTable(res.user_id);
-				} catch (err) {
-					console.error("createTable err", err);
-				}
-				
-				init();
-				
-				uni.showToast({
-					title: '登录成功',
-					icon: 'success'
-				});
-				
-				setTimeout(() => {
-					uni.reLaunch({
-						url: '/pages/creation/home'
+
+			try {
+				const res = await login(this.username, this.password);
+
+				if (res) {
+					uni.setStorageSync('token', res.token);
+					uni.setStorageSync('user_id', res.user_id);
+
+					try {
+						await DB.createTable(res.user_id);
+					} catch (err) {
+						console.error('createTable err', err);
+					}
+
+					init();
+
+					uni.showToast({
+						title: '登录成功',
+						icon: 'success'
 					});
-				}, 500);
+
+					setTimeout(() => {
+						uni.reLaunch({
+							url: '/pages/creation/home'
+						});
+					}, 500);
+				}
+			} finally {
+				this.isLoading = false;
 			}
-			this.isLoading = false;
 		},
-		
+
 		goToRegister() {
 			uni.navigateTo({
 				url: '/pages/user/register'
@@ -142,238 +420,236 @@ export default {
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .login-container {
 	min-height: 100vh;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background:
+		radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.68) 32%, rgba(253, 231, 209, 0.32) 58%, rgba(255, 255, 255, 0.08) 100%),
+		linear-gradient(160deg, rgba(253, 231, 209, 1) 0%, #fff7ee 38%, #ffffff 66%, #fffaf5 100%);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	justify-content: center;
-	padding: 40px 30px;
 	position: relative;
 	overflow: hidden;
+	box-sizing: border-box;
 }
 
-/* 背景装饰圆圈 */
-.background-decoration {
+.bg-layer {
 	position: absolute;
-	width: 100%;
-	height: 100%;
-	top: 0;
 	left: 0;
-	overflow: hidden;
+	top: 0;
+	right: 0;
+	bottom: 0;
 	z-index: 0;
+	pointer-events: none;
+	overflow: hidden;
 }
 
-.circle {
+.bg-circle {
 	position: absolute;
-	border-radius: 50%;
-	background: rgba(255, 255, 255, 0.1);
-	animation: float 20s infinite ease-in-out;
+	background: rgba(253, 231, 209, 0.76);
 }
 
-.circle-1 {
-	width: 150px;
-	height: 150px;
-	top: -50px;
-	left: -50px;
-	animation-delay: 0s;
+.bg-circle-left {
+	left: -120px;
+	top: 35%;
 }
 
-.circle-2 {
-	width: 200px;
-	height: 200px;
-	top: 50%;
-	right: -80px;
-	animation-delay: 5s;
+.bg-circle-right {
+	right: 14%;
+	top: 19%;
+	background: rgba(253, 231, 209, 0.82);
 }
 
-.circle-3 {
-	width: 120px;
-	height: 120px;
-	bottom: -40px;
-	left: 30%;
-	animation-delay: 10s;
+.bg-circle-top {
+	left: 8%;
+	top: -42px;
+	background: rgba(253, 231, 209, 0.58);
 }
 
-@keyframes float {
-	0%, 100% {
-		transform: translateY(0) scale(1);
-		opacity: 0.3;
-	}
-	50% {
-		transform: translateY(-30px) scale(1.1);
-		opacity: 0.5;
-	}
+.brush-logo {
+	position: absolute;
+	left: 20%;
+	right: 14%;
+	top: 35%;
+	height: 42px;
+	background: rgba(255, 255, 255, 0.58);
+	filter: blur(1px);
+	transform: rotate(-1deg);
 }
 
-/* Logo区域 */
+.login-main {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	position: relative;
+	z-index: 1;
+	box-sizing: border-box;
+}
+
 .logo-section {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	margin-bottom: 50px;
-	z-index: 1;
+	width: 100%;
 }
 
-.logo-icon {
-	width: 80px;
-	height: 80px;
-	background: rgba(255, 255, 255, 0.2);
-	border-radius: 50%;
+.brand-wrap {
+	position: relative;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+}
+
+.brand-text {
+	font-family: "Trebuchet MS", "Comic Sans MS", "Arial Rounded MT Bold", "PingFang SC", sans-serif;
+	font-weight: 700;
+	font-style: italic;
+	color: #202124;
+	line-height: 1;
+	letter-spacing: 2px;
+	text-shadow: 0 2px 2px rgba(255, 255, 255, 0.62);
+}
+
+.brand-dot {
+	position: absolute;
+	left: 38%;
+	background: #f5a623;
+}
+
+.slogan-row {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	margin-bottom: 20px;
-	backdrop-filter: blur(10px);
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.logo-text {
-	font-size: 40px;
-}
-
-.app-name {
-	font-size: 28px;
-	font-weight: bold;
-	color: #fff;
-	margin-bottom: 8px;
-	text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-}
-
-.app-slogan {
-	font-size: 14px;
-	color: rgba(255, 255, 255, 0.9);
-	letter-spacing: 1px;
-}
-
-/* 表单区域 */
-.form-section {
 	width: 100%;
-	max-width: 400px;
-	z-index: 1;
+}
+
+.slogan-text {
+	color: #5f6368;
+	line-height: 1.45;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.slogan-mark {
+	color: #f5a623;
+	line-height: 1;
+	font-weight: 700;
+}
+
+.form-section {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	box-sizing: border-box;
 }
 
 .input-wrapper {
-	position: relative;
-	margin-bottom: 20px;
-	background: rgba(255, 255, 255, 0.95);
-	border-radius: 16px;
+	width: 100%;
 	display: flex;
 	align-items: center;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-	transition: all 0.3s;
+	background: rgba(255, 255, 255, 0.92);
+	box-shadow: 0 10px 28px rgba(138, 90, 43, 0.06);
+	box-sizing: border-box;
+	overflow: hidden;
 }
 
-.input-wrapper:focus-within {
-	background: #fff;
-	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-	transform: translateY(-2px);
-}
-
-.input-icon {
-	width: 50px;
+.input-icon-wrap {
+	height: 100%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
 }
 
-.icon {
-	font-size: 20px;
+.input-line-icon {
+	color: #7f7f7f;
+	line-height: 1;
+	font-weight: 400;
 }
 
 .input-field {
 	flex: 1;
-	height: 54px;
-	padding: 0 20px 0 0;
-	font-size: 15px;
-	color: #333;
+	color: #333333;
 	background: transparent;
 	border: none;
+	font-weight: 400;
+	box-sizing: border-box;
 }
 
 .input-placeholder {
-	color: #999;
+	color: #b8b8b8;
+	font-weight: 400;
 }
 
-/* 登录按钮 */
 .login-btn {
 	width: 100%;
-	height: 54px;
-	background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-	border-radius: 16px;
+	padding: 0;
+	border: none;
+	background: rgba(253, 231, 209, 1);
+	box-shadow: 0 10px 24px rgba(138, 90, 43, 0.1);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	margin-top: 30px;
-	box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
-	transition: all 0.3s;
+	box-sizing: border-box;
+}
+
+.login-btn::after {
 	border: none;
-	padding: 0;
 }
 
-.login-btn:active:not(.btn-loading) {
-	transform: scale(0.98);
-	box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+.login-btn:active:not(.login-btn-loading) {
+	transform: scale(0.992);
+	opacity: 0.9;
 }
 
-.login-btn.btn-loading {
-	background: linear-gradient(135deg, #ff8b8b 0%, #ff7a8f 100%);
-	opacity: 0.8;
+.login-btn-loading {
+	opacity: 0.74;
 }
 
 .btn-text {
-	font-size: 16px;
-	font-weight: 600;
-	color: #fff;
+	color: #202124;
+	line-height: 1;
+	font-weight: 400;
 	letter-spacing: 2px;
 }
 
 .loading-spinner {
 	width: 20px;
 	height: 20px;
-	border: 3px solid rgba(255, 255, 255, 0.3);
-	border-top-color: #fff;
+	border: 3px solid rgba(138, 90, 43, 0.18);
+	border-top-color: #8a5a2b;
 	border-radius: 50%;
 	animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-	to { transform: rotate(360deg); }
-}
-
-/* 底部链接 */
 .footer-links {
 	display: flex;
-	justify-content: center;
 	align-items: center;
-	margin-top: 30px;
+	justify-content: center;
 	gap: 8px;
 }
 
 .link-text {
-	font-size: 14px;
-	color: rgba(255, 255, 255, 0.8);
+	color: #6f7277;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .link-btn {
-	font-size: 14px;
-	color: #fff;
-	font-weight: 600;
-	text-decoration: underline;
+	color: #8a5a2b;
+	font-weight: 400;
+	line-height: 1;
 }
 
-/* 波浪装饰 */
-.wave-decoration {
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	width: 100%;
-	height: 80px;
-	background: rgba(255, 255, 255, 0.1);
-	z-index: 0;
-	clip-path: polygon(0 50%, 100% 30%, 100% 100%, 0% 100%);
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 </style>
