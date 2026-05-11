@@ -1,14 +1,17 @@
 <template>
     <view class="container">
+        <!-- 顶部固定安全栏：遮住状态栏 / 刘海区域 -->
+        <view class="safe-status-bar" :style="safeStatusBarStyle"></view>
+
         <!-- 搜索区域 -->
-        <view class="search-wrapper">
+        <view class="search-wrapper" :style="searchWrapperStyle">
             <view class="fixed-search-bar">
                 <view class="search-input-container">
                     <text class="search-icon">🔍</text>
-                    <input 
-                        v-model="keyword" 
-                        type="text" 
-                        placeholder="搜索你感兴趣的创作..." 
+                    <input
+                        v-model="keyword"
+                        type="text"
+                        placeholder="搜索你感兴趣的创作..."
                         @confirm="goToSearchPage"
                     />
                     <text v-if="keyword" class="clear-icon" @click.stop="clearKeyword">✕</text>
@@ -20,57 +23,49 @@
         </view>
 
         <!-- 双列创作列表 -->
-        <view class="creation-grid-container">
-            <!-- 初始加载状态 -->
+        <view class="creation-grid-container" :style="creationGridContainerStyle">
             <view v-if="loading && creations.length === 0" class="initial-loading">
                 <view class="loading-spinner"></view>
                 <text class="loading-text">精彩内容加载中...</text>
             </view>
 
-            <!-- 双列网格 -->
             <view class="creation-grid" v-else-if="creations.length > 0">
-                <view 
-                    class="creation-card" 
-                    v-for="(creation, index) in creations" 
-                    :key="`creation-${creation.creation_id}-${index}`" 
+                <view
+                    class="creation-card"
+                    v-for="(creation, index) in creations"
+                    :key="'creation-' + creation.creation_id + '-' + index"
+                    :style="cardStyle"
                     @click="goToCreationDetail(creation)"
                 >
-                    <!-- 图片容器 -->
-                    <view class="image-wrapper">
-                        <image 
-                            class="card-image" 
-                            :src="creation.image || '/static/images/default.png'" 
+                    <view class="image-wrapper" :style="imageWrapperStyle">
+                        <image
+                            class="card-image"
+                            :src="creation.image || defaultImage"
                             mode="aspectFill"
                             @error="handleImageError(creation)"
                             lazy-load
                         ></image>
-                        <!-- 渐变遮罩 -->
-                        <view class="image-gradient"></view>
-                        <!-- 类型标签 -->
-                        <view class="type-badge" v-if="creation.type">
-                            <text>{{ creation.type === 'video' ? '📹' : '🖼️' }}</text>
+
+                        <view class="video-badge" v-if="creation.type === 'video'">
+                            <text class="video-badge-icon">▶</text>
                         </view>
                     </view>
-                    
-                    <!-- 内容区域 -->
-                    <view class="card-content">
+
+                    <view class="card-content" :style="cardContentStyle">
                         <view class="card-title-container">
                             <text class="card-title">{{ creation.title }}</text>
                         </view>
                         <view class="card-footer">
                             <view class="card-author">
-                                <image 
-                                    class="author-avatar" 
-                                    :src="creation.author?.avatar || '/static/images/avatar-default.png'" 
+                                <image
+                                    class="author-avatar"
+                                    :src="creation.author.avatar || defaultAvatar"
                                     mode="aspectFill"
                                     lazy-load
                                 ></image>
-                                <text class="author-name">{{ creation.author?.name || '未知作者' }}</text>
+                                <text class="author-name">{{ creation.author.name || '未知作者' }}</text>
                             </view>
-                            <view 
-                                class="card-likes" 
-                                @click.stop="toggleDigg(index)"
-                            >
+                            <view class="card-likes" @click.stop="toggleDigg(index)">
                                 <text class="like-icon">
                                     {{ creation.is_digg ? '♥️' : '♡' }}
                                 </text>
@@ -83,14 +78,12 @@
                 </view>
             </view>
 
-            <!-- 空状态 -->
             <view v-else class="empty-state">
                 <text class="empty-icon">🎨</text>
                 <text class="empty-text">暂无创作内容</text>
                 <text class="empty-hint">快去创作第一个作品吧！</text>
             </view>
-            
-            <!-- 加载更多 -->
+
             <view v-if="loading && creations.length > 0" class="loading-more">
                 <view class="loading-spinner small"></view>
                 <text class="loading-more-text">
@@ -98,6 +91,7 @@
                 </text>
             </view>
         </view>
+		<custom-tabbar active-path="pages/creation/home" />
     </view>
 </template>
 
@@ -105,58 +99,140 @@
 import { getCreationsByRec } from '@/request/creation.js'
 import { digg, cancelDigg } from '@/request/action.js'
 
+const SEARCH_AREA_HEIGHT = 58
+const GRID_BOTTOM_PADDING = 10
+const GRID_ROW_GAP = 6
+const MIN_CARD_HEIGHT = 220
+const MIN_CARD_CONTENT_HEIGHT = 40
+const MAX_CARD_CONTENT_HEIGHT = 52
+const MIN_IMAGE_HEIGHT = 150
+
 export default {
     data() {
         return {
-            keyword: "",
+            keyword: '',
             creations: [],
             loading: false,
             currentPage: 1,
             hasMore: true,
-            isRefreshing: false
-        };
-    },
-    onLoad() {
-        // 初始加载推荐流
-        this.fetchCreations(1, false);
-    },
-    // 下拉刷新（需要在页面 json 里开启 enablePullDownRefresh）
-    onPullDownRefresh() {
-        this.refreshList();
-    },
-    // 上拉触底加载更多
-    onReachBottom() {
-        if (!this.loading && this.hasMore) {
-            this.loadMore();
+            isRefreshing: false,
+
+            statusBarHeight: 0,
+
+            defaultImage: '/static/images/default.png',
+            defaultAvatar: '/static/user_avatar.png',
+
+            cardHeight: 260,
+            imageHeight: 196,
+            cardContentHeight: 44
         }
     },
+
+    computed: {
+        safeStatusBarStyle() {
+            return 'height:' + this.statusBarHeight + 'px;'
+        },
+
+        searchWrapperStyle() {
+            return 'top:' + this.statusBarHeight + 'px;'
+        },
+
+        creationGridContainerStyle() {
+            return (
+                'padding-top:' + (this.statusBarHeight + SEARCH_AREA_HEIGHT) + 'px;' +
+                'padding-left:6px;' +
+                'padding-right:6px;' +
+                'padding-bottom:10px;'
+            )
+        },
+
+        cardStyle() {
+            return 'height:' + this.cardHeight + 'px;'
+        },
+
+        imageWrapperStyle() {
+            return 'height:' + this.imageHeight + 'px;'
+        },
+
+        cardContentStyle() {
+            return 'height:' + this.cardContentHeight + 'px;'
+        }
+    },
+
+    onLoad() {
+        this.initCardLayout()
+        this.fetchCreations(1, false)
+    },
+
+    onShow() {
+        this.initCardLayout()
+    },
+
+    onPullDownRefresh() {
+        this.refreshList()
+    },
+
+    onReachBottom() {
+        if (!this.loading && this.hasMore) {
+            this.loadMore()
+        }
+    },
+
     methods: {
-        /* ========== 列表加载 ========== */
+        initCardLayout() {
+            try {
+                const sys = uni.getSystemInfoSync()
+                const windowHeight = Number(sys.windowHeight || 667)
+                this.statusBarHeight = Number(sys.statusBarHeight || 0)
+
+                const availableHeight =
+                    windowHeight -
+                    this.statusBarHeight -
+                    SEARCH_AREA_HEIGHT -
+                    GRID_BOTTOM_PADDING
+
+                const nextCardHeight = Math.floor((availableHeight - GRID_ROW_GAP * 2) / 2.5)
+
+                this.cardHeight = Math.max(MIN_CARD_HEIGHT, nextCardHeight)
+
+                const nextContentHeight = Math.floor(this.cardHeight / 6)
+                this.cardContentHeight = Math.max(
+                    MIN_CARD_CONTENT_HEIGHT,
+                    Math.min(MAX_CARD_CONTENT_HEIGHT, nextContentHeight)
+                )
+                this.imageHeight = Math.max(MIN_IMAGE_HEIGHT, this.cardHeight - this.cardContentHeight)
+            } catch (err) {
+                this.statusBarHeight = 0
+                this.cardHeight = 260
+                this.cardContentHeight = 44
+                this.imageHeight = 216
+            }
+        },
+
         async fetchCreations(page = 1, append = false) {
-            if (this.loading) return;
-            this.loading = true;
+            if (this.loading) return
+            this.loading = true
 
             try {
-                const res = await getCreationsByRec(getApp().globalData.userId);
+                const res = await getCreationsByRec(getApp().globalData.userId)
 
-                // 兼容多种返回格式：数组 或 {creations: [...]}
                 const list = Array.isArray(res)
                     ? res
-                    : (res && (res.creations || res.list)) 
+                    : (res && (res.creations || res.list))
                         ? (res.creations || res.list)
-                        : [];
+                        : []
 
                 const mapped = list.map(item => {
-                    const materialType = Number(item.material_type);
-                    const isVideo = materialType === 2;
+                    const materialType = Number(item.material_type)
+                    const isVideo = materialType === 2
 
                     return {
                         creation_id: item.creation_id,
                         user_id: item.user_id,
-                        image: item.cover_url || item.material_url || '/static/images/default.png',
+                        image: item.cover_url || item.material_url || this.defaultImage,
                         title: item.title || '未命名作品',
                         author: {
-                            avatar: item.avatar || item.author_avatar || '/static/user_avatar.png',
+                            avatar: item.avatar || item.author_avatar || this.defaultAvatar,
                             name: item.username || item.author_name || '未知作者',
                             user_id: item.user_id
                         },
@@ -164,136 +240,122 @@ export default {
                         material_type: materialType,
                         likes: item.digg_count || item.like_count || 0,
                         is_digg: !!item.is_digg
-                    };
-                });
+                    }
+                })
 
                 if (append) {
-                    this.creations = this.creations.concat(mapped);
-                    this.currentPage = page;
+                    this.creations = this.creations.concat(mapped)
+                    this.currentPage = page
                 } else {
-                    this.creations = mapped;
-                    this.currentPage = page;
+                    this.creations = mapped
+                    this.currentPage = page
                 }
 
-                const pageSize = 20; // 根据你后端分页大小调整
-                this.hasMore = list.length >= pageSize && mapped.length > 0;
-
+                const pageSize = 20
+                this.hasMore = list.length >= pageSize && mapped.length > 0
             } catch (err) {
-                console.error("加载创作列表失败：", err);
+                console.error('加载创作列表失败：', err)
                 if (append && this.currentPage > 1) {
-                    this.currentPage -= 1;
+                    this.currentPage -= 1
                 }
-                uni.showToast({ title: "加载失败，请重试", icon: "none" });
+                uni.showToast({ title: '加载失败，请重试', icon: 'none' })
             } finally {
-                this.loading = false;
+                this.loading = false
                 if (this.isRefreshing) {
-                    this.isRefreshing = false;
-                    uni.stopPullDownRefresh();
+                    this.isRefreshing = false
+                    uni.stopPullDownRefresh()
                 }
             }
         },
 
         async loadMore() {
-            if (!this.hasMore) return;
-            const nextPage = this.currentPage + 1;
-            await this.fetchCreations(nextPage, true);
+            if (!this.hasMore) return
+            const nextPage = this.currentPage + 1
+            await this.fetchCreations(nextPage, true)
         },
 
         async refreshList() {
-            this.isRefreshing = true;
-            this.hasMore = true;
-            await this.fetchCreations(1, false);
+            this.isRefreshing = true
+            this.hasMore = true
+            await this.fetchCreations(1, false)
         },
 
-        /* ========== 图片出错兜底 ========== */
         handleImageError(creation) {
             if (creation) {
-                creation.image = "/static/images/default.png";
+                creation.image = this.defaultImage
             }
         },
 
-        /* ========== 搜索 ========== */
         goToSearchPage() {
-            const kw = this.keyword.trim();
+            const kw = this.keyword.trim()
             if (kw) {
                 uni.navigateTo({
-                    url: `/pages/creation/search?keyword=${encodeURIComponent(kw)}`
-                });
+                    url: '/pages/creation/search?keyword=' + encodeURIComponent(kw)
+                })
             } else {
                 uni.showToast({
                     title: '请输入搜索词',
                     icon: 'none'
-                });
+                })
             }
         },
 
         clearKeyword() {
-            this.keyword = '';
+            this.keyword = ''
         },
 
-        /* ========== 点赞 / 取消点赞 ========== */
         async toggleDigg(index) {
-            const item = this.creations[index];
-            if (!item || item._digging) return;
+            const item = this.creations[index]
+            if (!item || item._digging) return
 
-            item._digging = true;
+            item._digging = true
             try {
                 if (item.is_digg) {
-                    // 取消点赞
-                    await cancelDigg("creation",item.creation_id);
-                    item.is_digg = false;
-                    if (item.likes > 0) item.likes -= 1;
+                    await cancelDigg('creation', item.creation_id)
+                    item.is_digg = false
+                    if (item.likes > 0) item.likes -= 1
                 } else {
-                    // 点赞
-                    await digg("creation",item.creation_id);
-                    item.is_digg = true;
-                    item.likes += 1;
+                    await digg('creation', item.creation_id)
+                    item.is_digg = true
+                    item.likes += 1
                 }
             } catch (e) {
-                console.error('点赞操作失败：', e);
+                console.error('点赞操作失败：', e)
                 uni.showToast({
                     title: '操作失败',
                     icon: 'none'
-                });
+                })
             } finally {
-                item._digging = false;
+                item._digging = false
             }
         },
 
-        /* ========== 跳转详情：按类型进入不同详情页 ========== */
         goToCreationDetail(creation) {
-            if (!creation || !creation.creation_id) return;
+            if (!creation || !creation.creation_id) return
 
-            const creationId = encodeURIComponent(creation.creation_id);
+            const creationId = encodeURIComponent(creation.creation_id)
             const userId = encodeURIComponent(
-                creation.user_id || creation.author?.user_id || ''
-            );
+                creation.user_id || creation.author.user_id || ''
+            )
 
-            const isVideo = creation.type === 'video' 
-                || Number(creation.material_type) === 2;
-
+            const isVideo = creation.type === 'video' || Number(creation.material_type) === 2
             const basePath = isVideo
                 ? '/pages/creation/creation_video'
-                : '/pages/creation/creation_image';
+                : '/pages/creation/creation_image'
 
             uni.navigateTo({
-                url: `${basePath}?creationId=${creationId}&userId=${userId}`
-            });
+                url: basePath + '?creationId=' + creationId + '&userId=' + userId
+            })
         },
 
-        /* ========== 数字格式化 ========== */
         formatNumber(num) {
-            if (!num && num !== 0) return '0';
-            if (num >= 10000) {
-                return (num / 10000).toFixed(1) + 'w';
-            }
-            if (num >= 1000) {
-                return (num / 1000).toFixed(1) + 'k';
-            }
-            return num.toString();
+            const n = Number(num || 0)
+            if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
+            return n.toString()
         }
     }
-};
+}
 </script>
 
 <style scoped>
@@ -305,22 +367,29 @@ export default {
     min-height: 100vh;
 }
 
-/* ==================== 搜索区域 ==================== */
-.search-wrapper {
+.safe-status-bar {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
+    z-index: 1000;
+    background: #ffffff;
+}
+
+.search-wrapper {
+    position: fixed;
+    left: 0;
+    right: 0;
     z-index: 999;
     background: #fff;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
 .fixed-search-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 8px 10px;
     box-sizing: border-box;
 }
 
@@ -328,11 +397,11 @@ export default {
     flex: 1;
     display: flex;
     align-items: center;
-    height: 36px;
+    height: 34px;
     background: #f5f7fa;
-    border-radius: 18px;
-    padding: 0 14px;
-    gap: 8px;
+    border-radius: 17px;
+    padding: 0 12px;
+    gap: 6px;
     transition: all 0.3s;
 }
 
@@ -342,7 +411,7 @@ export default {
 }
 
 .search-icon {
-    font-size: 16px;
+    font-size: 15px;
     opacity: 0.6;
 }
 
@@ -368,17 +437,17 @@ export default {
 }
 
 .search-button {
-    height: 36px;
-    padding: 0 20px;
+    height: 34px;
+    padding: 0 16px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 18px;
+    border-radius: 17px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
     font-size: 14px;
     font-weight: 500;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 3px 10px rgba(102, 126, 234, 0.26);
     transition: all 0.3s;
 }
 
@@ -386,9 +455,8 @@ export default {
     transform: scale(0.95);
 }
 
-/* ==================== 创作列表 ==================== */
 .creation-grid-container {
-    padding: 66px 8px 12px;
+    padding: 0 6px 10px;
     box-sizing: border-box;
 }
 
@@ -409,8 +477,16 @@ export default {
     animation: spin 1s linear infinite;
 }
 
+.loading-spinner.small {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+}
+
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loading-text {
@@ -422,27 +498,27 @@ export default {
 .creation-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
 }
 
 .creation-card {
     background: #fff;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.055);
+    transition: all 0.24s;
 }
 
 .creation-card:active {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
 }
 
 .image-wrapper {
     position: relative;
     width: 100%;
-    height: 240px;
     overflow: hidden;
+    background: #f3f3f3;
 }
 
 .card-image {
@@ -451,67 +527,65 @@ export default {
     object-fit: cover;
 }
 
-.image-gradient {
+.video-badge {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
-    pointer-events: none;
-}
-
-.type-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    border-radius: 14px;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.42);
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+}
+
+.video-badge-icon {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.94);
+    line-height: 1;
+    margin-left: 1px;
 }
 
 .card-content {
-    padding: 10px;
+    padding: 4px 6px 4px;
+    box-sizing: border-box;
 }
 
 .card-title-container {
-    margin-bottom: 8px;
+    height: 16px;
+    margin-bottom: 2px;
 }
 
 .card-title {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
     color: #333;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    line-height: 16px;
+    display: block;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .card-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    height: 16px;
 }
 
 .card-author {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex: 1;
     min-width: 0;
 }
 
 .author-avatar {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     border: 1px solid #f0f0f0;
     object-fit: cover;
@@ -519,7 +593,7 @@ export default {
 }
 
 .author-name {
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
     white-space: nowrap;
     overflow: hidden;
@@ -529,20 +603,20 @@ export default {
 .card-likes {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     flex-shrink: 0;
+    padding-left: 4px;
 }
 
 .like-icon {
-    font-size: 12px;
+    font-size: 10px;
 }
 
 .like-count {
-    font-size: 11px;
+    font-size: 10px;
     color: #999;
 }
 
-/* 空状态 */
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -566,19 +640,12 @@ export default {
     color: #999;
 }
 
-/* 加载更多 */
 .loading-more {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 20px 0;
-}
-
-.loading-spinner.small {
-    width: 20px;
-    height: 20px;
-    border-width: 2px;
+    padding: 18px 0;
 }
 
 .loading-more-text {

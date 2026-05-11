@@ -1,17 +1,20 @@
 <template>
   <view class="notice-container">
-    <!-- 顶部栏 -->
-    <view class="header-bar">
-      <view class="back-btn" @click="goBack">
-        <text class="back-icon">←</text>
+    <!-- 顶部栏：状态栏 + 一个列表项高度 -->
+    <view class="header-bar" :style="headerStyle">
+      <view class="header-content" :style="headerContentStyle">
+        <view class="back-btn" @click="goBack">
+          <text class="back-icon">‹</text>
+        </view>
+        <text class="header-title">{{ pageTitle }}</text>
+        <view class="header-right"></view>
       </view>
-      <text class="header-title">{{ pageTitle }}</text>
-      <view class="header-right"></view>
     </view>
 
-    <!-- 列表 -->
+    <!-- 列表：一屏约 10 条 -->
     <scroll-view
       class="notice-scroll"
+      :style="scrollStyle"
       scroll-y
       :lower-threshold="120"
       @scrolltolower="loadMore"
@@ -22,21 +25,21 @@
       <view class="notice-list">
         <view
           class="notice-item"
+          :style="noticeItemStyle"
           v-for="(n, idx) in notices"
           :key="String(n.notice_id || idx)"
           @click="handleItemClick(n)"
         >
-          <!-- 左侧头像 -->
           <view class="avatar-wrapper">
             <image
               class="avatar"
+              :style="avatarStyle"
               :src="n.sender_avatar || '/static/user_avatar.png'"
               mode="aspectFill"
               @click.stop="goToUser(n.sender_id)"
             />
           </view>
 
-          <!-- 中间内容 -->
           <view class="notice-content">
             <view class="row-top">
               <text class="username" @click.stop="goToUser(n.sender_id)">
@@ -45,7 +48,6 @@
             </view>
 
             <view class="row-mid">
-              <!-- 可聚合：等N人（可点击进入聚合页） -->
               <text
                 v-if="n._text_parts && n._text_parts.aggPrefix"
                 class="agg-prefix"
@@ -63,8 +65,7 @@
             </view>
           </view>
 
-          <!-- 右侧引用封面 -->
-          <view class="ref-cover" v-if="n.ref_id && n.ref_cover_url">
+          <view class="ref-cover" :style="refCoverStyle" v-if="n.ref_id && n.ref_cover_url">
             <image class="ref-image" :src="n.ref_cover_url" mode="aspectFill" />
           </view>
         </view>
@@ -90,7 +91,6 @@ import JSONbig from 'json-bigint'
 export default {
   data() {
     return {
-      // enum NoticeGroup: 1 System, 2 Follow, 3 Action
       group: 2,
 
       notices: [],
@@ -100,24 +100,94 @@ export default {
       loading: false,
       loadingMore: false,
 
-      refresherTriggered: false
+      refresherTriggered: false,
+
+      windowHeight: 667,
+      statusBarHeight: 0,
+      rowHeight: 58,
+      headerHeight: 58,
+      avatarSize: 40,
+      refCoverSize: 42
     }
   },
+
   computed: {
     pageTitle() {
       if (Number(this.group) === 2) return '关注通知'
       if (Number(this.group) === 3) return '互动通知'
       if (Number(this.group) === 1) return '系统通知'
       return '通知'
+    },
+
+    headerStyle() {
+      return 'height:' + this.headerHeight + 'px;'
+    },
+
+    headerContentStyle() {
+      return 'height:' + this.headerHeight + 'px;padding-top:' + this.statusBarHeight + 'px;'
+    },
+
+    scrollStyle() {
+      const height = Math.max(0, this.windowHeight - this.headerHeight)
+      return 'top:' + this.headerHeight + 'px;height:' + height + 'px;'
+    },
+
+    noticeItemStyle() {
+      return 'height:' + this.rowHeight + 'px;'
+    },
+
+    avatarStyle() {
+      const radius = Math.floor(this.avatarSize / 2)
+      return 'width:' + this.avatarSize + 'px;height:' + this.avatarSize + 'px;border-radius:' + radius + 'px;'
+    },
+
+    refCoverStyle() {
+      return 'width:' + this.refCoverSize + 'px;height:' + this.refCoverSize + 'px;'
     }
   },
+
   async onLoad(options) {
+    this.initResponsiveLayout()
+
     const g = Number(options.group)
     this.group = g || 2
-	await markNoticeRead({ group: Number(this.group) })
+
+    await markNoticeRead({ group: Number(this.group) })
     this.loadNotices(true)
   },
+
+  onShow() {
+    this.initResponsiveLayout()
+  },
+
   methods: {
+    initResponsiveLayout() {
+      try {
+        const sys = uni.getSystemInfoSync()
+        const windowHeight = Number(sys.windowHeight || 667)
+        const statusBarHeight = Number(sys.statusBarHeight || 0)
+
+        this.windowHeight = windowHeight
+        this.statusBarHeight = statusBarHeight
+
+        // 状态栏之外：顶部内容 1 行 + 列表 10 行 = 11 行
+        const availableHeight = Math.max(520, windowHeight - statusBarHeight)
+        const rowHeight = Math.floor(availableHeight / 11)
+
+        this.rowHeight = Math.max(52, Math.min(72, rowHeight))
+        this.headerHeight = this.statusBarHeight + this.rowHeight
+        this.avatarSize = Math.max(34, Math.min(46, Math.floor(this.rowHeight * 0.68)))
+        this.refCoverSize = Math.max(36, Math.min(48, Math.floor(this.rowHeight * 0.72)))
+      } catch (err) {
+        this.windowHeight = 667
+        this.statusBarHeight = 0
+        this.rowHeight = 58
+        this.headerHeight = 58
+        this.avatarSize = 40
+        this.refCoverSize = 42
+      }
+    },
+
     goBack() {
       uni.navigateBack()
     },
@@ -130,7 +200,6 @@ export default {
       })
     },
 
-    // ========= 数据加载 =========
     async loadNotices(reset = false) {
       if (this.loading || this.loadingMore) return
       if (!reset && !this.hasMore) return
@@ -148,6 +217,7 @@ export default {
         group: Number(this.group),
         page: this.page
       }
+
       const res = await getNoticeList(payload)
       const list = res && Array.isArray(res.notices) ? res.notices : []
 
@@ -175,7 +245,6 @@ export default {
       this.loadNotices(false)
     },
 
-    // ========= 展示与解析 =========
     decorateNotice(n) {
       const noticeType = this.toSafeNumber(n.notice_type)
       const aggCount = this.toSafeNumber(n.agg_count)
@@ -198,8 +267,6 @@ export default {
     },
 
     buildNoticeTextParts(noticeType, noticeContent, aggCountNum) {
-      // NoticeType:
-      // 1 System, 2 Follow, 3 Digg, 4 DiggComment, 5 CreateComment, 6 CreateReply
       if (noticeType === 1) {
         const rest = (noticeContent || '').toString()
         return { aggPrefix: '', rest }
@@ -245,34 +312,35 @@ export default {
       }
     },
 
-    // ========= 点击行为 =========
     goToUser(userId) {
-      const uid = encodeURIComponent(String(userId || ''))
-      if (!uid) return
-	  const currentUserId = getApp().globalData.userId;
-	  if (String(uid) === String(currentUserId)) {
-	  	uni.navigateTo({
-	  		url: '/pages/user/my_profile_copy'
-	  	});
-	  	return;
-	  }
+      const rawUid = String(userId || '')
+      if (!rawUid) return
+
+      const currentUserId = String(getApp().globalData.userId || '')
+      if (rawUid === currentUserId) {
+        uni.navigateTo({
+          url: '/pages/user/my_profile_copy'
+        })
+        return
+      }
+
       uni.navigateTo({
-        url: `/pages/user/user_profile?userId=${uid}`
+        url: `/pages/user/user_profile?userId=${encodeURIComponent(rawUid)}`
       })
     },
 
     openAgg(n) {
       const noticeId = encodeURIComponent(String(n.notice_id || ''))
       if (!noticeId) return
-    
+
       const noticeType = encodeURIComponent(String(n.notice_type || ''))
       const noticeContent = encodeURIComponent(String(n.notice_content || ''))
-    
+
       const refId = encodeURIComponent(String(n.ref_id || ''))
       const refType = encodeURIComponent(String(n.ref_type || ''))
       const refCoverUrl = encodeURIComponent(String(n.ref_cover_url || ''))
       const refUserId = encodeURIComponent(String(n.ref_user_id || ''))
-    
+
       uni.navigateTo({
         url:
           `/pages/im/notice_agg?noticeId=${noticeId}` +
@@ -295,7 +363,6 @@ export default {
       const creationId = encodeURIComponent(String(n.ref_id))
       const userId = encodeURIComponent(String(n.ref_user_id || ''))
 
-      // 约定：ref_type=2 -> 视频；否则图片（如与你后端枚举不同，改这里即可）
       const isVideo = Number(n.ref_type) === 2
       const basePath = isVideo
         ? '/pages/creation/creation_video'
@@ -306,7 +373,6 @@ export default {
       })
     },
 
-    // ========= 工具函数 =========
     toSafeNumber(v) {
       if (v === null || v === undefined) return 0
       if (typeof v === 'number') return v
@@ -356,66 +422,79 @@ export default {
 <style scoped>
 .notice-container {
   height: 100vh;
-  display: flex;
-  flex-direction: column;
   background: #f8f9fa;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 顶部栏 */
 .header-bar {
-  height: 52px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   top: 0;
   z-index: 100;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-sizing: border-box;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 14px;
+  padding-right: 14px;
+  box-sizing: border-box;
 }
 
 .back-btn {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .back-icon {
-  font-size: 22px;
-  color: #333;
+  font-size: 30px;
+  line-height: 30px;
+  color: #fff;
+  font-weight: 300;
 }
 
 .header-title {
   flex: 1;
   text-align: center;
   font-size: 16px;
-  font-weight: 600;
-  color: #333;
+  font-weight: 700;
+  color: #fff;
 }
 
 .header-right {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
 }
 
-/* 列表 */
 .notice-scroll {
-  flex: 1;
+  position: fixed;
+  left: 0;
+  right: 0;
   overflow: hidden;
+  background: #f8f9fa;
 }
 
 .notice-list {
-  padding: 8px 0;
+  padding: 0;
 }
 
 .notice-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 0 14px;
   background: #fff;
-  margin-bottom: 1px;
+  border-bottom: 1px solid #f0f0f0;
+  box-sizing: border-box;
 }
 
 .notice-item:active {
@@ -423,16 +502,14 @@ export default {
 }
 
 .avatar-wrapper {
-  position: relative;
   flex-shrink: 0;
-  margin-right: 12px;
+  margin-right: 10px;
 }
 
 .avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
   border: 2px solid #f0f0f0;
+  box-sizing: border-box;
+  background: #f3f3f3;
 }
 
 .notice-content {
@@ -440,16 +517,21 @@ export default {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: center;
+  gap: 1px;
+  overflow: hidden;
 }
 
-.row-top {
+.row-top,
+.row-mid,
+.row-bottom {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .username {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #333;
   max-width: 100%;
@@ -458,59 +540,48 @@ export default {
   white-space: nowrap;
 }
 
-.row-mid {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
 .agg-prefix {
-  font-size: 14px;
+  font-size: 12px;
   color: #5b7dff;
   flex-shrink: 0;
+  margin-right: 3px;
 }
 
 .notice-text {
-  font-size: 14px;
+  font-size: 12px;
   color: #666;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.row-bottom {
-  display: flex;
-  align-items: center;
-}
-
 .time {
-  font-size: 12px;
+  font-size: 10px;
   color: #999;
 }
 
-/* 右侧封面 */
 .ref-cover {
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
+  border-radius: 7px;
   overflow: hidden;
-  margin-left: 12px;
+  margin-left: 10px;
   flex-shrink: 0;
   border: 1px solid #f0f0f0;
+  box-sizing: border-box;
+  background: #f3f3f3;
 }
 
 .ref-image {
   width: 100%;
   height: 100%;
+  display: block;
 }
 
-/* 空状态 & footer */
 .empty {
-  padding: 80px 16px;
+  height: 70vh;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   color: #999;
 }
 
@@ -524,9 +595,11 @@ export default {
 }
 
 .footer {
-  text-align: center;
-  padding: 14px 0 22px;
-  font-size: 13px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
   color: #999;
 }
 </style>

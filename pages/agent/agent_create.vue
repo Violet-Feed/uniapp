@@ -77,19 +77,38 @@
 				</view>
 			</view>
 		</view>
+
+		<!-- 头像裁剪窗口 -->
+		<avatar-cropper
+			:visible="avatarCropper.visible"
+			:src="avatarCropper.src"
+			title="裁剪智能体头像"
+			mask-shape="circle"
+			@close="closeAvatarCropper"
+			@confirm="onAgentAvatarCropped"
+		/>
 	</view>
 </template>
 
 <script>
 import { createAgent } from '@/request/agent.js';
 import { uploadImage } from '@/request/common.js';
+import AvatarCropper from '@/components/avatar-cropper.vue';
 
 export default {
+	components: {
+		AvatarCropper
+	},
+
 	data() {
 		return {
 			submitting: false,
 			uploadingAvatar: false,
 			defaultAvatar: '/static/ai.png',
+			avatarCropper: {
+				visible: false,
+				src: ''
+			},
 			form: {
 				agentName: '',
 				avatarUri: '',
@@ -98,6 +117,7 @@ export default {
 			}
 		};
 	},
+
 	methods: {
 		goBack() {
 			uni.navigateBack();
@@ -122,28 +142,72 @@ export default {
 				count: 1,
 				sizeType: ['compressed'],
 				sourceType: ['album', 'camera'],
-				success: async (res) => {
+				success: (res) => {
 					const filePath = res?.tempFilePaths?.[0];
 					if (!filePath) return;
 
-					this.uploadingAvatar = true;
-					const uploadRes = await uploadImage(filePath, 'agent_avatar');
-					this.uploadingAvatar = false;
-
-					if (uploadRes === undefined) return;
-
-					const avatarUri = this.parseAvatarUri(uploadRes);
-					if (!avatarUri) return;
-
-					this.form.avatarUri = avatarUri;
+					this.avatarCropper = {
+						visible: true,
+						src: filePath
+					};
 				}
 			});
+		},
+
+		closeAvatarCropper() {
+			this.avatarCropper = {
+				visible: false,
+				src: ''
+			};
+		},
+
+		async onAgentAvatarCropped(filePath) {
+			this.closeAvatarCropper();
+			await this.uploadAgentAvatar(filePath);
+		},
+
+		async uploadAgentAvatar(filePath) {
+			if (!filePath || this.uploadingAvatar || this.submitting) return;
+
+			this.uploadingAvatar = true;
+
+			try {
+				const uploadRes = await uploadImage(filePath, 'agent_avatar');
+				if (uploadRes === undefined) return;
+
+				const avatarUri = this.parseAvatarUri(uploadRes);
+				if (!avatarUri) {
+					uni.showToast({
+						title: '上传失败',
+						icon: 'none'
+					});
+					return;
+				}
+
+				this.form.avatarUri = avatarUri;
+			} catch (e) {
+				console.error('上传头像失败：', e);
+				uni.showToast({
+					title: '上传失败',
+					icon: 'none'
+				});
+			} finally {
+				this.uploadingAvatar = false;
+			}
 		},
 
 		parseAvatarUri(uploadRes) {
 			if (!uploadRes) return '';
 			if (typeof uploadRes === 'string') return uploadRes;
-			if (typeof uploadRes === 'object') return uploadRes.source_url || '';
+			if (typeof uploadRes === 'object') {
+				return (
+					uploadRes.source_url ||
+					uploadRes.sourceUrl ||
+					uploadRes.url ||
+					uploadRes?.data?.source_url ||
+					''
+				);
+			}
 			return '';
 		},
 
@@ -151,26 +215,41 @@ export default {
 			if (this.submitting || this.uploadingAvatar) return;
 
 			const agentName = (this.form.agentName || '').trim();
-			if (!agentName) return;
+			if (!agentName) {
+				uni.showToast({
+					title: '请输入智能体名称',
+					icon: 'none'
+				});
+				return;
+			}
 
 			this.submitting = true;
 
-			const res = await createAgent({
-				agentName,
-				avatarUri: this.form.avatarUri || '',
-				description: (this.form.description || '').trim(),
-				personality: (this.form.personality || '').trim()
-			});
+			try {
+				const res = await createAgent({
+					agentName,
+					avatarUri: this.form.avatarUri || '',
+					description: (this.form.description || '').trim(),
+					personality: (this.form.personality || '').trim()
+				});
 
-			this.submitting = false;
-			if (res === undefined) return;
+				if (res === undefined) return;
 
-			const agentId = res?.agent_id ? String(res.agent_id) : '';
-			if (!agentId) return;
+				const agentId = res?.agent_id ? String(res.agent_id) : '';
+				if (!agentId) return;
 
-			uni.redirectTo({
-				url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(agentId)}`
-			});
+				uni.redirectTo({
+					url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(agentId)}`
+				});
+			} catch (e) {
+				console.error('创建智能体失败：', e);
+				uni.showToast({
+					title: '创建失败',
+					icon: 'none'
+				});
+			} finally {
+				this.submitting = false;
+			}
 		}
 	}
 };

@@ -1,41 +1,54 @@
 <template>
 	<view class="user-profile-container">
-		<!-- 顶部区域 - 渐变背景 -->
-		<view class="profile-header">
-			<!-- 返回按钮 -->
-			<view class="back-btn" @click="goBack">
-				<text class="back-icon">←</text>
-			</view>
-
-			<!-- 用户头像 -->
-			<view class="avatar-section">
-				<image class="avatar" :src="avatar || '/static/user_avatar.png'" mode="aspectFill"></image>
-			</view>
-
-			<!-- 用户名 -->
-			<view class="user-info">
-				<text class="username">{{ username }}</text>
-			</view>
-
-			<!-- 统计数据（互关 / 关注 / 粉丝） -->
-			<view class="stats-section">
-				<view class="stat-item" @click="goToFriendList">
-					<text class="stat-number">{{ formatNumber(friendCount) }}</text>
-					<text class="stat-label">互关</text>
+		<!-- 下滑后出现的用户信息栏：返回 + 头像 + 用户名；原始作品/点赞栏滚动到这里后与它合并 -->
+		<view
+			v-if="stickyHeaderVisible"
+			class="compact-sticky-header"
+			:style="compactStickyHeaderStyle"
+		>
+			<view class="compact-profile-row" :style="compactProfileRowStyle">
+				<view class="compact-back-btn" @click="goBack">
+					<text class="compact-back-icon">‹</text>
 				</view>
-				<view class="stat-item" @click="goToFollowingList">
-					<text class="stat-number">{{ formatNumber(followingCount) }}</text>
-					<text class="stat-label">关注</text>
+				<image class="compact-avatar" :src="avatar || defaultAvatar" mode="aspectFill"></image>
+				<text class="compact-username">{{ username || '我的' }}</text>
+			</view>
+		</view>
+
+		<!-- 顶部区域：占屏幕五分之二，包含刘海 / 状态栏 -->
+		<view class="profile-header" :style="profileHeaderStyle">
+			<view class="back-btn" :style="topActionBtnStyle" @click="goBack">
+				<text class="back-icon">‹</text>
+			</view>
+
+			<view class="profile-header-content" :style="profileHeaderContentStyle">
+				<view class="avatar-section">
+					<image class="avatar" :style="avatarStyle" :src="avatar || defaultAvatar" mode="aspectFill"></image>
 				</view>
-				<view class="stat-item" @click="goToFollowerList">
-					<text class="stat-number">{{ formatNumber(followerCount) }}</text>
-					<text class="stat-label">粉丝</text>
+
+				<view class="user-info">
+					<text class="username">{{ username }}</text>
+				</view>
+
+				<view class="stats-section">
+					<view class="stat-item" @click="goToFriendList">
+						<text class="stat-number">{{ formatNumber(friendCount) }}</text>
+						<text class="stat-label">互关</text>
+					</view>
+					<view class="stat-item" @click="goToFollowingList">
+						<text class="stat-number">{{ formatNumber(followingCount) }}</text>
+						<text class="stat-label">关注</text>
+					</view>
+					<view class="stat-item" @click="goToFollowerList">
+						<text class="stat-number">{{ formatNumber(followerCount) }}</text>
+						<text class="stat-label">粉丝</text>
+					</view>
 				</view>
 			</view>
 		</view>
 
-		<!-- Tab切换栏 -->
-		<view class="tab-bar">
+		<!-- 原始 Tab：滚动到顶部时粘在用户信息栏下方，与信息栏合并成共同顶栏 -->
+		<view class="tab-bar" :style="tabBarStyle">
 			<view
 				class="tab-item"
 				:class="{ active: activeTab === 'works' }"
@@ -56,20 +69,20 @@
 			</view>
 		</view>
 
-		<!-- 内容列表 -->
-		<view class="content-container">
-			<!-- 作品列表 -->
+		<view class="content-container" :style="contentContainerStyle">
 			<view v-if="activeTab === 'works'">
 				<view class="creation-grid">
 					<view
 						class="creation-card"
+						:style="creationCardStyle"
 						v-for="(work, index) in worksList"
 						:key="work.creation_id || index"
 						@click="goToWorkDetail(work)"
 					>
-						<view class="image-wrapper">
+						<view class="image-wrapper" :style="imageWrapperStyle">
 							<image
 								class="card-image"
+								:style="cardImageStyle"
 								:src="work.cover"
 								mode="aspectFill"
 								@error="onCoverError(work)"
@@ -77,23 +90,17 @@
 							<view class="image-gradient"></view>
 						</view>
 
-						<view class="card-content">
+						<view class="card-content" :style="cardContentStyle">
 							<view class="card-title-container">
 								<text class="card-title">{{ work.title }}</text>
 							</view>
 							<view class="card-footer">
 								<view class="card-author">
-									<image
-										class="author-avatar"
-										:src="work.avatar || defaultAvatar"
-										mode="aspectFill"
-									/>
+									<image class="author-avatar" :src="work.avatar || defaultAvatar" mode="aspectFill" />
 									<text class="author-name">{{ work.username }}</text>
 								</view>
 								<view class="card-likes" @click.stop="toggleDigg('works', index)">
-									<text class="like-icon" :class="{ active: work.is_digg }">
-										{{ work.is_digg ? '♥️' : '♡' }}
-									</text>
+									<text class="like-icon" :class="{ active: work.is_digg }">{{ work.is_digg ? '♥️' : '♡' }}</text>
 									<text class="like-count">{{ formatNumber(work.digg_count) }}</text>
 								</view>
 							</view>
@@ -108,18 +115,19 @@
 				</view>
 			</view>
 
-			<!-- 点赞列表 -->
 			<view v-if="activeTab === 'likes'">
 				<view class="creation-grid">
 					<view
 						class="creation-card"
+						:style="creationCardStyle"
 						v-for="(item, index) in likesList"
 						:key="item.creation_id || index"
 						@click="goToWorkDetail(item)"
 					>
-						<view class="image-wrapper">
+						<view class="image-wrapper" :style="imageWrapperStyle">
 							<image
 								class="card-image"
+								:style="cardImageStyle"
 								:src="item.cover"
 								mode="aspectFill"
 								@error="onCoverError(item)"
@@ -127,23 +135,17 @@
 							<view class="image-gradient"></view>
 						</view>
 
-						<view class="card-content">
+						<view class="card-content" :style="cardContentStyle">
 							<view class="card-title-container">
 								<text class="card-title">{{ item.title }}</text>
 							</view>
 							<view class="card-footer">
 								<view class="card-author">
-									<image
-										class="author-avatar"
-										:src="item.avatar || defaultAvatar"
-										mode="aspectFill"
-									/>
+									<image class="author-avatar" :src="item.avatar || defaultAvatar" mode="aspectFill" />
 									<text class="author-name">{{ item.username }}</text>
 								</view>
 								<view class="card-likes" @click.stop="toggleDigg('likes', index)">
-									<text class="like-icon" :class="{ active: item.is_digg }">
-										{{ item.is_digg ? '❤️' : '🤍' }}
-									</text>
+									<text class="like-icon" :class="{ active: item.is_digg }">{{ item.is_digg ? '❤️' : '🤍' }}</text>
 									<text class="like-count">{{ formatNumber(item.digg_count) }}</text>
 								</view>
 							</view>
@@ -167,11 +169,22 @@
 </template>
 
 <script>
-import DB from '@/utils/sqlite.js';
+import DB from '@/utils/sqlite.js'
 import { getCreationsByUser, getCreationsByDigg } from '@/request/creation.js'
 import { digg, cancelDigg } from '@/request/action.js'
 import { getUserProfile } from '@/request/user.js'
-import JSONbig from 'json-bigint'
+
+const TAB_BAR_HEIGHT = 48
+const COMPACT_PROFILE_HEIGHT = 40
+const GRID_GAP = 6
+const CONTENT_PADDING_TOP = 8
+const CONTENT_PADDING_X = 8
+const CONTENT_PADDING_BOTTOM = 10
+const MIN_HEADER_HEIGHT = 240
+const MIN_CARD_HEIGHT = 118
+const MIN_CARD_CONTENT_HEIGHT = 36
+const MAX_CARD_CONTENT_HEIGHT = 44
+const MIN_IMAGE_HEIGHT = 76
 
 export default {
 	data() {
@@ -182,60 +195,156 @@ export default {
 			friendCount: 0,
 			followingCount: 0,
 			followerCount: 0,
-
 			activeTab: 'works',
-
 			worksList: [],
 			likesList: [],
-
 			loading: false,
 			worksPage: 1,
 			worksHasMore: true,
 			likesPage: 1,
 			likesHasMore: true,
 			likesLoaded: false,
-
 			defaultImage: '/static/images/default.png',
-			defaultAvatar: '/static/user_avatar.png'
+			defaultAvatar: '/static/user_avatar.png',
+
+			windowHeight: 667,
+			statusBarHeight: 0,
+			profileHeaderHeight: 267,
+			profileHeaderContentHeight: 267,
+			avatarSize: 86,
+			creationCardHeight: 160,
+			imageHeight: 118,
+			cardContentHeight: 42,
+			stickyHeaderVisible: false,
+			stickyHeaderProgress: 0
 		}
 	},
+
+	computed: {
+		profileHeaderStyle() {
+			return 'height:' + this.profileHeaderHeight + 'px;'
+		},
+		profileHeaderContentStyle() {
+			return 'height:' + this.profileHeaderContentHeight + 'px;padding-top:' + this.statusBarHeight + 'px;'
+		},
+		topActionBtnStyle() {
+			return 'top:' + (this.statusBarHeight + 10) + 'px;'
+		},
+		avatarStyle() {
+			return 'width:' + this.avatarSize + 'px;height:' + this.avatarSize + 'px;border-radius:' + Math.floor(this.avatarSize / 2) + 'px;'
+		},
+		compactStickyHeaderStyle() {
+			const totalHeight = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
+			const bgAlpha = Math.max(0, Math.min(0.96, this.stickyHeaderProgress * 0.96))
+			const shadowAlpha = Math.max(0, Math.min(0.10, this.stickyHeaderProgress * 0.10))
+			return (
+				'height:' + totalHeight + 'px;' +
+				'background:rgba(255,255,255,' + bgAlpha + ');' +
+				'box-shadow:0 2px 12px rgba(0,0,0,' + shadowAlpha + ');'
+			)
+		},
+		compactProfileRowStyle() {
+			const totalHeight = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
+			return 'height:' + totalHeight + 'px;padding-top:' + this.statusBarHeight + 'px;'
+		},
+		tabBarStyle() {
+			const stickyTop = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
+			const shadowAlpha = Math.max(0, Math.min(0.08, this.stickyHeaderProgress * 0.08))
+			return (
+				'height:' + TAB_BAR_HEIGHT + 'px;' +
+				'top:' + stickyTop + 'px;' +
+				'box-shadow:0 2px 10px rgba(0,0,0,' + shadowAlpha + ');'
+			)
+		},
+		contentContainerStyle() {
+			return 'padding:' + CONTENT_PADDING_TOP + 'px ' + CONTENT_PADDING_X + 'px ' + CONTENT_PADDING_BOTTOM + 'px;'
+		},
+		creationCardStyle() {
+			return 'height:' + this.creationCardHeight + 'px;'
+		},
+		imageWrapperStyle() {
+			return 'height:' + this.imageHeight + 'px;'
+		},
+		cardContentStyle() {
+			return 'height:' + this.cardContentHeight + 'px;'
+		},
+		cardImageStyle() {
+			return 'width:100%;height:' + this.imageHeight + 'px;'
+		}
+	},
+
 	onLoad() {
+		this.initResponsiveLayout()
 		this.userId = getApp().globalData.userId
 		this.loadUserProfile()
 		this.loadUserWorks(true)
 	},
+
+	onShow() {
+		this.initResponsiveLayout()
+	},
+
+	onPageScroll(e) {
+		const scrollTop = Number(e && e.scrollTop ? e.scrollTop : 0)
+		const infoBarHeight = this.statusBarHeight + COMPACT_PROFILE_HEIGHT
+		const start = Math.max(0, this.profileHeaderHeight - infoBarHeight - 160)
+		const end = Math.max(start + 1, this.profileHeaderHeight - infoBarHeight)
+		const progress = Math.max(0, Math.min(1, (scrollTop - start) / (end - start)))
+		this.stickyHeaderProgress = progress
+		this.stickyHeaderVisible = progress > 0.01
+	},
+
 	onReachBottom() {
 		if (this.activeTab === 'works') this.loadUserWorks(false)
 		else if (this.activeTab === 'likes') this.loadUserLikes(false)
 	},
+
 	onPullDownRefresh() {
-		const tasks = []
-		tasks.push(this.loadUserProfile())
+		const tasks = [this.loadUserProfile()]
 		if (this.activeTab === 'works') tasks.push(this.loadUserWorks(true))
 		else if (this.activeTab === 'likes') tasks.push(this.loadUserLikes(true))
-
-		Promise.all(tasks).finally(() => {
-			uni.stopPullDownRefresh()
-		})
+		Promise.all(tasks).finally(() => uni.stopPullDownRefresh())
 	},
+
 	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync()
+				const windowHeight = Number(sys.windowHeight || 667)
+				const statusBarHeight = Number(sys.statusBarHeight || 0)
+				this.windowHeight = windowHeight
+				this.statusBarHeight = statusBarHeight
+				this.profileHeaderHeight = Math.max(MIN_HEADER_HEIGHT, Math.floor(windowHeight * 2 / 5))
+				this.profileHeaderContentHeight = this.profileHeaderHeight
+				const headerUsableHeight = Math.max(180, this.profileHeaderHeight - statusBarHeight)
+				this.avatarSize = Math.max(68, Math.min(92, Math.floor(headerUsableHeight * 0.28)))
+				const availableGridHeight = windowHeight - CONTENT_PADDING_TOP - CONTENT_PADDING_BOTTOM
+				const nextCardHeight = Math.floor((availableGridHeight - GRID_GAP * 3) / 4)
+				this.creationCardHeight = Math.max(MIN_CARD_HEIGHT, nextCardHeight)
+				const nextContentHeight = Math.floor(this.creationCardHeight / 3.8)
+				this.cardContentHeight = Math.max(MIN_CARD_CONTENT_HEIGHT, Math.min(MAX_CARD_CONTENT_HEIGHT, nextContentHeight))
+				this.imageHeight = Math.max(MIN_IMAGE_HEIGHT, this.creationCardHeight - this.cardContentHeight)
+			} catch (err) {
+				this.windowHeight = 667
+				this.statusBarHeight = 0
+				this.profileHeaderHeight = 267
+				this.profileHeaderContentHeight = 267
+				this.avatarSize = 86
+				this.creationCardHeight = 160
+				this.cardContentHeight = 42
+				this.imageHeight = 118
+			}
+		},
 		goBack() {
 			uni.navigateBack()
 		},
-
 		async loadUserProfile() {
 			const uid = this.userId || getApp().globalData.userId
 			try {
 				const res = await getUserProfile(uid, true, true)
 				if (res) {
-					this.username =
-						res.user_info && res.user_info.username
-							? res.user_info.username
-							: ''
-					this.avatar =
-						res.user_info && res.user_info.avatar
-							? res.user_info.avatar
-							: this.defaultAvatar
+					this.username = res.user_info && res.user_info.username ? res.user_info.username : ''
+					this.avatar = res.user_info && res.user_info.avatar ? res.user_info.avatar : this.defaultAvatar
 					this.followingCount = res.following_count || 0
 					this.followerCount = res.follower_count || 0
 					this.friendCount = res.friend_count || 0
@@ -244,10 +353,9 @@ export default {
 			} catch (e) {
 				console.error('加载用户资料失败：', e)
 			}
-		
 			try {
 				const rows = await DB.getUsersByIds([uid])
-				const user = rows?.[0] || null
+				const user = rows && rows.length ? rows[0] : null
 				if (user) {
 					this.username = user.username || getApp().globalData.username || ''
 					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
@@ -256,24 +364,17 @@ export default {
 			} catch (e) {
 				console.error('读取本地用户资料失败：', e)
 			}
-		
 			this.username = getApp().globalData.username || ''
 			this.avatar = getApp().globalData.avatar || this.defaultAvatar
 		},
-
 		async loadUserWorks(reset = false) {
 			if (this.loading) return
 			if (!reset && !this.worksHasMore) return
-
 			this.loading = true
 			try {
 				const pageToLoad = reset ? 1 : this.worksPage + 1
 				const res = await getCreationsByUser(this.userId, pageToLoad)
-
-				const list = Array.isArray(res)
-					? res
-					: (res && Array.isArray(res.creations) ? res.creations : [])
-
+				const list = Array.isArray(res) ? res : (res && Array.isArray(res.creations) ? res.creations : [])
 				if (!list || list.length === 0) {
 					if (reset) {
 						this.worksList = []
@@ -282,7 +383,6 @@ export default {
 					this.worksHasMore = false
 					return
 				}
-
 				const mapped = list.map((item) => ({
 					creation_id: item.creation_id,
 					cover: item.cover_url || item.material_url || this.defaultImage,
@@ -295,7 +395,6 @@ export default {
 					material_type: item.material_type,
 					raw: item
 				}))
-
 				if (reset) {
 					this.worksList = mapped
 					this.worksPage = 1
@@ -303,9 +402,7 @@ export default {
 					this.worksList = this.worksList.concat(mapped)
 					this.worksPage = pageToLoad
 				}
-
-				const pageSize = 20
-				this.worksHasMore = list.length >= pageSize
+				this.worksHasMore = list.length >= 20
 			} catch (e) {
 				console.error('加载作品列表失败：', e)
 				uni.showToast({ title: '加载作品失败', icon: 'none' })
@@ -313,20 +410,14 @@ export default {
 				this.loading = false
 			}
 		},
-
 		async loadUserLikes(reset = false) {
 			if (this.loading) return
 			if (!reset && !this.likesHasMore) return
-
 			this.loading = true
 			try {
 				const pageToLoad = reset ? 1 : this.likesPage + 1
 				const res = await getCreationsByDigg(this.userId, pageToLoad)
-
-				const list = Array.isArray(res)
-					? res
-					: (res && Array.isArray(res.creations) ? res.creations : [])
-
+				const list = Array.isArray(res) ? res : (res && Array.isArray(res.creations) ? res.creations : [])
 				if (!list || list.length === 0) {
 					if (reset) {
 						this.likesList = []
@@ -336,7 +427,6 @@ export default {
 					this.likesLoaded = true
 					return
 				}
-
 				const mapped = list.map((item) => ({
 					creation_id: item.creation_id,
 					cover: item.cover_url || item.material_url || this.defaultImage,
@@ -349,7 +439,6 @@ export default {
 					material_type: item.material_type,
 					raw: item
 				}))
-
 				if (reset) {
 					this.likesList = mapped
 					this.likesPage = 1
@@ -357,9 +446,7 @@ export default {
 					this.likesList = this.likesList.concat(mapped)
 					this.likesPage = pageToLoad
 				}
-
-				const pageSize = 20
-				this.likesHasMore = list.length >= pageSize
+				this.likesHasMore = list.length >= 20
 				this.likesLoaded = true
 			} catch (e) {
 				console.error('加载点赞列表失败：', e)
@@ -368,22 +455,18 @@ export default {
 				this.loading = false
 			}
 		},
-
 		switchTab(tab) {
 			if (this.activeTab === tab) return
 			this.activeTab = tab
 			if (tab === 'likes' && !this.likesLoaded) this.loadUserLikes(true)
 		},
-
 		onCoverError(item) {
 			if (item) item.cover = this.defaultImage
 		},
-
 		async toggleDigg(listType, index) {
 			const list = listType === 'works' ? this.worksList : this.likesList
 			const item = list[index]
 			if (!item || item._digging) return
-
 			item._digging = true
 			try {
 				if (item.is_digg) {
@@ -401,31 +484,23 @@ export default {
 				item._digging = false
 			}
 		},
-
 		goToFriendList() {
 			uni.navigateTo({ url: `/pages/user/friend_list?userId=${this.userId}` })
 		},
-
 		goToFollowingList() {
 			uni.navigateTo({ url: `/pages/user/following_list?userId=${this.userId}` })
 		},
-
 		goToFollowerList() {
 			uni.navigateTo({ url: `/pages/user/follower_list?userId=${this.userId}` })
 		},
-
 		goToWorkDetail(work) {
 			if (!work || !work.creation_id) return
-
 			const creationId = encodeURIComponent(work.creation_id)
 			const userId = encodeURIComponent(work.user_id || this.userId || '')
-
 			const isVideo = Number(work.material_type) === 2
 			const basePath = isVideo ? '/pages/creation/creation_video' : '/pages/creation/creation_image'
-
 			uni.navigateTo({ url: `${basePath}?creationId=${creationId}&userId=${userId}` })
 		},
-
 		formatNumber(num) {
 			if (!num && num !== 0) return '0'
 			if (num >= 10000) return (num / 10000).toFixed(1) + 'w'
@@ -442,23 +517,87 @@ export default {
 	background: #f8f9fa;
 }
 
-/* ==================== 头部区域 ==================== */
+.compact-sticky-header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	box-sizing: border-box;
+	pointer-events: auto;
+	backdrop-filter: blur(12px);
+}
+
+.compact-profile-row {
+	display: flex;
+	align-items: center;
+	padding-left: 10px;
+	padding-right: 14px;
+	box-sizing: border-box;
+}
+
+.compact-back-btn {
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	margin-right: 4px;
+}
+
+.compact-back-icon {
+	font-size: 30px;
+	line-height: 30px;
+	color: #333;
+	font-weight: 300;
+}
+
+.compact-avatar {
+	width: 26px;
+	height: 26px;
+	border-radius: 13px;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	margin-right: 8px;
+	background: rgba(0, 0, 0, 0.04);
+	flex-shrink: 0;
+}
+
+.compact-username {
+	font-size: 14px;
+	font-weight: 600;
+	color: #333;
+	max-width: 220px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .profile-header {
 	position: relative;
 	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-	padding: 12px 16px 32px;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
-/* 返回按钮 */
+.profile-header-content {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	padding-left: 16px;
+	padding-right: 16px;
+}
+
 .back-btn {
 	position: absolute;
-	top: 12px;
 	left: 16px;
-	width: 36px;
-	height: 36px;
-	background: rgba(255, 255, 255, 0.3);
+	width: 34px;
+	height: 34px;
+	background: rgba(255, 255, 255, 0.24);
 	backdrop-filter: blur(10px);
-	border-radius: 18px;
+	border-radius: 17px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -466,47 +605,44 @@ export default {
 }
 
 .back-icon {
-	font-size: 24px;
+	font-size: 30px;
+	line-height: 30px;
 	color: #fff;
+	font-weight: 300;
 }
 
-/* 头像区域 */
 .avatar-section {
 	display: flex;
 	justify-content: center;
-	padding-top: 40px;
-	margin-bottom: 16px;
+	margin-bottom: 12px;
 }
 
 .avatar {
-	width: 90px;
-	height: 90px;
-	border-radius: 50%;
 	border: 4px solid rgba(255, 255, 255, 0.3);
 	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+	box-sizing: border-box;
 }
 
-/* 用户信息 */
 .user-info {
 	text-align: center;
-	margin-bottom: 24px;
+	margin-bottom: 16px;
 }
 
 .username {
 	display: block;
-	font-size: 22px;
+	font-size: 21px;
 	font-weight: bold;
 	color: #fff;
-	margin-bottom: 6px;
 	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 统计数据（互关 / 关注 / 粉丝） */
 .stats-section {
 	display: flex;
 	align-items: center;
 	justify-content: space-around;
+	width: 100%;
 	padding: 0 20px;
+	box-sizing: border-box;
 }
 
 .stat-item {
@@ -517,7 +653,7 @@ export default {
 }
 
 .stat-number {
-	font-size: 20px;
+	font-size: 19px;
 	font-weight: bold;
 	color: #fff;
 	margin-bottom: 4px;
@@ -529,23 +665,24 @@ export default {
 	color: rgba(255, 255, 255, 0.85);
 }
 
-/* ==================== Tab栏 ==================== */
 .tab-bar {
 	display: flex;
+	align-items: center;
 	background: #fff;
 	border-bottom: 1px solid #f0f0f0;
 	position: sticky;
 	top: 0;
-	z-index: 10;
+	z-index: 90;
+	box-sizing: border-box;
 }
 
 .tab-item {
 	flex: 1;
+	height: 48px;
 	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: 14px 0;
 	gap: 6px;
 	transition: all 0.3s;
 }
@@ -555,7 +692,7 @@ export default {
 }
 
 .tab-icon {
-	font-size: 18px;
+	font-size: 17px;
 }
 
 .tab-text {
@@ -578,12 +715,10 @@ export default {
 	to { width: 32px; opacity: 1; }
 }
 
-/* ==================== 内容列表 ==================== */
 .content-container {
-	padding: 12px 8px;
+	box-sizing: border-box;
 }
 
-/* 3列宫格 */
 .creation-grid {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
@@ -605,14 +740,17 @@ export default {
 .image-wrapper {
 	position: relative;
 	width: 100%;
-	aspect-ratio: 3 / 4;
 	overflow: hidden;
+	background: #f3f3f3;
 }
 
 .card-image {
 	width: 100%;
 	height: 100%;
+	display: block;
+	vertical-align: top;
 	object-fit: cover;
+	object-position: center center;
 }
 
 .image-gradient {
@@ -620,41 +758,50 @@ export default {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	height: 40px;
-	background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
+	height: 26px;
+	background: linear-gradient(to top, rgba(0, 0, 0, 0.18), transparent);
 }
 
-.card-content { padding: 6px; }
-.card-title-container { margin-bottom: 4px; }
+.card-content {
+	padding: 4px 5px;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.card-title-container {
+	height: 15px;
+	margin-bottom: 2px;
+}
 
 .card-title {
-	font-size: 12px;
+	font-size: 10px;
 	font-weight: 500;
 	color: #333;
-	line-height: 1.3;
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
+	line-height: 15px;
+	display: block;
+	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .card-footer {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	height: 15px;
 }
 
 .card-author {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 3px;
 	flex: 1;
 	min-width: 0;
 }
 
 .author-avatar {
-	width: 18px;
-	height: 18px;
+	width: 14px;
+	height: 14px;
 	border-radius: 50%;
 	border: 1px solid #f0f0f0;
 	object-fit: cover;
@@ -662,7 +809,7 @@ export default {
 }
 
 .author-name {
-	font-size: 10px;
+	font-size: 9px;
 	color: #555;
 	white-space: nowrap;
 	overflow: hidden;
@@ -674,21 +821,23 @@ export default {
 	align-items: center;
 	gap: 2px;
 	flex-shrink: 0;
+	padding-left: 3px;
 }
 
 .like-icon {
-	font-size: 14px;
+	font-size: 10px;
 	transition: transform 0.15s ease;
 }
 
-.like-icon.active { transform: scale(1.1); }
+.like-icon.active {
+	transform: scale(1.1);
+}
 
 .like-count {
-	font-size: 10px;
+	font-size: 9px;
 	color: #999;
 }
 
-/* 空状态 */
 .empty-state {
 	display: flex;
 	flex-direction: column;
@@ -713,7 +862,6 @@ export default {
 	text-align: center;
 }
 
-/* 加载更多 */
 .loading-more {
 	display: flex;
 	align-items: center;
@@ -731,7 +879,9 @@ export default {
 	animation: spin 1s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+	to { transform: rotate(360deg); }
+}
 
 .loading-text {
 	font-size: 13px;

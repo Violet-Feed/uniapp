@@ -10,8 +10,16 @@
       :loop="true"
       :controls="false"
       object-fit="contain"
-      @click="handleVideoTap"
     ></video>
+
+    <!-- 透明触摸层：nvue/App 中 video 原生组件的 longpress 不稳定，用覆盖层统一处理单击和长按 -->
+    <view
+      class="video-touch-layer"
+      @touchstart="onVideoTouchStart"
+      @touchmove="onVideoTouchMove"
+      @touchend="onVideoTouchEnd"
+      @touchcancel="onVideoTouchCancel"
+    ></view>
 
     <!-- 顶部：只有返回 -->
     <view class="top-bar">
@@ -76,13 +84,9 @@
       </view>
     </view>
 
-    <!-- 中间暂停 / 播放 图标 -->
+    <!-- 中间播放提示：仅暂停时显示 ▶，无圆形背景 -->
     <view v-if="showCenterIcon && !showCommentsPanel" class="center-icon">
-      <view class="center-icon-inner">
-        <text class="center-icon-text">
-          {{ isPlaying ? '⏸' : '▶️' }}
-        </text>
-      </view>
+      <text class="center-icon-text">▶</text>
     </view>
 
     <!-- 底部信息 -->
@@ -386,6 +390,22 @@
       </view>
     </view>
 
+    <!-- 长按视频操作面板 -->
+    <view class="video-action-mask" v-if="videoActionSheet.visible" @click="closeVideoActionSheet">
+      <view class="video-action-sheet" @click.stop>
+        <view
+          class="video-action-item"
+          :class="{ disabled: videoActionSheet.saving }"
+          @click="saveVideoToAlbum"
+        >
+          <text class="video-action-text">
+            {{ videoActionSheet.saving ? '保存中...' : '保存到相册' }}
+          </text>
+        </view>
+
+      </view>
+    </view>
+
     <!-- 分享面板 -->
     <view class="share-mask" v-if="showSharePanel" @click="closeSharePanel">
       <view class="share-panel" @click.stop>
@@ -450,6 +470,7 @@
 import { getCreationById } from '@/request/creation.js'
 import { getUserProfile } from '@/request/user.js'
 import ForwardPicker from '@/components/forward-picker.nvue'
+import { enqueueClickReport } from '@/utils/track.js'
 import {
   digg,
   cancelDigg,
@@ -475,6 +496,11 @@ export default {
       creationId: '',
       authorId: '',
       videoContext: null,
+      videoTouchTimer: null,
+      videoTouchStartX: 0,
+      videoTouchStartY: 0,
+      videoTouchMoved: false,
+      videoLongPressed: false,
 
       defaultAvatar: '/static/user_avatar.png',
 
@@ -550,6 +576,11 @@ export default {
         mode: 'conversation'
       },
 
+      videoActionSheet: {
+        visible: false,
+        saving: false
+      },
+
       likeLoading: false
     }
   },
@@ -601,6 +632,7 @@ export default {
       this.avatar = app.globalData.avatar || this.defaultAvatar
     }
 
+    enqueueClickReport(this.creationId)
     this.initPage()
   },
 
@@ -616,6 +648,11 @@ export default {
     if (this.centerIconTimer) {
       clearTimeout(this.centerIconTimer)
       this.centerIconTimer = null
+    }
+
+    if (this.videoTouchTimer) {
+      clearTimeout(this.videoTouchTimer)
+      this.videoTouchTimer = null
     }
   },
 
@@ -699,30 +736,186 @@ export default {
     },
 
     handleVideoTap() {
+      if (this.videoActionSheet.visible) return
       if (!this.videoContext) return
 
       if (this.isPlaying) {
         this.videoContext.pause()
         this.isPlaying = false
-
-        if (this.centerIconTimer) {
-          clearTimeout(this.centerIconTimer)
-          this.centerIconTimer = null
-        }
-
         this.showCenterIcon = true
       } else {
         this.videoContext.play()
         this.isPlaying = true
-        this.showCenterIcon = true
-
-        if (this.centerIconTimer) clearTimeout(this.centerIconTimer)
-
-        this.centerIconTimer = setTimeout(() => {
-          this.showCenterIcon = false
-          this.centerIconTimer = null
-        }, 600)
+        this.showCenterIcon = false
       }
+
+      if (this.centerIconTimer) {
+        clearTimeout(this.centerIconTimer)
+        this.centerIconTimer = null
+      }
+    },
+
+    onVideoTouchStart(e) {
+      if (this.videoActionSheet.visible || this.videoActionSheet.saving) return
+
+      const touch = e && e.touches && e.touches[0] ? e.touches[0] : {}
+      this.videoTouchStartX = touch.clientX || touch.pageX || 0
+      this.videoTouchStartY = touch.clientY || touch.pageY || 0
+      this.videoTouchMoved = false
+      this.videoLongPressed = false
+
+      if (this.videoTouchTimer) {
+        clearTimeout(this.videoTouchTimer)
+        this.videoTouchTimer = null
+      }
+
+      this.videoTouchTimer = setTimeout(() => {
+        if (this.videoTouchMoved) return
+        this.videoLongPressed = true
+        this.openVideoActionSheet()
+      }, 550)
+    },
+
+    onVideoTouchMove(e) {
+      const touch = e && e.touches && e.touches[0] ? e.touches[0] : {}
+      const x = touch.clientX || touch.pageX || 0
+      const y = touch.clientY || touch.pageY || 0
+      const dx = Math.abs(x - this.videoTouchStartX)
+      const dy = Math.abs(y - this.videoTouchStartY)
+
+      if (dx > 10 || dy > 10) {
+        this.videoTouchMoved = true
+        if (this.videoTouchTimer) {
+          clearTimeout(this.videoTouchTimer)
+          this.videoTouchTimer = null
+        }
+      }
+    },
+
+    onVideoTouchEnd() {
+      if (this.videoTouchTimer) {
+        clearTimeout(this.videoTouchTimer)
+        this.videoTouchTimer = null
+      }
+
+      if (this.videoLongPressed) {
+        this.videoLongPressed = false
+        return
+      }
+
+      if (!this.videoTouchMoved) {
+        this.handleVideoTap()
+      }
+    },
+
+    onVideoTouchCancel() {
+      if (this.videoTouchTimer) {
+        clearTimeout(this.videoTouchTimer)
+        this.videoTouchTimer = null
+      }
+      this.videoTouchMoved = false
+      this.videoLongPressed = false
+    },
+
+    openVideoActionSheet() {
+      if (!this.creation.videoUrl || this.videoActionSheet.saving) return
+
+      this.showCenterIcon = false
+      this.showCommentsPanel = false
+      this.showSharePanel = false
+      this.forwardPicker.visible = false
+      this.resetCommentAction()
+
+      this.videoActionSheet.visible = true
+    },
+
+    closeVideoActionSheet() {
+      if (this.videoActionSheet.saving) return
+      this.videoActionSheet.visible = false
+    },
+
+    saveVideoToAlbum() {
+      const url = this.creation.videoUrl
+      if (!url || this.videoActionSheet.saving) return
+
+      this.videoActionSheet.saving = true
+
+      const finish = () => {
+        this.videoActionSheet.saving = false
+        this.videoActionSheet.visible = false
+      }
+
+      // H5：浏览器环境无法调用系统相册，降级为下载 / 新窗口打开。
+      // #ifdef H5
+      try {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `creation_${this.creationId || Date.now()}.mp4`
+        a.target = '_blank'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+
+        uni.showToast({
+          title: '已开始下载',
+          icon: 'none'
+        })
+      } catch (err) {
+        console.error('download video on H5 failed:', err)
+        window.open(url, '_blank')
+      } finally {
+        finish()
+      }
+      return
+      // #endif
+
+      const saveFileToAlbum = (filePath) => {
+        uni.saveVideoToPhotosAlbum({
+          filePath,
+          success: () => {
+            uni.showToast({
+              title: '已保存到相册',
+              icon: 'success'
+            })
+          },
+          fail: (err) => {
+            console.error('saveVideoToPhotosAlbum failed:', err)
+            uni.showToast({
+              title: '保存失败，请检查权限',
+              icon: 'none'
+            })
+          },
+          complete: finish
+        })
+      }
+
+      if (/^https?:\/\//.test(url)) {
+        uni.downloadFile({
+          url,
+          success: (res) => {
+            if (res.statusCode === 200 && res.tempFilePath) {
+              saveFileToAlbum(res.tempFilePath)
+            } else {
+              finish()
+              uni.showToast({
+                title: '视频下载失败',
+                icon: 'none'
+              })
+            }
+          },
+          fail: (err) => {
+            console.error('download video failed:', err)
+            finish()
+            uni.showToast({
+              title: '视频下载失败',
+              icon: 'none'
+            })
+          }
+        })
+        return
+      }
+
+      saveFileToAlbum(url)
     },
 
     async toggleLike() {
@@ -773,6 +966,7 @@ export default {
 
     async openCommentsPanel() {
       this.showSharePanel = false
+      this.videoActionSheet.visible = false
       this.forwardPicker.visible = false
       this.showCommentsPanel = true
       this.commentInputFocus = false
@@ -1214,6 +1408,7 @@ export default {
       if (!target || !target.user || !this.isSelfUser(target.user.user_id)) return
 
       this.showSharePanel = false
+      this.videoActionSheet.visible = false
       this.forwardPicker.visible = false
       this.commentInputFocus = false
 
@@ -1323,6 +1518,7 @@ export default {
     openSharePanel() {
       this.shareLoading = false
       this.showCommentsPanel = false
+      this.videoActionSheet.visible = false
       this.forwardPicker.visible = false
       this.showSharePanel = true
     },
@@ -1380,7 +1576,7 @@ export default {
       const title = this.creation.title || '分享一个作品'
       const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
       const imageUrl = this.creation.coverImage || ''
-      const href = this.creation.shareUrl || `http://127.0.0.1:3000/violet.html?creationId=${this.creationId}`
+      const href = this.creation.shareUrl || `http://127.0.0.1:3000/share.html?creationId=${this.creationId}`
 
       return {
         title,
@@ -1509,6 +1705,17 @@ export default {
 .video {
   width: 750rpx;
   flex: 1;
+}
+
+/* 透明触摸层：低于顶部、右侧、底部信息层，高于 video 原生层 */
+.video-touch-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  background-color: rgba(0, 0, 0, 0);
 }
 
 /* 顶部返回左上角 */
@@ -1642,7 +1849,8 @@ export default {
   color: #ffffff;
 }
 
-/* 中间暂停 / 播放图标 */
+
+/* 中间播放提示 */
 .center-icon {
   position: absolute;
   left: 0;
@@ -1651,20 +1859,14 @@ export default {
   bottom: 0;
   justify-content: center;
   align-items: center;
-}
-
-.center-icon-inner {
-  width: 80px;
-  height: 80px;
-  border-radius: 40px;
-  background-color: rgba(0, 0, 0, 0.4);
-  justify-content: center;
-  align-items: center;
+  z-index: 2;
 }
 
 .center-icon-text {
-  font-size: 44px;
-  color: #ffffff;
+  font-size: 54px;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+  font-weight: 700;
 }
 
 /* 底部信息 */
@@ -1713,7 +1915,7 @@ export default {
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* 评论遮罩和抽屉：恢复原始样式 */
+/* 评论遮罩和抽屉 */
 .comments-mask {
   position: absolute;
   left: 0;
@@ -2101,6 +2303,45 @@ export default {
   font-size: 16px;
   font-weight: 500;
 }
+
+/* 长按视频操作菜单 */
+.video-action-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 320;
+  background-color: rgba(0, 0, 0, 0.25);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.video-action-sheet {
+  width: 750rpx;
+  background-color: #f7f7f7;
+  padding: 8px;
+}
+
+.video-action-item {
+  width: 734rpx;
+  height: 44px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  justify-content: center;
+  align-items: center;
+}
+
+.video-action-item.disabled {
+  opacity: 0.6;
+}
+
+.video-action-text {
+  font-size: 14px;
+  color: #333333;
+  font-weight: 500;
+}
+
 
 /* 分享面板 */
 .share-mask {

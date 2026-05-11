@@ -79,6 +79,16 @@
 			</view>
 		</view>
 
+		<!-- 头像裁剪窗口 -->
+		<avatar-cropper
+			:visible="avatarCropper.visible"
+			:src="avatarCropper.src"
+			title="裁剪头像"
+			mask-shape="circle"
+			@close="closeAvatarCropper"
+			@confirm="onUserAvatarCropped"
+		/>
+
 		<view class="loading-mask" v-if="submitting">
 			<view class="loading-box">提交中...</view>
 		</view>
@@ -90,8 +100,13 @@ import { getUserProfile, updateUserInfo } from '@/request/user.js'
 import { uploadImage } from '@/request/common.js'
 import DB from '@/utils/sqlite.js'
 import { enqueueEntityAvatars } from '@/utils/im-cache.js'
+import AvatarCropper from '@/components/avatar-cropper.vue'
 
 export default {
+	components: {
+		AvatarCropper
+	},
+
 	data() {
 		return {
 			userId: null,
@@ -103,6 +118,11 @@ export default {
 			tempUsername: '',
 			tempPassword: '',
 			tempConfirmPassword: '',
+
+			avatarCropper: {
+				visible: false,
+				src: ''
+			},
 
 			submitting: false
 		}
@@ -269,73 +289,96 @@ export default {
 		},
 
 		handleEditAvatar() {
+			if (this.submitting) return
+
 			uni.showActionSheet({
 				itemList: ['从相册选择', '拍照'],
 				success: (res) => {
 					const sourceType = res.tapIndex === 1 ? ['camera'] : ['album']
-					this.chooseAndUploadAvatar(sourceType)
+					this.chooseAvatarForCrop(sourceType)
 				}
 			})
 		},
 
-		chooseAndUploadAvatar(sourceType) {
+		chooseAvatarForCrop(sourceType) {
 			uni.chooseImage({
 				count: 1,
 				sizeType: ['compressed'],
 				sourceType,
-				success: async (res) => {
+				success: (res) => {
 					const filePath = res.tempFilePaths?.[0]
 					if (!filePath) return
 
-					this.submitting = true
-
-					try {
-						const uploadRes = await uploadImage(filePath, 'user_avatar')
-						const sourceUrl =
-							uploadRes?.source_url ||
-							uploadRes?.data?.source_url ||
-							''
-
-						if (!sourceUrl) {
-							throw new Error('上传头像未返回 source_url')
-						}
-
-						const ok = await updateUserInfo({
-							type: 'avatar',
-							value: sourceUrl
-						})
-
-						if (!ok) {
-							throw new Error('updateUserInfo avatar 返回失败')
-						}
-
-						this.avatar = sourceUrl
-						getApp().globalData.avatar = sourceUrl
-
-						await DB.updateUser(this.userId, {
-							avatar_uri: sourceUrl,
-							local_avatar_uri: '',
-							modify_time: Date.now()
-						})
-
-						enqueueEntityAvatars('user', [this.userId])
-
-						uni.showToast({
-							title: '头像已更新',
-							icon: 'success'
-						})
-					} catch (e) {
-						console.error('修改头像失败：', e)
-
-						uni.showToast({
-							title: '修改失败',
-							icon: 'none'
-						})
-					} finally {
-						this.submitting = false
+					this.avatarCropper = {
+						visible: true,
+						src: filePath
 					}
 				}
 			})
+		},
+
+		closeAvatarCropper() {
+			this.avatarCropper = {
+				visible: false,
+				src: ''
+			}
+		},
+
+		async onUserAvatarCropped(filePath) {
+			this.closeAvatarCropper()
+			await this.uploadUserAvatar(filePath)
+		},
+
+		async uploadUserAvatar(filePath) {
+			if (!filePath || this.submitting) return
+
+			this.submitting = true
+
+			try {
+				const uploadRes = await uploadImage(filePath, 'user_avatar')
+				const sourceUrl =
+					uploadRes?.source_url ||
+					uploadRes?.data?.source_url ||
+					''
+
+				if (!sourceUrl) {
+					throw new Error('上传头像未返回 source_url')
+				}
+
+				const ok = await updateUserInfo({
+					type: 'avatar',
+					value: sourceUrl
+				})
+
+				if (!ok) {
+					throw new Error('updateUserInfo avatar 返回失败')
+				}
+
+				this.avatar = sourceUrl
+				getApp().globalData.avatar = sourceUrl
+
+				await DB.updateUser(this.userId, {
+					avatar_uri: sourceUrl,
+					local_avatar_uri: '',
+					modify_time: Date.now()
+				})
+
+				enqueueEntityAvatars('user', [this.userId])
+
+				uni.showToast({
+					title: '头像已更新',
+					icon: 'success'
+				})
+			} catch (e) {
+				console.error('修改头像失败：', e)
+
+				uni.showToast({
+					title: '修改失败',
+					icon: 'none'
+				})
+			} finally {
+				this.submitting = false
+			}
 		}
 	}
 }

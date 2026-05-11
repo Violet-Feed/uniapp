@@ -72,7 +72,8 @@
 		{
 			"path": "pages/im/setting",
 			"style": {
-				"navigationBarTitleText":"设置"
+				"navigationBarTitleText":"设置",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
@@ -140,7 +141,8 @@
 		{
 			"path": "pages/agent/edit_agent",
 			"style": {
-				"navigationBarTitleText": "编辑智能体"
+				"navigationBarTitleText": "编辑智能体",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
@@ -164,7 +166,8 @@
 		{
 			"path": "pages/user/edit_profile",
 			"style": {
-				"navigationBarTitleText": "编辑资料"
+				"navigationBarTitleText": "编辑资料",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
@@ -211,10 +214,6 @@
 		"selectedColor": "#9932cc",
 		"backgroundColor": "#FFFFFF",
 		"borderStyle": "black",
-		"fontSize": "16px",
-		"fontWeight": "bold",
-		"iconWidth": "24px",
-		"height": "50px",
 		"list": [
 			{
 				"text": "首页",

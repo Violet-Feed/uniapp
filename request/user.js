@@ -118,3 +118,10 @@ export const searchUsers = async (keyword,page) => {
 	};
 	return httpRequestBackData("/user/search_users",data);
 }
+
+export const reportClick = async (payload) => {
+	const data = {
+		creation_ids: payload.creationIds
+	};
+	return httpRequestBackBool("/user/report_click",data);
+}

@@ -27,7 +27,7 @@
       </view>
     </view>
 
-    <!-- 图片展示区域 -->
+    <!-- 图片展示区域：固定高度，完整展示，不足区域为黑色 -->
     <swiper
       class="image-swiper"
       :indicator-dots="creation.images.length > 1"
@@ -35,9 +35,36 @@
       indicator-active-color="#fff"
     >
       <swiper-item v-for="(image, index) in creation.images" :key="index">
-        <image class="creation-image" :src="image" mode="aspectFill"></image>
+        <image
+          class="creation-image"
+          :src="image"
+          mode="aspectFit"
+          @click="openImagePreview(index)"
+        ></image>
       </swiper-item>
     </swiper>
+
+    <!-- 图片全屏预览：点击放大后，再点击图片或遮罩缩小 -->
+    <view
+      v-if="imagePreview.visible"
+      class="image-preview-mask"
+      @click="closeImagePreview"
+    >
+      <image
+        class="image-preview-img"
+        :src="imagePreview.url"
+        mode="aspectFit"
+        @click.stop="closeImagePreview"
+      ></image>
+
+      <view
+        class="image-preview-download"
+        :class="{ disabled: imagePreview.saving }"
+        @click.stop="downloadCurrentPreviewImage"
+      >
+        <text class="download-icon">↓</text>
+      </view>
+    </view>
 
     <!-- 内容区域 -->
     <view class="content-section">
@@ -240,7 +267,7 @@
     </view>
 
     <!-- 底部操作栏：抽屉打开时隐藏 -->
-    <view class="bottom-bar" v-if="!showCommentInput">
+    <view class="bottom-bar" v-if="!showCommentInput && !imagePreview.visible">
       <view class="comment-input-wrapper" @click="startNewComment">
         <text class="comment-placeholder">说点什么...</text>
       </view>
@@ -341,6 +368,7 @@
 import { getCreationById } from '@/request/creation.js'
 import { getUserProfile } from '@/request/user.js'
 import ForwardPicker from '@/components/forward-picker.vue'
+import { enqueueClickReport } from '@/utils/track.js'
 import {
   digg,
   cancelDigg,
@@ -395,6 +423,13 @@ export default {
       isLiked: false,
       isFollowed: false,
       isDetailExpanded: false,
+
+      imagePreview: {
+        visible: false,
+        url: '',
+        index: 0,
+        saving: false
+      },
 
       // 评论相关
       commentList: [],
@@ -458,6 +493,7 @@ export default {
     this.authorId = options.userId || options.user_id || ''
     const app = getApp()
     this.currentUserId = app && app.globalData ? app.globalData.userId : null
+    enqueueClickReport(this.creationId)
     this.initPage()
   },
 
@@ -706,6 +742,119 @@ export default {
       })
     },
 
+    openImagePreview(index = 0) {
+      const images = this.creation.images || []
+      const url = images[index]
+
+      if (!url) return
+
+      this.showSharePanel = false
+      this.showCommentInput = false
+      this.forwardPicker.visible = false
+
+      this.imagePreview = {
+        visible: true,
+        url,
+        index,
+        saving: false
+      }
+    },
+
+    closeImagePreview() {
+      if (this.imagePreview.saving) return
+
+      this.imagePreview.visible = false
+      this.imagePreview.url = ''
+      this.imagePreview.index = 0
+    },
+
+    downloadCurrentPreviewImage() {
+      this.downloadImage(this.imagePreview.url)
+    },
+
+    downloadImage(url) {
+      if (!url || this.imagePreview.saving) return
+
+      this.imagePreview.saving = true
+
+      const finish = () => {
+        this.imagePreview.saving = false
+      }
+
+      // H5：使用浏览器下载。
+      // #ifdef H5
+      try {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `creation_${this.creationId || Date.now()}.jpg`
+        a.target = '_blank'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+
+        uni.showToast({
+          title: '已开始下载',
+          icon: 'none'
+        })
+      } catch (err) {
+        console.error('download image on H5 failed', err)
+        window.open(url, '_blank')
+      } finally {
+        finish()
+      }
+      return
+      // #endif
+
+      // App / 小程序：下载到临时文件后保存到系统相册。
+      const saveToAlbum = (filePath) => {
+        uni.saveImageToPhotosAlbum({
+          filePath,
+          success: () => {
+            uni.showToast({
+              title: '已保存到相册',
+              icon: 'success'
+            })
+          },
+          fail: (err) => {
+            console.error('saveImageToPhotosAlbum failed', err)
+            uni.showToast({
+              title: '保存失败，请检查相册权限',
+              icon: 'none'
+            })
+          },
+          complete: finish
+        })
+      }
+
+      if (/^https?:\/\//.test(url)) {
+        uni.downloadFile({
+          url,
+          success: (res) => {
+            if (res.statusCode === 200 && res.tempFilePath) {
+              saveToAlbum(res.tempFilePath)
+            } else {
+              finish()
+              uni.showToast({
+                title: '下载失败',
+                icon: 'none'
+              })
+            }
+          },
+          fail: (err) => {
+            console.error('download image failed', err)
+            finish()
+            uni.showToast({
+              title: '下载失败',
+              icon: 'none'
+            })
+          }
+        })
+        return
+      }
+
+      saveToAlbum(url)
+    },
+
     async toggleLike() {
       if (this.likeLoading || !this.creation.creationId) return
       this.likeLoading = true
@@ -827,6 +976,7 @@ export default {
     focusCommentInput() {
       this.showSharePanel = false
       this.forwardPicker.visible = false
+      this.imagePreview.visible = false
       this.showCommentInput = true
       this.commentInputFocus = true
     },
@@ -1007,6 +1157,7 @@ export default {
       this.showSharePanel = false
       this.showCommentInput = false
       this.forwardPicker.visible = false
+      this.imagePreview.visible = false
       this.commentAction = {
         visible: true,
         type,
@@ -1111,6 +1262,7 @@ export default {
       this.shareLoading = false
       this.forwardPicker.visible = false
       this.showCommentInput = false
+      this.imagePreview.visible = false
       this.showSharePanel = true
     },
 
@@ -1167,7 +1319,7 @@ export default {
       const title = this.creation.title || '分享一个作品'
       const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
       const imageUrl = this.creation.coverImage || this.creation.images[0] || ''
-      const href = this.creation.shareUrl || `http://127.0.0.1:3000/violet.html?creationId=${this.creationId}`
+      const href = this.creation.shareUrl || `http://127.0.0.1:3000/share.html?creationId=${this.creationId}`
 
       return {
         title,
@@ -1380,16 +1532,61 @@ export default {
   color: #666;
 }
 
-/* 图片展示 */
+/* 图片展示：固定高度，完整展示；横向或纵向不足区域为白色 */
 .image-swiper {
   width: 100%;
-  height: 500px;
-  background: #000;
+  height: 320px;
+  background: #fff;
 }
 
 .creation-image {
   width: 100%;
   height: 100%;
+  background: #fff;
+}
+
+/* 图片全屏预览 */
+.image-preview-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.96);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-img {
+  width: 100%;
+  height: 100%;
+}
+
+.image-preview-download {
+  position: fixed;
+  right: 18px;
+  bottom: calc(30px + env(safe-area-inset-bottom));
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-download.disabled {
+  opacity: 0.6;
+}
+
+.download-icon {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 600;
 }
 
 /* 内容区域 */

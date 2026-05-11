@@ -101,6 +101,16 @@
 			<button class="quit-btn" @click="quitGroup">退出群聊</button>
 		</view>
 
+		<!-- 头像裁剪窗口 -->
+		<avatar-cropper
+			:visible="avatarCropper.visible"
+			:src="avatarCropper.src"
+			title="裁剪群头像"
+			mask-shape="circle"
+			@close="closeAvatarCropper"
+			@confirm="onGroupAvatarCropped"
+		/>
+
 		<!-- 群资料详情弹窗 -->
 		<view class="desc-mask" v-if="showDescriptionPopup" @click="closeDescriptionViewer">
 			<view class="desc-popup" @click.stop>
@@ -150,8 +160,13 @@ import {
 	removeConversationMember
 } from '@/request/im.js';
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
+import AvatarCropper from '@/components/avatar-cropper.vue';
 
 export default {
+	components: {
+		AvatarCropper
+	},
+
 	data() {
 		return {
 			conId: '',
@@ -171,7 +186,11 @@ export default {
 			editTitle: '',
 			editValue: '',
 			editPlaceholder: '',
-			updating: false
+			updating: false,
+			avatarCropper: {
+				visible: false,
+				src: ''
+			}
 		};
 	},
 
@@ -198,10 +217,6 @@ export default {
 		this.conId = options.conId || '';
 		this.conType = Number(options.conType || 0);
 		if (!this.conId) return;
-		await this.refreshPage();
-	},
-
-	async onPullDownRefresh() {
 		await this.refreshPage();
 	},
 
@@ -281,12 +296,29 @@ export default {
 				count: 1,
 				sizeType: ['compressed'],
 				sourceType: ['album', 'camera'],
-				success: async res => {
+				success: res => {
 					const filePath = res?.tempFilePaths?.[0] || '';
 					if (!filePath) return;
-					await this.updateGroupAvatar(filePath);
+
+					this.avatarCropper = {
+						visible: true,
+						src: filePath
+					};
 				}
 			});
+		},
+
+		closeAvatarCropper() {
+			this.avatarCropper = {
+				visible: false,
+				src: ''
+			};
+		},
+
+		async onGroupAvatarCropped(filePath) {
+			this.closeAvatarCropper();
+			if (!filePath) return;
+			await this.updateGroupAvatar(filePath);
 		},
 
 		async updateGroupAvatar(filePath) {
@@ -295,7 +327,12 @@ export default {
 			this.updating = true;
 			try {
 				const uploadRes = await uploadImage(filePath, 'conv_avatar');
-				const sourceUrl = uploadRes?.source_url || uploadRes?.sourceUrl || uploadRes?.url || '';
+				const sourceUrl =
+					uploadRes?.source_url ||
+					uploadRes?.sourceUrl ||
+					uploadRes?.url ||
+					uploadRes?.data?.source_url ||
+					'';
 
 				if (!sourceUrl) {
 					uni.showToast({
@@ -482,7 +519,6 @@ export default {
 				});
 
 				if (!ok) return;
-
 
 				uni.showToast({
 					title: '已退出群聊',

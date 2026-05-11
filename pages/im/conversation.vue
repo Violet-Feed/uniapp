@@ -1,33 +1,46 @@
 <template>
     <view class="chat-container">
-        <!-- 顶部导航栏 -->
-        <view class="chat-header">
-            <view class="header-left" @click="goBack">
-                <text class="back-icon">←</text>
-            </view>
-            <view class="header-center">
-                <text class="chat-title">{{ chatName }}</text>
-            </view>
-            <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2 && canSendMessage">
-                <text class="settings-icon">⋮</text>
+        <!-- 顶部导航栏：包含刘海 / 状态栏区域 -->
+        <view class="chat-header" :style="chatHeaderStyle">
+            <view class="chat-header-content" :style="chatHeaderContentStyle">
+                <view class="header-left" @click="goBack">
+                    <text class="back-icon">‹</text>
+                </view>
+                <view class="header-center">
+                    <text class="chat-title">{{ chatName }}</text>
+                </view>
+                <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2 && canSendMessage">
+                    <text class="settings-icon">⋮</text>
+                </view>
+                <view class="header-right-placeholder" v-else></view>
             </view>
         </view>
 
         <!-- 消息列表 -->
-        <scroll-view class="chat-messages" scroll-y="true" :scroll-into-view="scrollIntoViewId" @scroll="onScroll">
+        <scroll-view
+            class="chat-messages"
+            :style="chatMessagesStyle"
+            scroll-y="true"
+            :scroll-into-view="scrollIntoViewId"
+            @scroll="onScroll"
+        >
             <view class="messages">
-                <view v-if="isLoading" class="loading-tip">
+                <view v-if="isLoading" class="loading-tip" :style="systemRowStyle">
                     <view class="loading-spinner"></view>
                     <text class="loading-text">加载中...</text>
                 </view>
 
-                <view v-for="(message, index) in messages" :key="String(message.msg_id || index)" :id="'message-' + String(message.msg_id)">
-                    <view class="message-time" v-if="shouldShowTime(index)">
+                <view
+                    v-for="(message, index) in messages"
+                    :key="String(message.msg_id || index)"
+                    :id="'message-' + String(message.msg_id)"
+                >
+                    <view class="message-time" :style="systemRowStyle" v-if="shouldShowTime(index)">
                         <text class="time-text">{{ formatTime(message.create_time) }}</text>
                     </view>
 
-                    <view class="message message-right" v-if="isSelfMessage(message)">
-                        <view class="message-content message-content-right">
+                    <view class="message message-right" :style="messageRowStyle" v-if="isSelfMessage(message)">
+                        <view class="message-content message-content-right" :style="messageContentStyle">
                             <text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
 
                             <view class="self-bubble-row">
@@ -38,6 +51,7 @@
                                 <view
                                     v-if="isShareMessage(message)"
                                     class="share-card share-card-right"
+                                    :style="shareCardStyle"
                                     @click="goToShareCreationDetail(message)"
                                     @touchstart="onMessageTouchStart"
                                     @touchmove="onMessageTouchMove"
@@ -45,15 +59,14 @@
                                     @touchcancel="onMessageTouchEnd"
                                     @longpress.stop="showMessageActions($event, message)"
                                 >
-                                    <view class="share-image-wrapper">
+                                    <view class="share-image-wrapper" :style="shareImageWrapperStyle">
                                         <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                        <view class="share-image-gradient"></view>
-                                        <view class="share-type-badge">
-                                            <text>{{ getShareMaterialTypeIcon(message) }}</text>
+                                        <view class="share-video-badge" v-if="isShareVideo(message)">
+                                            <text class="share-video-badge-icon">▶</text>
                                         </view>
                                     </view>
 
-                                    <view class="share-card-content">
+                                    <view class="share-card-content" :style="shareCardContentStyle">
                                         <view class="share-card-title-container">
                                             <text class="share-card-title">{{ getShareTitle(message) }}</text>
                                         </view>
@@ -81,22 +94,28 @@
                             </view>
                         </view>
 
-                        <view class="avatar-box" @click="goToUserProfile(message)">
-                            <image class="avatar" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
+                        <view class="avatar-box" :style="avatarBoxStyle" @click="goToUserProfile(message)">
+                            <image class="avatar" :style="avatarStyle" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
                         </view>
                     </view>
 
-                    <view class="message message-left" v-else-if="isOtherSenderMessage(message)">
-                        <view class="avatar-box" @click="goToUserProfile(message)">
-                            <image class="avatar" :src="message.avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)" mode="aspectFill"></image>
+                    <view class="message message-left" :style="messageRowStyle" v-else-if="isOtherSenderMessage(message)">
+                        <view class="avatar-box" :style="avatarBoxStyle" @click="goToUserProfile(message)">
+                            <image
+                                class="avatar"
+                                :style="avatarStyle"
+                                :src="message.avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)"
+                                mode="aspectFill"
+                            ></image>
                         </view>
 
-                        <view class="message-content message-content-left">
+                        <view class="message-content message-content-left" :style="messageContentStyle">
                             <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
 
                             <view
                                 v-if="isShareMessage(message)"
                                 class="share-card share-card-left"
+                                :style="shareCardStyle"
                                 @click="goToShareCreationDetail(message)"
                                 @touchstart="onMessageTouchStart"
                                 @touchmove="onMessageTouchMove"
@@ -104,15 +123,14 @@
                                 @touchcancel="onMessageTouchEnd"
                                 @longpress.stop="showMessageActions($event, message)"
                             >
-                                <view class="share-image-wrapper">
+                                <view class="share-image-wrapper" :style="shareImageWrapperStyle">
                                     <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                    <view class="share-image-gradient"></view>
-                                    <view class="share-type-badge">
-                                        <text>{{ getShareMaterialTypeIcon(message) }}</text>
+                                    <view class="share-video-badge" v-if="isShareVideo(message)">
+                                        <text class="share-video-badge-icon">▶</text>
                                     </view>
                                 </view>
 
-                                <view class="share-card-content">
+                                <view class="share-card-content" :style="shareCardContentStyle">
                                     <view class="share-card-title-container">
                                         <text class="share-card-title">{{ getShareTitle(message) }}</text>
                                     </view>
@@ -140,7 +158,7 @@
                         </view>
                     </view>
 
-                    <view class="message message-center" v-else>
+                    <view class="message message-center" :style="systemRowStyle" v-else>
                         <view
                             class="system-message"
                             @touchstart="onMessageTouchStart"
@@ -167,7 +185,7 @@
             </view>
         </view>
 
-        <view class="input-bar" v-if="canSendMessage">
+        <view class="input-bar" :style="inputBarStyle" v-if="canSendMessage">
             <view class="input-wrapper">
                 <input
                     class="input-field"
@@ -183,7 +201,7 @@
             </view>
         </view>
 
-        <view class="disabled-input-bar" v-else>
+        <view class="disabled-input-bar" :style="inputBarStyle" v-else>
             <text class="disabled-input-text">无法在已退出的群聊中发送消息</text>
         </view>
     </view>
@@ -195,6 +213,7 @@ import DB from '@/utils/sqlite.js';
 import { sendMessage, getMessageByConversation, markRead, recallMessage, handleMessageExtra } from '@/request/im.js';
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 import { enqueueProfileRefresh } from '@/utils/im-cache.js';
+import { getUserInfos } from '@/request/user.js';
 
 export default {
     data() {
@@ -202,6 +221,7 @@ export default {
             userId: getApp().globalData.userId,
             myAvatar: getApp().globalData.avatar,
             senderInfoMap: new Map(),
+            shareAuthorInfoMap: new Map(),
             conversation: {},
             conIndex: Number.MAX_SAFE_INTEGER,
             messages: [],
@@ -217,6 +237,22 @@ export default {
             defaultCover: '/static/images/default.png',
             firstPageProfileRefreshed: false,
             groupProfileTtlMs: 7 * 24 * 60 * 60 * 1000,
+
+            windowHeight: 667,
+            statusBarHeight: 0,
+            bottomSafeHeight: 0,
+            headerHeight: 60,
+            headerContentHeight: 44,
+            inputBarHeight: 56,
+            messageUnitHeight: 48,
+            halfMessageHeight: 24,
+            avatarSize: 34,
+            messageGap: 6,
+            shareCardWidth: 176,
+            shareCardHeight: 236,
+            shareImageHeight: 194,
+            shareContentHeight: 42,
+
             messageAction: {
                 visible: false,
                 left: 0,
@@ -234,10 +270,60 @@ export default {
     computed: {
         canSendMessage() {
             return Number(this.conversation?.is_member ?? 1) !== 0;
+        },
+
+        chatHeaderStyle() {
+            return 'height:' + this.headerHeight + 'px;';
+        },
+
+        chatHeaderContentStyle() {
+            return 'height:' + this.headerContentHeight + 'px;margin-top:' + this.statusBarHeight + 'px;';
+        },
+
+        chatMessagesStyle() {
+            return 'top:' + this.headerHeight + 'px;bottom:' + this.inputBarHeight + 'px;';
+        },
+
+        inputBarStyle() {
+            return 'height:' + this.inputBarHeight + 'px;padding-bottom:' + this.bottomSafeHeight + 'px;';
+        },
+
+        messageRowStyle() {
+            return 'margin-bottom:' + this.messageGap + 'px;';
+        },
+
+        systemRowStyle() {
+            return 'height:' + this.halfMessageHeight + 'px;margin-bottom:' + Math.max(2, Math.floor(this.messageGap / 2)) + 'px;';
+        },
+
+        avatarBoxStyle() {
+            return 'width:' + this.avatarSize + 'px;height:' + this.avatarSize + 'px;';
+        },
+
+        avatarStyle() {
+            return 'width:' + this.avatarSize + 'px;height:' + this.avatarSize + 'px;border-radius:' + Math.floor(this.avatarSize / 2) + 'px;';
+        },
+
+        messageContentStyle() {
+            return 'min-height:' + this.avatarSize + 'px;';
+        },
+
+        shareCardStyle() {
+            return 'width:' + this.shareCardWidth + 'px;height:' + this.shareCardHeight + 'px;';
+        },
+
+        shareImageWrapperStyle() {
+            return 'height:' + this.shareImageHeight + 'px;';
+        },
+
+        shareCardContentStyle() {
+            return 'height:' + this.shareContentHeight + 'px;';
         }
     },
 
     async onLoad(options) {
+        this.initResponsiveLayout();
+
         this.conversation.con_short_id = 0;
         this.conversation.con_id = options.conId;
         this.conversation.con_type = Number(options.conType);
@@ -254,6 +340,7 @@ export default {
             if (res.length > 0) {
                 await this.fillSenderInfos(res);
                 this.normalizeMessages(res);
+                await this.ensureShareAuthorInfos(res);
 
                 this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
@@ -266,6 +353,7 @@ export default {
                 if (res.length > 0) {
                     await this.fillSenderInfos(res);
                     this.normalizeMessages(res);
+                    await this.ensureShareAuthorInfos(res);
 
                     res.reverse();
                     this.messages = res.concat(this.messages);
@@ -307,6 +395,7 @@ export default {
 
             await this.fillSenderInfos([msg]);
             this.normalizeMessages([msg]);
+            await this.ensureShareAuthorInfos([msg]);
 
             if (this.isSelfMessage(msg)) {
                 for (let i = this.messages.length - 1; i >= 0; i--) {
@@ -360,6 +449,7 @@ export default {
 
                     const nextMessage = await handleMessageExtra(this.messages[index]);
                     this.normalizeMessages([nextMessage]);
+                    await this.ensureShareAuthorInfos([nextMessage]);
 
                     this.messages.splice(index, 1, nextMessage);
                 }
@@ -367,6 +457,10 @@ export default {
         };
 
         uni.$on('command', this.commandListener);
+    },
+
+    onShow() {
+        this.initResponsiveLayout();
     },
 
     onUnload() {
@@ -379,6 +473,55 @@ export default {
     },
 
     methods: {
+        initResponsiveLayout() {
+            try {
+                const sys = uni.getSystemInfoSync();
+                const windowHeight = Number(sys.windowHeight || 667);
+                const statusBarHeight = Number(sys.statusBarHeight || 0);
+                const safeInsets = sys.safeAreaInsets || {};
+                const bottomSafeHeight = Number(safeInsets.bottom || 0);
+
+                this.windowHeight = windowHeight;
+                this.statusBarHeight = statusBarHeight;
+                this.bottomSafeHeight = bottomSafeHeight;
+
+                // 视觉高度约束：顶部群名内容区 1H、消息列表 10H、底部输入内容区 1H。
+                // 顶部额外包含状态栏，底部额外包含安全区；H 即一个“头像行”。
+                const usableHeight = Math.max(420, windowHeight - statusBarHeight - bottomSafeHeight);
+                const rawUnitHeight = Math.floor(usableHeight / 12);
+
+                this.messageUnitHeight = Math.max(34, Math.min(52, rawUnitHeight));
+                this.messageGap = Math.max(4, Math.min(8, Math.floor(this.messageUnitHeight * 0.16)));
+                this.avatarSize = Math.max(28, Math.min(38, this.messageUnitHeight - this.messageGap));
+                this.halfMessageHeight = Math.max(16, Math.floor(this.messageUnitHeight / 2));
+
+                this.headerContentHeight = this.messageUnitHeight;
+                this.headerHeight = statusBarHeight + this.headerContentHeight;
+                this.inputBarHeight = this.messageUnitHeight + bottomSafeHeight;
+
+                // 分享创作卡片同步首页样式：小圆角、封面占主体、信息区约 1/6。
+                this.shareCardWidth = Math.max(160, Math.min(190, Math.floor(sys.windowWidth * 0.48)));
+                this.shareCardHeight = Math.floor(this.shareCardWidth * 1.34);
+                this.shareContentHeight = Math.max(38, Math.floor(this.shareCardHeight / 6));
+                this.shareImageHeight = this.shareCardHeight - this.shareContentHeight;
+            } catch (err) {
+                this.windowHeight = 667;
+                this.statusBarHeight = 0;
+                this.bottomSafeHeight = 0;
+                this.headerContentHeight = 44;
+                this.headerHeight = 44;
+                this.inputBarHeight = 44;
+                this.messageUnitHeight = 44;
+                this.messageGap = 6;
+                this.avatarSize = 34;
+                this.halfMessageHeight = 22;
+                this.shareCardWidth = 176;
+                this.shareCardHeight = 236;
+                this.shareContentHeight = 42;
+                this.shareImageHeight = 194;
+            }
+        },
+
         isGroupConversation() {
             return Number(this.conversation?.con_type) === 2;
         },
@@ -565,32 +708,38 @@ export default {
 
         getShareAuthorAvatar(message) {
             const share = this.getShareContent(message);
+            const cached = this.getShareAuthorInfo(message);
 
             return share.authorAvatarUrl ||
                 share.author_avatar_url ||
                 share.authorAvatar ||
                 share.author_avatar ||
                 share.avatar ||
+                cached.avatar ||
                 this.userDefaultAvatar;
         },
 
         getShareAuthorName(message) {
             const share = this.getShareContent(message);
+            const cached = this.getShareAuthorInfo(message);
 
             return share.authorName ||
                 share.author_name ||
                 share.username ||
-                share.name ||
+                cached.username ||
+                cached.name ||
                 '未知作者';
         },
 
-        getShareMaterialTypeIcon(message) {
+        isShareVideo(message) {
             const share = this.getShareContent(message);
             const materialType = share.materialType ?? share.material_type;
             const type = share.type ?? share.creationType ?? share.creation_type;
+            return type === 'video' || Number(materialType) === 2;
+        },
 
-            const isVideo = type === 'video' || Number(materialType) === 2;
-            return isVideo ? '📹' : '🖼️';
+        getShareMaterialTypeIcon(message) {
+            return this.isShareVideo(message) ? '▶' : '';
         },
 
         getIdString(value) {
@@ -608,6 +757,60 @@ export default {
                 share.user_id ??
                 ''
             );
+        },
+
+        getShareAuthorInfo(message) {
+            const authorId = this.getShareAuthorId(message);
+            if (!authorId) return {};
+            return this.shareAuthorInfoMap.get(String(authorId)) || {};
+        },
+
+        collectShareAuthorIds(messages) {
+            const idSet = new Set();
+
+            for (const message of messages || []) {
+                if (!this.isShareMessage(message)) continue;
+
+                const authorId = this.getShareAuthorId(message);
+                if (!authorId) continue;
+                if (this.shareAuthorInfoMap.has(String(authorId))) continue;
+
+                idSet.add(String(authorId));
+            }
+
+            return Array.from(idSet);
+        },
+
+        async ensureShareAuthorInfos(messages) {
+            const userIds = this.collectShareAuthorIds(messages);
+            if (!userIds.length) return;
+
+            try {
+                const res = await getUserInfos({ userIds });
+                const list = Array.isArray(res)
+                    ? res
+                    : (res && Array.isArray(res.user_infos))
+                        ? res.user_infos
+                        : (res && Array.isArray(res.users))
+                            ? res.users
+                            : [];
+
+                for (const user of list) {
+                    if (!user) continue;
+
+                    const userId = this.getIdString(user.user_id ?? user.userId ?? user.id ?? '');
+                    if (!userId) continue;
+
+                    this.shareAuthorInfoMap.set(String(userId), {
+                        user_id: userId,
+                        username: user.username || user.name || user.nick_name || '',
+                        name: user.username || user.name || user.nick_name || '',
+                        avatar: user.avatar || user.avatar_url || user.avatarUrl || ''
+                    });
+                }
+            } catch (err) {
+                console.error('get share author infos failed:', err);
+            }
         },
 
         getShareCreationId(message) {
@@ -802,6 +1005,7 @@ export default {
                 let res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
                 await this.fillSenderInfos(res);
                 this.normalizeMessages(res);
+                await this.ensureShareAuthorInfos(res);
 
                 let newMessages = res.reverse();
 
@@ -824,6 +1028,7 @@ export default {
                     if (res.length > 0) {
                         await this.fillSenderInfos(res);
                         this.normalizeMessages(res);
+                        await this.ensureShareAuthorInfos(res);
 
                         res.reverse();
                         newMessages = res.concat(newMessages);
@@ -899,7 +1104,7 @@ export default {
             let top = point.y - menuHeight - 12;
 
             left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
-            if (top < 64) top = point.y + 12;
+            if (top < this.headerHeight) top = point.y + 12;
             top = Math.max(8, Math.min(top, sys.windowHeight - menuHeight - 8));
 
             this.messageAction = {
@@ -1052,27 +1257,36 @@ export default {
 
 <style scoped>
 .chat-container {
-    display: flex;
-    flex-direction: column;
+    position: relative;
     height: 100vh;
     background: #f0f2f5;
+    overflow: hidden;
 }
 
 .chat-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 120;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+    box-sizing: border-box;
+}
+
+.chat-header-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 56px;
-    background: #fff;
-    border-bottom: 1px solid #e5e5e5;
-    padding: 0 16px;
-    flex-shrink: 0;
+    padding: 0 12px;
+    box-sizing: border-box;
 }
 
 .header-left,
-.header-right {
-    width: 40px;
-    height: 40px;
+.header-right,
+.header-right-placeholder {
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1080,9 +1294,10 @@ export default {
 }
 
 .back-icon {
-    font-size: 24px;
+    font-size: 30px;
+    line-height: 30px;
     color: #333;
-    font-weight: 500;
+    font-weight: 300;
 }
 
 .header-center {
@@ -1090,24 +1305,32 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
 }
 
 .chat-title {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
     color: #333;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .settings-icon {
-    font-size: 24px;
+    font-size: 22px;
     color: #333;
     font-weight: 600;
 }
 
 .chat-messages {
-    flex: 1;
+    position: fixed;
+    left: 0;
+    right: 0;
     overflow-y: auto;
-    padding: 10px 10px 10px 8px;
+    padding: 8px 8px 8px 8px;
+    box-sizing: border-box;
 }
 
 .messages {
@@ -1121,12 +1344,11 @@ export default {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 16px 0;
 }
 
 .loading-spinner {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border: 2px solid #f3f3f3;
     border-top-color: #667eea;
     border-radius: 50%;
@@ -1140,19 +1362,19 @@ export default {
 }
 
 .loading-text {
-    font-size: 13px;
+    font-size: 12px;
     color: #999;
 }
 
 .message-time {
     display: flex;
     justify-content: center;
-    margin: 14px 0 10px;
+    align-items: center;
 }
 
 .time-text {
     font-size: 9px;
-    line-height: 1.2;
+    line-height: 12px;
     color: #999;
     background: rgba(0, 0, 0, 0.05);
     padding: 1px 8px;
@@ -1161,9 +1383,8 @@ export default {
 
 .message {
     display: flex;
-    margin-bottom: 12px;
     align-items: flex-start;
-    padding: 0 4px;
+    padding: 0;
 }
 
 .message-left {
@@ -1176,6 +1397,7 @@ export default {
 
 .message-center {
     justify-content: center;
+    align-items: center;
 }
 
 .avatar-box {
@@ -1183,19 +1405,18 @@ export default {
 }
 
 .avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
     border: 2px solid #fff;
+    box-sizing: border-box;
 }
 
 .message-left .avatar-box {
+    margin-left: 0;
     margin-right: 7px;
 }
 
 .message-right .avatar-box {
-    margin-left: 5px;
-    margin-right: 7px;
+    margin-left: 7px;
+    margin-right: 0;
 }
 
 .message-content {
@@ -1203,23 +1424,22 @@ export default {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 32px;
 }
 
 .message-content-left {
-    max-width: calc(100% - 88px);
+    max-width: calc(100% - 82px);
     align-items: flex-start;
 }
 
 .message-content-right {
     flex: 0 1 auto;
-    max-width: calc(100% - 88px);
+    max-width: calc(100% - 82px);
     align-items: flex-end;
 }
 
 .sender-name {
-    font-size: 10px;
-    line-height: 1.2;
+    font-size: 9px;
+    line-height: 11px;
     color: #999;
     margin: 0 0 2px 6px;
 }
@@ -1231,8 +1451,8 @@ export default {
 }
 
 .bubble {
-    padding: 6px 12px;
-    border-radius: 15px;
+    padding: 5px 10px;
+    border-radius: 13px;
     word-break: break-word;
     position: relative;
     display: inline-block;
@@ -1240,7 +1460,7 @@ export default {
 
 .bubble-text {
     font-size: 13px;
-    line-height: 1.42;
+    line-height: 18px;
     text-align: left;
 }
 
@@ -1265,21 +1485,21 @@ export default {
 }
 
 .message-status {
-    width: 16px;
-    min-width: 16px;
-    height: 16px;
+    width: 14px;
+    min-width: 14px;
+    height: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-right: 4px;
-    padding-top: 8px;
+    padding-top: 7px;
     flex-shrink: 0;
     box-sizing: content-box;
 }
 
 .status-loading {
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
     border: 2px solid rgba(102, 126, 234, 0.3);
     border-top-color: #667eea;
     border-radius: 50%;
@@ -1287,15 +1507,14 @@ export default {
 }
 
 .share-card {
-    width: 176px;
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
     position: relative;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.055);
+    transition: all 0.24s;
 }
 
 .share-card-left {
@@ -1307,16 +1526,15 @@ export default {
 }
 
 .share-card:active {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
 }
 
 .share-image-wrapper {
     position: relative;
     width: 100%;
-    height: 236px;
     overflow: hidden;
-    background: #f5f5f7;
+    background: #f3f3f3;
 }
 
 .share-card-image {
@@ -1325,68 +1543,65 @@ export default {
     display: block;
 }
 
-.share-image-gradient {
+.share-video-badge {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
-    pointer-events: none;
-}
-
-.share-type-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    border-radius: 14px;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.42);
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+}
+
+.share-video-badge-icon {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.94);
+    line-height: 1;
+    margin-left: 1px;
 }
 
 .share-card-content {
-    padding: 10px;
+    padding: 4px 6px;
     box-sizing: border-box;
 }
 
 .share-card-title-container {
-    margin-bottom: 8px;
+    height: 16px;
+    margin-bottom: 2px;
 }
 
 .share-card-title {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
     color: #333;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    line-height: 16px;
+    display: block;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .share-card-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    height: 16px;
 }
 
 .share-card-author {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex: 1;
     min-width: 0;
 }
 
 .share-author-avatar {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     border: 1px solid #f0f0f0;
     flex-shrink: 0;
@@ -1394,7 +1609,7 @@ export default {
 }
 
 .share-author-name {
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
     white-space: nowrap;
     overflow: hidden;
@@ -1410,7 +1625,7 @@ export default {
 
 .system-text {
     font-size: 9px;
-    line-height: 1.2;
+    line-height: 12px;
     color: #666;
     text-align: center;
 }
@@ -1462,23 +1677,33 @@ export default {
 }
 
 .input-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     align-items: center;
-    padding: 9px 14px;
+    padding: 6px 14px 6px;
     background: #fff;
     border-top: 1px solid #e5e5e5;
     gap: 10px;
-    flex-shrink: 0;
+    box-sizing: border-box;
+    z-index: 110;
 }
 
 .disabled-input-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 11px 14px;
+    padding: 6px 14px;
     background: #fff;
     border-top: 1px solid #e5e5e5;
-    flex-shrink: 0;
+    box-sizing: border-box;
+    z-index: 110;
 }
 
 .disabled-input-text {
@@ -1514,6 +1739,7 @@ export default {
     align-items: center;
     justify-content: center;
     transition: all 0.3s;
+    flex-shrink: 0;
 }
 
 .send-btn-active {

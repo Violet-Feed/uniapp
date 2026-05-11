@@ -1,18 +1,20 @@
 <template>
     <view class="conversation-container">
-        <!-- 顶部标题栏 -->
-        <view class="header-bar">
-            <text class="header-title">消息</text>
-            <view class="header-actions">
-                <view class="action-btn" @click="showDropdown = !showDropdown">
-                    <text class="action-icon">➕</text>
+        <!-- 顶部消息栏：包含状态栏 / 刘海区域，消息和加号位于下半部分 -->
+        <view class="header-bar" :style="headerBarStyle">
+            <view class="header-content" :style="headerContentStyle">
+                <text class="header-title">消息</text>
+                <view class="header-actions">
+                    <view class="action-btn" :style="actionButtonStyle" @click="showDropdown = !showDropdown">
+                        <text class="action-icon">➕</text>
+                    </view>
                 </view>
             </view>
         </view>
 
         <!-- 下拉菜单 -->
         <view class="dropdown-overlay" v-if="showDropdown" @click="showDropdown = false">
-            <view class="dropdown-menu" @click.stop>
+            <view class="dropdown-menu" :style="dropdownMenuStyle" @click.stop>
                 <view class="dropdown-item" @click="goToCreateConversationPage">
                     <text class="item-icon">👥</text>
                     <text class="item-text">创建群聊</text>
@@ -27,17 +29,18 @@
         <!-- 会话列表 -->
         <scroll-view
             class="conversation-scroll"
+            :style="conversationScrollStyle"
             scroll-y
             lower-threshold="40"
             @scroll="onConversationScroll"
             @scrolltolower="onConversationScrollToLower"
         >
             <view class="conversation-list">
-                <!-- 固定通知入口 -->
-                <view class="notice-row">
+                <!-- 固定通知入口：高度为会话高度的 1.5 倍 -->
+                <view class="notice-row" :style="noticeRowStyle">
                     <view class="notice-card" @click="openNotice(NOTICE_GROUP.SYSTEM)">
-                        <view class="notice-avatar-wrapper">
-                            <image class="notice-avatar" src="/static/notice.png" mode="aspectFill"></image>
+                        <view class="notice-avatar-wrapper" :style="noticeAvatarStyle">
+                            <image class="notice-avatar" :style="noticeAvatarStyle" src="/static/notice.png" mode="aspectFill"></image>
                             <view class="unread-badge" v-if="systemNoticeCount > 0">
                                 {{ systemNoticeCount > 99 ? '99+' : systemNoticeCount }}
                             </view>
@@ -46,8 +49,8 @@
                     </view>
 
                     <view class="notice-card" @click="openNotice(NOTICE_GROUP.FOLLOW)">
-                        <view class="notice-avatar-wrapper">
-                            <image class="notice-avatar" src="/static/notice.png" mode="aspectFill"></image>
+                        <view class="notice-avatar-wrapper" :style="noticeAvatarStyle">
+                            <image class="notice-avatar" :style="noticeAvatarStyle" src="/static/notice.png" mode="aspectFill"></image>
                             <view class="unread-badge" v-if="followNoticeCount > 0">
                                 {{ followNoticeCount > 99 ? '99+' : followNoticeCount }}
                             </view>
@@ -56,8 +59,8 @@
                     </view>
 
                     <view class="notice-card" @click="openNotice(NOTICE_GROUP.ACTION)">
-                        <view class="notice-avatar-wrapper">
-                            <image class="notice-avatar" src="/static/notice.png" mode="aspectFill"></image>
+                        <view class="notice-avatar-wrapper" :style="noticeAvatarStyle">
+                            <image class="notice-avatar" :style="noticeAvatarStyle" src="/static/notice.png" mode="aspectFill"></image>
                             <view class="unread-badge" v-if="actionNoticeCount > 0">
                                 {{ actionNoticeCount > 99 ? '99+' : actionNoticeCount }}
                             </view>
@@ -66,11 +69,12 @@
                     </view>
                 </view>
 
-                <!-- 普通会话列表 -->
+                <!-- 普通会话列表：一屏约显示 8 个 -->
                 <view
                     class="conversation-item"
                     v-for="(conversation, index) in conversationList"
                     :key="conversation.con_id || index"
+                    :style="conversationItemStyle"
                     @click="openChat(conversation)"
                     @touchstart="onConversationTouchStart"
                     @touchmove="onConversationTouchMove"
@@ -81,6 +85,7 @@
                     <view class="avatar-wrapper">
                         <image
                             class="avatar"
+                            :style="avatarStyle"
                             :src="conversation.avatar_uri || '/static/conv_avatar.png'"
                             mode="aspectFill"
                         ></image>
@@ -136,6 +141,7 @@
                 </view>
             </view>
         </view>
+		<custom-tabbar active-path="pages/im/home" />
     </view>
 </template>
 
@@ -164,6 +170,16 @@ export default {
             conversationScrollBoxHeight: 0,
             privateProfileTtlMs: 24 * 60 * 60 * 1000,
 
+            // 布局高度：会话一屏约 8 个，通知栏与会话同高，顶栏与会话同高
+            windowHeight: 667,
+            statusBarHeight: 0,
+            headerHeight: 60,
+            noticeRowHeight: 60,
+            conversationItemHeight: 60,
+            avatarSize: 46,
+            noticeAvatarSize: 38,
+            actionButtonSize: 36,
+
             showDropdown: false,
             normalListener: null,
             commandListener: null,
@@ -189,7 +205,49 @@ export default {
         };
     },
 
+    computed: {
+        headerBarStyle() {
+            return 'height:' + this.headerHeight + 'px;';
+        },
+
+        headerContentStyle() {
+            const contentHeight = Math.max(32, this.headerHeight - this.statusBarHeight)
+            return 'height:' + contentHeight + 'px;margin-top:' + this.statusBarHeight + 'px;'
+        },
+
+        conversationScrollStyle() {
+            const top = this.headerHeight;
+            const height = Math.max(0, this.windowHeight - top);
+            return 'top:' + top + 'px;height:' + height + 'px;';
+        },
+
+        dropdownMenuStyle() {
+            return 'top:' + (this.headerHeight + 8) + 'px;';
+        },
+
+        noticeRowStyle() {
+            return 'height:' + this.noticeRowHeight + 'px;';
+        },
+
+        conversationItemStyle() {
+            return 'height:' + this.conversationItemHeight + 'px;';
+        },
+
+        avatarStyle() {
+            return 'width:' + this.avatarSize + 'px;height:' + this.avatarSize + 'px;border-radius:' + Math.floor(this.avatarSize / 2) + 'px;';
+        },
+
+        noticeAvatarStyle() {
+            return 'width:' + this.noticeAvatarSize + 'px;height:' + this.noticeAvatarSize + 'px;border-radius:' + Math.floor(this.noticeAvatarSize / 2) + 'px;';
+        },
+
+        actionButtonStyle() {
+            return 'width:' + this.actionButtonSize + 'px;height:' + this.actionButtonSize + 'px;border-radius:' + Math.floor(this.actionButtonSize / 2) + 'px;';
+        }
+    },
+
     onLoad() {
+        this.initResponsiveLayout();
         this.loadMoreConversations(true);
 
         this.normalListener = (data) => {
@@ -320,6 +378,11 @@ export default {
         this.loadNoticeCounts();
     },
 
+    onShow() {
+        this.initResponsiveLayout();
+        this.$nextTick(() => this.updateConversationScrollBoxHeight());
+    },
+
     onReady() {
         this.updateConversationScrollBoxHeight();
     },
@@ -339,6 +402,38 @@ export default {
     },
 
     methods: {
+        initResponsiveLayout() {
+            try {
+                const sys = uni.getSystemInfoSync();
+                const windowHeight = Number(sys.windowHeight || 667);
+                const statusBarHeight = Number(sys.statusBarHeight || 0);
+
+                this.windowHeight = windowHeight;
+                this.statusBarHeight = statusBarHeight;
+
+                // 顶栏总高度包含状态栏 / 刘海区域，并且等于一个会话高度。
+                // 整屏约为：顶栏 1H + 列表 8H = 9H；列表 8H 中包含通知栏。
+                const rowHeight = Math.floor(windowHeight / 9);
+
+                this.conversationItemHeight = Math.max(statusBarHeight + 38, rowHeight);
+                this.headerHeight = this.conversationItemHeight;
+                this.noticeRowHeight = this.conversationItemHeight;
+
+                this.avatarSize = Math.max(38, Math.min(52, Math.floor(this.conversationItemHeight * 0.64)));
+                this.noticeAvatarSize = Math.max(34, Math.min(46, Math.floor(this.conversationItemHeight * 0.56)));
+                this.actionButtonSize = Math.max(28, Math.min(36, Math.floor(this.conversationItemHeight * 0.46)));
+            } catch (err) {
+                this.windowHeight = 667;
+                this.statusBarHeight = 0;
+                this.conversationItemHeight = 60;
+                this.headerHeight = 60;
+                this.noticeRowHeight = 60;
+                this.avatarSize = 42;
+                this.noticeAvatarSize = 34;
+                this.actionButtonSize = 30;
+            }
+        },
+
         updateConversationScrollBoxHeight() {
             this.$nextTick(() => {
                 const query = uni.createSelectorQuery().in(this);
@@ -449,11 +544,11 @@ export default {
             const { userIds, agentIds } = this.collectPrivateProfileIds(list);
 
             if (userIds.length > 0) {
-                enqueueProfileRefresh("user", userIds, this.privateProfileTtlMs);
+                enqueueProfileRefresh('user', userIds, this.privateProfileTtlMs);
             }
 
             if (agentIds.length > 0) {
-                enqueueProfileRefresh("agent", agentIds, this.privateProfileTtlMs);
+                enqueueProfileRefresh('agent', agentIds, this.privateProfileTtlMs);
             }
         },
 
@@ -600,8 +695,10 @@ export default {
             let top = point.y - menuHeight - 12;
 
             left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
-            if (top < 64) top = point.y + 12;
-            top = Math.max(8, Math.min(top, sys.windowHeight - menuHeight - 8));
+
+            const minTop = this.statusBarHeight + 8;
+            if (top < minTop) top = point.y + 12;
+            top = Math.max(minTop, Math.min(top, sys.windowHeight - menuHeight - 8));
 
             this.conversationAction = {
                 visible: true,
@@ -743,24 +840,32 @@ export default {
 <style scoped>
 .conversation-container {
     height: 100vh;
-    display: flex;
-    flex-direction: column;
     background: #f8f9fa;
+    position: relative;
+    overflow: hidden;
 }
 
 .header-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 120;
+    box-sizing: border-box;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.header-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
 }
 
 .header-title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: bold;
     color: #fff;
 }
@@ -771,11 +876,8 @@ export default {
 }
 
 .action-btn {
-    width: 36px;
-    height: 36px;
     background: rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -788,7 +890,7 @@ export default {
 }
 
 .action-icon {
-    font-size: 18px;
+    font-size: 15px;
     color: #fff;
 }
 
@@ -814,7 +916,6 @@ export default {
 
 .dropdown-menu {
     position: absolute;
-    top: 60px;
     right: 16px;
     background: #fff;
     border-radius: 12px;
@@ -862,12 +963,15 @@ export default {
 }
 
 .conversation-scroll {
-    flex: 1;
+    position: fixed;
+    left: 0;
+    right: 0;
     overflow: hidden;
+    background: #f8f9fa;
 }
 
 .conversation-list {
-    padding: 8px 0 0;
+    padding: 0;
 }
 
 .notice-row {
@@ -875,11 +979,13 @@ export default {
     align-items: center;
     background: #fff;
     margin-bottom: 5px;
-    padding: 7px 16px;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
 
 .notice-card {
     flex: 1;
+    height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -892,20 +998,15 @@ export default {
 
 .notice-avatar-wrapper {
     position: relative;
-    width: 38px;
-    height: 38px;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .notice-avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
     border: 2px solid #f0f0f0;
 }
 
 .notice-name {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 400;
     color: #333;
     line-height: 1.25;
@@ -915,10 +1016,11 @@ export default {
     position: relative;
     display: flex;
     align-items: center;
-    padding: 9px 16px;
+    padding: 0 16px;
     background: #fff;
     margin-bottom: 0;
     transition: background 0.2s;
+    box-sizing: border-box;
 }
 
 .conversation-item::after {
@@ -943,9 +1045,6 @@ export default {
 }
 
 .avatar {
-    width: 46px;
-    height: 46px;
-    border-radius: 50%;
     border: 2px solid #f0f0f0;
 }
 
@@ -1002,13 +1101,13 @@ export default {
 .conversation-message {
     display: flex;
     align-items: center;
-    min-height: 18px;
+    min-height: 16px;
 }
 
 .last-message {
-    min-height: 18px;
-    line-height: 18px;
-    font-size: 13px;
+    min-height: 16px;
+    line-height: 16px;
+    font-size: 12px;
     font-weight: 400;
     color: #666;
     overflow: hidden;

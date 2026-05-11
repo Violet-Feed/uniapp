@@ -4,9 +4,8 @@
 <script>
 import DB from '@/utils/sqlite.js'
 import Snowflake from '@/utils/snowflake.js'
-import {
-	init
-} from '@/utils/init.js'
+import { init } from '@/utils/init.js'
+import { flushClickReportQueue } from '@/utils/track.js'
 
 export default {
 	onLaunch(options) {
@@ -50,6 +49,10 @@ export default {
 				force: false
 			})
 		}, 500)
+	},
+	
+	onHide() {
+	    flushClickReportQueue()
 	},
 
 	methods: {
