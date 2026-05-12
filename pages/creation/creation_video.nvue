@@ -1,9 +1,9 @@
 <template>
-  <view class="page">
-    <!-- 视频本体 -->
+  <view class="page violet-font" :style="pageStyle">
     <video
       id="creationVideo"
       class="video"
+      :style="pageStyle"
       :src="creation.videoUrl"
       :poster="creation.coverImage"
       :autoplay="true"
@@ -12,157 +12,193 @@
       object-fit="contain"
     ></video>
 
-    <!-- 透明触摸层：nvue/App 中 video 原生组件的 longpress 不稳定，用覆盖层统一处理单击和长按 -->
     <view
       class="video-touch-layer"
+      :style="pageStyle"
       @touchstart="onVideoTouchStart"
       @touchmove="onVideoTouchMove"
       @touchend="onVideoTouchEnd"
       @touchcancel="onVideoTouchCancel"
     ></view>
 
-    <!-- 顶部：只有返回 -->
-    <view class="top-bar">
+    <view class="top-bar" :style="topBarStyle">
       <view class="back-btn" @click="goBack">
-        <text class="back-icon">←</text>
+        <text class="iconfont back-icon" :style="backIconStyle">{{ icons.fanhui }}</text>
       </view>
     </view>
 
-    <!-- 右侧头像 + 点赞 / 评论 / 转发 -->
-    <view class="right-actions">
+    <view
+      v-if="!showCommentsPanel && !showSharePanel && !videoActionSheet.visible"
+      class="right-actions"
+      :style="rightActionsStyle"
+    >
       <view
         class="action-item avatar-item"
+        :style="avatarItemStyle"
         @click="goToUserPage(creation.author.user_id)"
       >
-        <view class="avatar-touch">
-          <view class="avatar-wrapper">
+        <view class="avatar-touch" :style="avatarTouchStyle">
+          <view class="avatar-wrapper" :style="avatarWrapperStyle">
             <image
               class="avatar-img"
+              :style="avatarImageStyle"
               :src="creation.author.avatar || defaultAvatar"
               mode="aspectFill"
             />
           </view>
         </view>
+
         <view
           v-if="!isSelfAuthor && !isFollowed"
           class="follow-plus"
+          :style="followPlusStyle"
           @click.stop="handleFollowClick"
         >
           <text class="follow-plus-text">+</text>
         </view>
       </view>
 
-      <view class="action-item" @click="toggleLike">
-        <view class="action-hit">
-          <text class="action-icon" :class="{ liked: isLiked }">
-            {{ isLiked ? '♥️' : '♡' }}
+      <view class="action-item" :style="actionItemStyle" @click="toggleLike">
+        <view class="action-hit" :style="actionHitStyle">
+          <text
+            class="iconfont action-icon"
+            :class="{ liked: isLiked }"
+            :style="actionIconStyle"
+          >
+            {{ isLiked ? icons.xihuan : icons.xihuan1 }}
           </text>
-          <text class="action-count">
+          <text class="action-count" :style="actionCountStyle">
             {{ formatNumber(creation.likes) }}
           </text>
         </view>
       </view>
 
-      <view class="action-item" @click="openCommentsPanel">
-        <view class="action-hit">
-          <text class="action-icon">💬</text>
-          <text class="action-count">
+      <view class="action-item" :style="actionItemStyle" @click="openCommentsPanel">
+        <view class="action-hit" :style="actionHitStyle">
+          <text class="iconfont action-icon" :style="actionIconStyle">
+            {{ icons.comment }}
+          </text>
+          <text class="action-count" :style="actionCountStyle">
             {{ formatNumber(creation.comments) }}
           </text>
         </view>
       </view>
 
-      <view class="action-item" @click="openSharePanel">
-        <view class="action-hit">
-          <view class="share-action-icon">
-            <text class="share-action-text">↗</text>
-          </view>
-          <text class="action-count">
+      <view class="action-item" :style="actionItemStyle" @click="openSharePanel">
+        <view class="action-hit" :style="actionHitStyle">
+          <text class="iconfont action-icon" :style="actionIconStyle">
+            {{ icons.fenxiang }}
+          </text>
+          <text class="action-count" :style="actionCountStyle">
             {{ formatNumber(creation.shares) }}
           </text>
         </view>
       </view>
     </view>
 
-    <!-- 中间播放提示：仅暂停时显示 ▶，无圆形背景 -->
     <view v-if="showCenterIcon && !showCommentsPanel" class="center-icon">
       <text class="center-icon-text">▶</text>
     </view>
 
-    <!-- 底部信息 -->
-    <view class="bottom-info">
+    <view
+      v-if="!showCommentsPanel && !showSharePanel && !videoActionSheet.visible"
+      class="bottom-info"
+      :style="bottomInfoStyle"
+    >
       <view class="author-row" @click="goToUserPage(creation.author.user_id)">
-        <text class="author-name">
+        <text class="author-name" :style="authorNameStyle">
           @{{ creation.author.username || '匿名用户' }}
         </text>
       </view>
 
-      <view class="title-row">
-        <text class="title-text">
-          {{ creation.title || '无标题作品' }}
+      <view class="title-row" v-if="creation.title">
+        <text class="title-text" :style="titleStyle">
+          {{ creation.title }}
         </text>
       </view>
 
-      <view class="detail-row">
+      <view class="detail-row" v-if="detailDisplayText">
         <text
+          v-if="!isDetailExpanded"
           class="detail-text"
-          :lines="isDetailExpanded ? 10 : 2"
-        >
-          {{ detailDisplayText }}
-        </text>
-        <text
-          v-if="detailDisplayText && detailDisplayText.length > 50"
-          class="detail-expand"
+          :style="detailStyle"
+          lines="2"
           @click="toggleDetail"
         >
-          {{ isDetailExpanded ? '收起' : '...展开' }}
+          {{ collapsedDetailInlineText }}
+        </text>
+
+        <text
+          v-else
+          class="detail-text"
+          :style="detailStyle"
+          @click="toggleDetail"
+        >
+          {{ expandedDetailInlineText }}
+        </text>
+      </view>
+
+      <view class="meta-row" v-if="creation.time || creation.location">
+        <text v-if="creation.time" class="meta-text" :style="metaStyle">
+          {{ formatRelativeTime(creation.time) }}
+        </text>
+        <text v-if="creation.location" class="meta-text" :style="metaStyle">
+          {{ creation.location }}
         </text>
       </view>
     </view>
 
-    <!-- 评论抽屉 -->
     <view
       v-if="showCommentsPanel"
       class="comments-mask"
+      :style="pageStyle"
       @click="closeCommentsPanelByMask"
     >
-      <view class="comments-panel" @click.stop="handleCommentsPanelTap">
-        <view class="comments-header">
-          <text class="comments-title">
+      <view
+        class="comments-panel"
+        :style="commentsPanelStyle"
+        @click.stop
+      >
+        <view class="comments-header" :style="commentsHeaderStyle">
+          <text class="comments-title" :style="commentsTitleStyle">
             评论 {{ formatNumber(creation.comments) }}
           </text>
 
           <view class="comments-header-right">
             <view class="comments-sort" @click.stop="toggleCommentSort">
-              <text class="comments-sort-label">
+              <text class="comments-sort-label" :style="commentMetaStyle">
                 {{ commentSortType === 'time' ? '按时间' : '按热度' }}
               </text>
             </view>
-            <text class="comments-close" @click.stop="closeCommentsPanel">✕</text>
+            <text class="comments-close" :style="commentsCloseStyle" @click.stop="closeCommentsPanel">
+              ×
+            </text>
           </view>
         </view>
 
-        <!-- 评论列表 -->
         <scroll-view
           scroll-y="true"
           class="comments-scroll"
+          :style="commentsScrollStyle"
           @scrolltolower="onCommentsScrollToLower"
           lower-threshold="80"
+          @touchend="handleCommentsBlankTouchEnd"
         >
           <view
             class="comment-item"
+            :style="commentItemStyle"
             v-for="comment in commentList"
             :key="comment.id"
           >
             <image
               class="comment-avatar"
+              :style="commentAvatarStyle"
               :src="comment.user.avatar || defaultAvatar"
               mode="aspectFill"
               @click.stop="goToUserPage(comment.user.user_id)"
             />
 
             <view class="comment-main">
-              <!-- 一级评论主体：只给这块绑定长按，避免和回复长按冲突 -->
               <view
                 class="comment-primary"
                 @touchstart="onCommentTouchStart"
@@ -171,25 +207,40 @@
                 @touchcancel="onCommentTouchEnd"
                 @longpress.stop="showCommentAction(comment, null, 'comment')"
               >
-                <view class="comment-header">
-                  <text
-                    class="comment-username"
-                    @click.stop="goToUserPage(comment.user.user_id)"
-                  >
-                    {{ comment.user.name }}
-                  </text>
+                <view class="comment-header-row">
+                  <view class="comment-name-line">
+                    <text
+                      class="comment-username"
+                      :style="commentNameStyle"
+                      @click.stop="goToUserPage(comment.user.user_id)"
+                    >
+                      {{ comment.user.name || '用户' }}
+                    </text>
+
+                    <text
+                      v-if="isAuthorComment(comment.user.user_id)"
+                      class="author-badge"
+                      :style="authorBadgeStyle"
+                    >
+                      作者
+                    </text>
+                  </view>
 
                   <view
                     class="comment-like"
                     :class="{ liked: comment.isLiked }"
                     @click.stop="toggleCommentLike(comment)"
                   >
-                    <text class="comment-like-icon">
-                      {{ comment.isLiked ? '♥️' : '♡' }}
+                    <text
+                      class="iconfont comment-like-icon"
+                      :class="{ liked: comment.isLiked }"
+                      :style="commentLikeIconStyle"
+                    >
+                      {{ comment.isLiked ? icons.xihuan : icons.xihuan1 }}
                     </text>
                     <text
-                      v-if="comment.likes > 0"
                       class="comment-like-count"
+                      :style="commentMetaStyle"
                     >
                       {{ formatNumber(comment.likes) }}
                     </text>
@@ -197,17 +248,18 @@
                 </view>
 
                 <view class="comment-text-wrap">
-                  <text class="comment-text">
+                  <text class="comment-text" :style="commentTextStyle">
                     {{ comment.text }}
                   </text>
                 </view>
 
                 <view class="comment-meta">
-                  <text class="comment-time">
+                  <text class="comment-time" :style="commentMetaStyle">
                     {{ formatRelativeTime(comment.time) }}
                   </text>
                   <text
                     class="comment-reply"
+                    :style="commentMetaStyle"
                     @click.stop="replyToComment(comment, comment)"
                   >
                     回复
@@ -219,13 +271,12 @@
                   class="comment-replies-toggle"
                   @click.stop="toggleReplies(comment)"
                 >
-                  <text class="comment-replies-toggle-text">
+                  <text class="comment-replies-toggle-text" :style="commentMetaStyle">
                     展开{{ comment.replyCount }}条回复
                   </text>
                 </view>
               </view>
 
-              <!-- 二级回复列表 -->
               <view v-if="comment.showReplies" class="reply-list">
                 <view
                   class="reply-item"
@@ -239,6 +290,7 @@
                 >
                   <image
                     class="reply-avatar"
+                    :style="replyAvatarStyle"
                     :src="reply.user.avatar || defaultAvatar"
                     mode="aspectFill"
                     @click.stop="goToUserPage(reply.user.user_id)"
@@ -249,14 +301,24 @@
                       <view class="reply-name-line">
                         <text
                           class="reply-username"
+                          :style="commentNameStyle"
                           @click.stop="goToUserPage(reply.user.user_id)"
                         >
-                          {{ reply.user.name }}
+                          {{ reply.user.name || '用户' }}
+                        </text>
+
+                        <text
+                          v-if="isAuthorComment(reply.user.user_id)"
+                          class="author-badge reply-author-badge"
+                          :style="authorBadgeStyle"
+                        >
+                          作者
                         </text>
 
                         <text
                           v-if="reply.replyToUser && reply.replyToUserId"
                           class="reply-at"
+                          :style="commentMetaStyle"
                           @click.stop="goToUserPage(reply.replyToUserId)"
                         >
                           回复 @{{ reply.replyToUser }}
@@ -268,28 +330,33 @@
                         :class="{ liked: reply.isLiked }"
                         @click.stop="toggleCommentLike(reply)"
                       >
-                        <text class="reply-like-icon">
-                          {{ reply.isLiked ? '♥️' : '♡' }}
+                        <text
+                          class="iconfont reply-like-icon"
+                          :class="{ liked: reply.isLiked }"
+                          :style="replyLikeIconStyle"
+                        >
+                          {{ reply.isLiked ? icons.xihuan : icons.xihuan1 }}
                         </text>
                         <text
-                          v-if="reply.likes > 0"
                           class="reply-like-count"
+                          :style="commentMetaStyle"
                         >
                           {{ formatNumber(reply.likes) }}
                         </text>
                       </view>
                     </view>
 
-                    <text class="reply-text">
+                    <text class="reply-text" :style="replyTextStyle">
                       {{ reply.text }}
                     </text>
 
                     <view class="reply-meta">
-                      <text class="reply-time">
+                      <text class="reply-time" :style="commentMetaStyle">
                         {{ formatRelativeTime(reply.time) }}
                       </text>
                       <text
                         class="reply-reply"
+                        :style="commentMetaStyle"
                         @click.stop="replyToComment(reply, comment)"
                       >
                         回复
@@ -301,6 +368,8 @@
                 <view class="reply-footer" v-if="comment.replies.length > 0">
                   <text
                     v-if="comment.replyHasMore && !comment.replyLoading"
+                    class="reply-footer-text"
+                    :style="commentMetaStyle"
                     @click.stop="loadMoreReplies(comment)"
                   >
                     展开更多回复
@@ -308,11 +377,13 @@
                   <text
                     v-if="comment.replyLoading"
                     class="reply-footer-loading"
+                    :style="commentMetaStyle"
                   >
                     回复加载中...
                   </text>
                   <text
                     class="reply-footer-collapse"
+                    :style="commentMetaStyle"
                     @click.stop="toggleReplies(comment)"
                   >
                     收起
@@ -325,47 +396,54 @@
           <view
             v-if="!commentList.length && !commentLoading"
             class="empty-comments"
+            :style="emptyCommentsStyle"
           >
-            <text class="empty-comments-text">还没有评论，快来抢沙发吧~</text>
+            <text class="empty-comments-text" :style="commentTextStyle">
+              还没有评论，快来抢沙发吧~
+            </text>
           </view>
 
           <view
             v-if="commentLoading && commentList.length"
             class="empty-comments"
+            :style="loadingCommentsStyle"
           >
-            <text class="empty-comments-text">评论加载中...</text>
+            <text class="empty-comments-text" :style="commentTextStyle">
+              评论加载中...
+            </text>
+          </view>
+
+          <view
+            v-if="!commentHasMore && commentList.length"
+            class="comments-footer"
+          >
+            <text class="comments-footer-text" :style="commentMetaStyle">
+              没有更多评论了
+            </text>
           </view>
         </scroll-view>
 
-        <!-- 默认占位输入条：点击后从下方切换为真正输入框 -->
         <view
-          v-if="!showCommentInput"
-          class="comment-placeholder-bar"
-          @click.stop="startNewComment"
-        >
-          <view class="comment-placeholder-input">
-            <text class="comment-placeholder-text">说点什么...</text>
-          </view>
-        </view>
-
-        <!-- 评论输入框：点击回复后出现，点击其他地方且内容为空时取消回复状态 -->
-        <view
-          v-if="showCommentInput"
           class="comment-input-bar"
+          :style="commentInputBarStyle"
           @click.stop
         >
           <input
             class="comment-input"
+            :style="commentInputBoxStyle"
             v-model="commentText"
             :placeholder="commentPlaceholder"
             :focus="commentInputFocus"
             confirm-type="send"
+            @focus="handleInputFocus"
             @blur="handleInputBlurInPanel"
             @confirm="sendComment"
           />
+
           <view
             class="send-btn"
             :class="{ active: commentText.trim() }"
+            :style="sendBtnStyle"
             @click="sendComment"
           >
             <text
@@ -373,6 +451,7 @@
                 'send-btn-text',
                 commentText.trim() ? 'send-btn-text-active' : ''
               ]"
+              :style="sendTextStyle"
             >
               发送
             </text>
@@ -381,74 +460,60 @@
       </view>
     </view>
 
-    <!-- 长按评论/回复删除菜单 -->
     <view class="comment-action-mask" v-if="commentAction.visible" @click="hideCommentAction">
-      <view class="comment-action-sheet" @click.stop>
+      <view class="comment-action-sheet" :style="flatActionSheetStyle" @click.stop>
         <view class="comment-action-delete" @click="confirmDeleteSelectedComment">
-          <text class="comment-action-delete-text">删除</text>
+          <text class="comment-action-delete-text">
+            {{ commentAction.deleting ? '删除中...' : '删除' }}
+          </text>
         </view>
       </view>
     </view>
 
-    <!-- 长按视频操作面板 -->
     <view class="video-action-mask" v-if="videoActionSheet.visible" @click="closeVideoActionSheet">
-      <view class="video-action-sheet" @click.stop>
+      <view class="video-action-sheet" :style="flatActionSheetStyle" @click.stop>
         <view
           class="video-action-item"
           :class="{ disabled: videoActionSheet.saving }"
           @click="saveVideoToAlbum"
         >
+          <text class="iconfont video-action-icon">{{ icons.xiazai }}</text>
           <text class="video-action-text">
             {{ videoActionSheet.saving ? '保存中...' : '保存到相册' }}
           </text>
         </view>
-
       </view>
     </view>
 
-    <!-- 分享面板 -->
     <view class="share-mask" v-if="showSharePanel" @click="closeSharePanel">
-      <view class="share-panel" @click.stop>
+      <view class="share-panel" :style="sharePanelStyle" @click.stop>
         <view class="share-panel-title-wrap">
           <text class="share-panel-title">分享至</text>
         </view>
 
         <view class="share-options-row">
           <view class="share-option" @click="shareToChat">
-            <view class="share-option-icon chat-icon">
-              <text class="share-icon-text">💬</text>
-            </view>
+            <text class="iconfont share-option-icon">{{ icons.xiaoxi }}</text>
             <text class="share-option-text">聊天</text>
           </view>
 
           <view class="share-option" @click="shareToFriend">
-            <view class="share-option-icon friend-icon">
-              <view class="friend-person-icon">
-                <view class="friend-person-head"></view>
-                <view class="friend-person-body"></view>
-              </view>
-            </view>
+            <text class="iconfont share-option-icon share-option-icon-small">{{ icons.qunliaox }}</text>
             <text class="share-option-text">朋友</text>
           </view>
 
           <view class="share-option" @click="shareToWechat">
-            <view class="share-option-icon wechat-icon">
-              <text class="share-icon-text-small">微</text>
-            </view>
+            <text class="iconfont share-option-icon">{{ icons.weixin }}</text>
             <text class="share-option-text">微信</text>
           </view>
 
           <view class="share-option" @click="shareToTimeline">
-            <view class="share-option-icon timeline-icon">
-              <text class="share-icon-text-small">朋</text>
-            </view>
+            <text class="iconfont share-option-icon share-option-icon-small">{{ icons.pengyouquan }}</text>
             <text class="share-option-text">朋友圈</text>
           </view>
 
           <view class="share-option" @click="shareToQQ">
-            <view class="share-option-icon qq-icon">
-              <text class="share-icon-text">Q</text>
-            </view>
+            <text class="iconfont share-option-icon">{{ icons.QQ }}</text>
             <text class="share-option-text">QQ</text>
           </view>
         </view>
@@ -486,6 +551,10 @@ import {
   deleteReply
 } from '@/request/action.js'
 
+const clamp = (value, min, max) => {
+  return Math.max(min, Math.min(max, value))
+}
+
 export default {
   components: {
     ForwardPicker
@@ -493,8 +562,42 @@ export default {
 
   data() {
     return {
+      icons: {
+        xiazai: '\ue656',
+        fujian: '\ue88a',
+        simangxing: '\ue7e2',
+        ziyuanxhdpi: '\ue64c',
+        qunliaox: '\ue6e2',
+        jiahao: '\ue726',
+        gouxuan: '\ue648',
+        weixin: '\ue63f',
+        gouxuan1: '\ue65c',
+        xihuan: '\ue86f',
+        xihuan1: '\ue870',
+        wode: '\ue605',
+        xiaoxi: '\ue612',
+        bianji: '\ue607',
+        jiahao_o: '\ueb78',
+        QQ: '\ue83d',
+        shezhi: '\ue851',
+        tongzhi: '\ue602',
+        shouye: '\ue668',
+        gengduo: '\ue64d',
+        pengyouquan: '\ue635',
+        tupian: '\ue811',
+        shipin: '\ue812',
+        sousuo: '\ue60d',
+        dongtai: '\ue7ae',
+        fanhui: '\ue63e',
+        neirongchuangzuo: '\ue61d',
+        comment: '\ue631',
+        fenxiang: '\ue891',
+        zhinengti: '\ue600'
+      },
+
       creationId: '',
       authorId: '',
+
       videoContext: null,
       videoTouchTimer: null,
       videoTouchStartX: 0,
@@ -549,11 +652,12 @@ export default {
       commentSortType: 'digg',
       commentsInitialized: false,
 
-      showCommentInput: false,
       commentText: '',
       commentPlaceholder: '说点什么...',
       commentInputFocus: false,
       replyingTo: null,
+      suppressInputBlurClose: false,
+      preventCancelReplyOnce: false,
 
       commentAction: {
         visible: false,
@@ -569,6 +673,11 @@ export default {
         moved: false
       },
 
+      videoActionSheet: {
+        visible: false,
+        saving: false
+      },
+
       showSharePanel: false,
       shareLoading: false,
       forwardPicker: {
@@ -576,12 +685,44 @@ export default {
         mode: 'conversation'
       },
 
-      videoActionSheet: {
-        visible: false,
-        saving: false
-      },
+      likeLoading: false,
 
-      likeLoading: false
+      windowWidth: 375,
+      windowHeight: 667,
+      statusBarHeight: 0,
+      safeBottom: 0,
+
+      rightActionsTop: 320,
+      rightActionsWidth: 62,
+      actionItemSize: 62,
+      actionIconSize: 34,
+      actionCountFontSize: 11,
+      avatarSize: 48,
+      avatarInnerSize: 42,
+
+      bottomInfoBottom: 8,
+      bottomInfoWidth: 280,
+
+      authorNameFontSize: 16,
+      titleFontSize: 15,
+      detailFontSize: 13,
+      metaFontSize: 12,
+
+      commentsPanelHeight: 470,
+      commentsHeaderHeight: 44,
+      commentsInputBarHeight: 54,
+      commentsScrollHeight: 372,
+
+      commentAvatarSize: 36,
+      replyAvatarSize: 26,
+      commentItemPadding: 10,
+      commentNameFontSize: 13,
+      commentTextFontSize: 13,
+      commentMetaFontSize: 11,
+      commentLikeIconSize: 18,
+
+      inputHeight: 36,
+      sendBtnWidth: 56
     }
   },
 
@@ -598,11 +739,16 @@ export default {
 
     inlineTagsText() {
       const arr = []
-      if (this.categoryLabel) arr.push(`# ${this.categoryLabel}`)
+
+      if (this.categoryLabel) {
+        arr.push(`# ${this.categoryLabel}`)
+      }
 
       if (Array.isArray(this.creation.tags)) {
         for (const tag of this.creation.tags) {
-          if (tag) arr.push(`# ${tag}`)
+          if (tag) {
+            arr.push(`# ${tag}`)
+          }
         }
       }
 
@@ -612,16 +758,280 @@ export default {
     detailDisplayText() {
       const detail = this.creation.detail || ''
       const tags = this.inlineTagsText || ''
-      return `${detail}${detail && tags ? ' ' : ''}${tags}`
+
+      if (detail && tags) return `${detail} ${tags}`
+      if (detail) return detail
+      return tags
+    },
+
+    detailLineUnits() {
+      if (!this.bottomInfoWidth || !this.detailFontSize) return 34
+      return Math.floor(this.bottomInfoWidth / this.detailFontSize)
+    },
+
+    detailCollapsedUnits() {
+      const suffixUnits = this.getTextUnits('...展开')
+      return Math.max(22, Math.floor(this.detailLineUnits * 2 - suffixUnits - 0.8))
+    },
+
+    showDetailExpand() {
+      return this.getTextUnits(this.detailDisplayText) > this.detailCollapsedUnits
+    },
+
+    collapsedDetailInlineText() {
+      if (!this.showDetailExpand) return this.detailDisplayText
+
+      const content = this.sliceTextByUnits(this.detailDisplayText, this.detailCollapsedUnits)
+      return `${content}...展开`
+    },
+
+    expandedDetailInlineText() {
+      if (!this.showDetailExpand) return this.detailDisplayText
+      return `${this.detailDisplayText} 收起`
     },
 
     isSelfAuthor() {
       if (!this.currentUserId || !this.creation.author.user_id) return false
       return String(this.currentUserId) === String(this.creation.author.user_id)
+    },
+
+    pageStyle() {
+      return (
+        'width:' + this.windowWidth + 'px;' +
+        'height:' + this.windowHeight + 'px;'
+      )
+    },
+
+    topBarStyle() {
+      return (
+        'height:' + (this.statusBarHeight + 46) + 'px;' +
+        'padding-top:' + this.statusBarHeight + 'px;'
+      )
+    },
+
+    backIconStyle() {
+      return 'font-size:' + clamp(Math.floor(this.windowWidth * 0.052), 18, 21) + 'px;'
+    },
+
+    rightActionsStyle() {
+      return (
+        'top:' + this.rightActionsTop + 'px;' +
+        'width:' + this.rightActionsWidth + 'px;'
+      )
+    },
+
+    actionItemStyle() {
+      return (
+        'width:' + this.rightActionsWidth + 'px;' +
+        'height:' + this.actionItemSize + 'px;'
+      )
+    },
+
+    avatarItemStyle() {
+      return (
+        'width:' + this.rightActionsWidth + 'px;' +
+        'height:' + Math.floor(this.actionItemSize * 1.08) + 'px;'
+      )
+    },
+
+    avatarTouchStyle() {
+      return (
+        'width:' + this.rightActionsWidth + 'px;' +
+        'height:' + Math.floor(this.actionItemSize * 0.9) + 'px;'
+      )
+    },
+
+    avatarWrapperStyle() {
+      const radius = Math.floor(this.avatarSize / 2)
+      return (
+        'width:' + this.avatarSize + 'px;' +
+        'height:' + this.avatarSize + 'px;' +
+        'border-radius:' + radius + 'px;'
+      )
+    },
+
+    avatarImageStyle() {
+      const radius = Math.floor(this.avatarInnerSize / 2)
+      return (
+        'width:' + this.avatarInnerSize + 'px;' +
+        'height:' + this.avatarInnerSize + 'px;' +
+        'border-radius:' + radius + 'px;'
+      )
+    },
+
+    followPlusStyle() {
+      const size = clamp(Math.floor(this.avatarSize * 0.43), 18, 21)
+      const left = Math.floor((this.rightActionsWidth - size) / 2)
+      const radius = Math.floor(size / 2)
+
+      return (
+        'width:' + size + 'px;' +
+        'height:' + size + 'px;' +
+        'border-radius:' + radius + 'px;' +
+        'left:' + left + 'px;'
+      )
+    },
+
+    actionHitStyle() {
+      return 'width:' + this.rightActionsWidth + 'px;'
+    },
+
+    actionIconStyle() {
+      return 'font-size:' + this.actionIconSize + 'px;'
+    },
+
+    actionCountStyle() {
+      return 'font-size:' + this.actionCountFontSize + 'px;'
+    },
+
+    bottomInfoStyle() {
+      return (
+        'bottom:' + this.bottomInfoBottom + 'px;' +
+        'width:' + this.bottomInfoWidth + 'px;'
+      )
+    },
+
+    authorNameStyle() {
+      return 'font-size:' + this.authorNameFontSize + 'px;'
+    },
+
+    titleStyle() {
+      return 'font-size:' + this.titleFontSize + 'px;'
+    },
+
+    detailStyle() {
+      return 'font-size:' + this.detailFontSize + 'px;'
+    },
+
+    metaStyle() {
+      return 'font-size:' + this.metaFontSize + 'px;'
+    },
+
+    commentsPanelStyle() {
+      return 'height:' + this.commentsPanelHeight + 'px;'
+    },
+
+    commentsHeaderStyle() {
+      return 'height:' + this.commentsHeaderHeight + 'px;'
+    },
+
+    commentsTitleStyle() {
+      return 'font-size:' + clamp(this.commentTextFontSize + 2, 14, 16) + 'px;'
+    },
+
+    commentsCloseStyle() {
+      return 'font-size:' + clamp(this.commentTextFontSize + 5, 18, 22) + 'px;'
+    },
+
+    commentsScrollStyle() {
+      return 'height:' + this.commentsScrollHeight + 'px;'
+    },
+
+    commentInputBarStyle() {
+      return (
+        'height:' + (this.commentsInputBarHeight + this.safeBottom) + 'px;' +
+        'padding-bottom:' + this.safeBottom + 'px;'
+      )
+    },
+
+    commentInputBoxStyle() {
+      return (
+        'height:' + this.inputHeight + 'px;' +
+        'border-radius:' + Math.floor(this.inputHeight / 2) + 'px;' +
+        'font-size:' + this.commentTextFontSize + 'px;'
+      )
+    },
+
+    sendBtnStyle() {
+      return (
+        'width:' + this.sendBtnWidth + 'px;' +
+        'height:' + this.inputHeight + 'px;' +
+        'border-radius:' + Math.floor(this.inputHeight / 2) + 'px;'
+      )
+    },
+
+    sendTextStyle() {
+      return 'font-size:' + this.commentTextFontSize + 'px;'
+    },
+
+    commentItemStyle() {
+      return (
+        'padding-top:' + this.commentItemPadding + 'px;' +
+        'padding-bottom:' + this.commentItemPadding + 'px;'
+      )
+    },
+
+    commentAvatarStyle() {
+      const radius = Math.floor(this.commentAvatarSize / 2)
+      return (
+        'width:' + this.commentAvatarSize + 'px;' +
+        'height:' + this.commentAvatarSize + 'px;' +
+        'border-radius:' + radius + 'px;'
+      )
+    },
+
+    replyAvatarStyle() {
+      const radius = Math.floor(this.replyAvatarSize / 2)
+      return (
+        'width:' + this.replyAvatarSize + 'px;' +
+        'height:' + this.replyAvatarSize + 'px;' +
+        'border-radius:' + radius + 'px;'
+      )
+    },
+
+    commentNameStyle() {
+      return 'font-size:' + this.commentNameFontSize + 'px;'
+    },
+
+    commentTextStyle() {
+      return 'font-size:' + this.commentTextFontSize + 'px;'
+    },
+
+    replyTextStyle() {
+      return 'font-size:' + this.commentTextFontSize + 'px;'
+    },
+
+    commentMetaStyle() {
+      return 'font-size:' + this.commentMetaFontSize + 'px;'
+    },
+
+    commentLikeIconStyle() {
+      return 'font-size:' + this.commentLikeIconSize + 'px;'
+    },
+
+    replyLikeIconStyle() {
+      return 'font-size:' + clamp(this.commentLikeIconSize - 1, 16, 18) + 'px;'
+    },
+
+    authorBadgeStyle() {
+      return 'font-size:' + clamp(this.commentMetaFontSize - 1, 9, 11) + 'px;'
+    },
+
+    emptyCommentsStyle() {
+      return 'height:' + Math.max(110, Math.floor(this.commentsScrollHeight * 0.42)) + 'px;'
+    },
+
+    loadingCommentsStyle() {
+      return 'height:40px;'
+    },
+
+    flatActionSheetStyle() {
+      return (
+        'width:' + this.windowWidth + 'px;' +
+        'padding-bottom:' + (12 + this.safeBottom) + 'px;'
+      )
+    },
+
+    sharePanelStyle() {
+      return 'padding-bottom:' + (18 + this.safeBottom) + 'px;'
     }
   },
 
   onLoad(options) {
+    this.loadVioletFont()
+    this.loadIconFont()
+    this.initResponsiveLayout()
+
     this.creationId = options.creationId || options.creation_id || ''
     this.authorId = options.userId || options.user_id || ''
 
@@ -641,6 +1051,7 @@ export default {
   },
 
   onShow() {
+    this.initResponsiveLayout()
     this.shareLoading = false
   },
 
@@ -657,6 +1068,139 @@ export default {
   },
 
   methods: {
+    loadVioletFont() {
+      // #ifdef APP-NVUE
+      try {
+        const domModule = weex.requireModule('dom')
+        let fontSrc = "url('static/fonts/HarmonyOS_Sans_SC_Regular.ttf')"
+
+        if (typeof plus !== 'undefined' && plus.io) {
+          const localPath = plus.io.convertLocalFileSystemURL(
+            '_www/static/fonts/HarmonyOS_Sans_SC_Regular.ttf'
+          )
+          fontSrc = `url('${localPath}')`
+        }
+
+        domModule.addRule('fontFace', {
+          fontFamily: 'VioletSans',
+          src: fontSrc
+        })
+      } catch (err) {
+        console.error('load nvue VioletSans failed:', err)
+      }
+      // #endif
+
+      // #ifndef APP-NVUE
+      uni.loadFontFace({
+        family: 'VioletSans',
+        source: "url('/static/fonts/HarmonyOS_Sans_SC_Regular.ttf')",
+        global: true,
+        fail: err => {
+          console.error('load VioletSans failed:', err)
+        }
+      })
+      // #endif
+    },
+
+    loadIconFont() {
+      // #ifdef APP-NVUE
+      try {
+        const domModule = weex.requireModule('dom')
+        let fontSrc = "url('static/icon/iconfont.ttf')"
+
+        if (typeof plus !== 'undefined' && plus.io) {
+          const localPath = plus.io.convertLocalFileSystemURL('_www/static/icon/iconfont.ttf')
+          fontSrc = `url('${localPath}')`
+        }
+
+        domModule.addRule('fontFace', {
+          fontFamily: 'violetIcon',
+          src: fontSrc
+        })
+      } catch (err) {
+        console.error('load nvue iconfont failed:', err)
+      }
+      // #endif
+
+      // #ifndef APP-NVUE
+      uni.loadFontFace({
+        family: 'violetIcon',
+        source: "url('/static/icon/iconfont.ttf')",
+        global: true,
+        fail: err => {
+          console.error('load iconfont failed:', err)
+        }
+      })
+      // #endif
+    },
+
+    initResponsiveLayout() {
+      try {
+        const sys = uni.getSystemInfoSync()
+        const windowWidth = Number(sys.windowWidth || 375)
+        const windowHeight = Number(sys.windowHeight || 667)
+        const statusBarHeight = Number(sys.statusBarHeight || 0)
+        const safeAreaInsets = sys.safeAreaInsets || {}
+        const safeBottom = Number(safeAreaInsets.bottom || 0)
+        const smallScreen = windowWidth <= 360 || windowHeight <= 640
+
+        this.windowWidth = windowWidth
+        this.windowHeight = windowHeight
+        this.statusBarHeight = statusBarHeight
+        this.safeBottom = safeBottom
+
+        this.rightActionsWidth = clamp(Math.floor(windowWidth * 0.165), 60, 66)
+        this.actionItemSize = clamp(Math.floor(windowHeight * 0.082), 58, 68)
+        this.avatarSize = clamp(Math.floor(windowWidth * 0.128), 46, 52)
+        this.avatarInnerSize = Math.max(40, this.avatarSize - 6)
+
+        this.actionIconSize = clamp(Math.floor(windowWidth * 0.086), 32, 38)
+        this.actionCountFontSize = smallScreen ? 10 : 11
+
+        const rightGroupHeight = Math.floor(this.actionItemSize * 4.08)
+        const idealTop = Math.floor(windowHeight * 0.56)
+        const minTop = statusBarHeight + 128
+        const maxTop = windowHeight - safeBottom - rightGroupHeight - 46
+        this.rightActionsTop = clamp(idealTop, minTop, Math.max(minTop, maxTop))
+
+        this.bottomInfoBottom = clamp(6 + Math.floor(safeBottom * 0.18), 6, 14)
+        this.bottomInfoWidth = Math.max(230, windowWidth - this.rightActionsWidth - 54)
+
+        this.authorNameFontSize = clamp(Math.floor(windowWidth * 0.043), 15, 17)
+        this.titleFontSize = clamp(Math.floor(windowWidth * 0.04), 14, 16)
+        this.detailFontSize = clamp(Math.floor(windowWidth * 0.036), 13, 15)
+        this.metaFontSize = clamp(Math.floor(windowWidth * 0.031), 11, 13)
+
+        this.commentsPanelHeight = clamp(
+          Math.floor(windowHeight * (smallScreen ? 0.72 : 0.68)),
+          420,
+          Math.floor(windowHeight * 0.8)
+        )
+
+        this.commentsHeaderHeight = clamp(Math.floor(windowWidth * 0.112), 40, 46)
+        this.inputHeight = clamp(Math.floor(windowWidth * 0.098), 34, 38)
+        this.commentsInputBarHeight = clamp(Math.floor(windowWidth * 0.136), 50, 56)
+        this.commentsScrollHeight = Math.max(
+          240,
+          this.commentsPanelHeight - this.commentsHeaderHeight - this.commentsInputBarHeight - safeBottom
+        )
+
+        this.commentAvatarSize = clamp(Math.floor(windowWidth * 0.096), 34, 39)
+        this.replyAvatarSize = clamp(Math.floor(windowWidth * 0.073), 24, 29)
+        this.commentItemPadding = clamp(Math.floor(windowWidth * 0.027), 9, 12)
+        this.commentNameFontSize = clamp(Math.floor(windowWidth * 0.036), 13, 14)
+        this.commentTextFontSize = clamp(Math.floor(windowWidth * 0.036), 13, 14)
+        this.commentMetaFontSize = clamp(Math.floor(windowWidth * 0.03), 11, 12)
+        this.commentLikeIconSize = clamp(Math.floor(windowWidth * 0.049), 18, 20)
+        this.sendBtnWidth = clamp(Math.floor(windowWidth * 0.15), 54, 60)
+      } catch (err) {
+        this.windowWidth = 375
+        this.windowHeight = 667
+        this.statusBarHeight = 0
+        this.safeBottom = 0
+      }
+    },
+
     async initPage() {
       uni.showLoading({ title: '加载中...' })
       const ok1 = await this.fetchCreationDetail()
@@ -685,11 +1229,16 @@ export default {
       this.creation.detail = c.content || ''
       this.creation.category = c.category || ''
       this.creation.time = c.create_time || ''
+      this.creation.location = c.location || ''
       this.creation.shareUrl = c.share_url || c.shareUrl || ''
 
       const cover = c.cover_url || c.material_url || ''
       this.creation.coverImage = cover
       this.creation.videoUrl = isVideo ? (c.material_url || '') : ''
+
+      if (c.user_id) {
+        this.authorId = c.user_id
+      }
 
       return true
     },
@@ -733,6 +1282,10 @@ export default {
 
     goBack() {
       uni.navigateBack()
+    },
+
+    handleInputFocus() {
+      this.commentInputFocus = true
     },
 
     handleVideoTap() {
@@ -813,6 +1366,7 @@ export default {
         clearTimeout(this.videoTouchTimer)
         this.videoTouchTimer = null
       }
+
       this.videoTouchMoved = false
       this.videoLongPressed = false
     },
@@ -845,7 +1399,6 @@ export default {
         this.videoActionSheet.visible = false
       }
 
-      // H5：浏览器环境无法调用系统相册，降级为下载 / 新窗口打开。
       // #ifdef H5
       try {
         const a = document.createElement('a')
@@ -985,23 +1538,42 @@ export default {
       this.commentText = ''
       this.replyingTo = null
       this.commentPlaceholder = '说点什么...'
-      this.showCommentInput = false
       this.commentInputFocus = false
+      this.suppressInputBlurClose = false
+      this.preventCancelReplyOnce = false
       this.resetCommentAction()
     },
 
     closeCommentsPanelByMask() {
-      if (this.showCommentInput && !this.commentText.trim()) {
-        this.cancelCommentInput()
+      if (this.replyingTo) {
+        this.cancelReplyToRoot()
         return
       }
+
+      if (!this.commentText.trim()) {
+        this.commentInputFocus = false
+        return
+      }
+
       this.closeCommentsPanel()
     },
 
-    handleCommentsPanelTap() {
-      if (this.showCommentInput && !this.commentText.trim()) {
-        this.cancelCommentInput()
+    handleCommentsBlankTouchEnd() {
+      if (this.preventCancelReplyOnce) {
+        this.preventCancelReplyOnce = false
+        return
       }
+
+      if (this.replyingTo) {
+        this.cancelReplyToRoot()
+      }
+    },
+
+    markInteractiveTap() {
+      this.preventCancelReplyOnce = true
+      setTimeout(() => {
+        this.preventCancelReplyOnce = false
+      }, 120)
     },
 
     startNewComment() {
@@ -1012,7 +1584,6 @@ export default {
 
     focusCommentInput() {
       this.showSharePanel = false
-      this.showCommentInput = true
       this.commentInputFocus = false
 
       this.$nextTick(() => {
@@ -1020,12 +1591,19 @@ export default {
       })
     },
 
-    cancelCommentInput() {
-      this.commentText = ''
+    cancelReplyToRoot() {
+      this.suppressInputBlurClose = true
       this.replyingTo = null
       this.commentPlaceholder = '说点什么...'
-      this.showCommentInput = false
       this.commentInputFocus = false
+
+      this.$nextTick(() => {
+        this.commentInputFocus = true
+      })
+
+      setTimeout(() => {
+        this.suppressInputBlurClose = false
+      }, 500)
     },
 
     async fetchComments(reset = false) {
@@ -1090,6 +1668,7 @@ export default {
     },
 
     toggleCommentSort() {
+      this.markInteractiveTap()
       this.commentSortType = this.commentSortType === 'time' ? 'digg' : 'time'
       this.commentPage = 1
       this.commentHasMore = true
@@ -1097,6 +1676,7 @@ export default {
     },
 
     async toggleReplies(comment) {
+      this.markInteractiveTap()
       if (!comment) return
 
       if (!comment.showReplies) {
@@ -1167,6 +1747,7 @@ export default {
     },
 
     loadMoreReplies(comment) {
+      this.markInteractiveTap()
       this.loadReplies(comment, false)
     },
 
@@ -1187,7 +1768,13 @@ export default {
       })
     },
 
+    isAuthorComment(userId) {
+      if (!userId || !this.creation.author.user_id) return false
+      return String(userId) === String(this.creation.author.user_id)
+    },
+
     async toggleCommentLike(comment) {
+      this.markInteractiveTap()
       if (!comment || comment._loading) return
 
       comment._loading = true
@@ -1218,6 +1805,7 @@ export default {
     },
 
     replyToComment(targetComment, parentComment) {
+      this.markInteractiveTap()
       if (!targetComment) return
 
       const parent = parentComment || targetComment
@@ -1240,15 +1828,18 @@ export default {
 
     handleInputBlurInPanel() {
       setTimeout(() => {
-        if (!this.commentText.trim()) {
-          this.cancelCommentInput()
-        } else {
-          this.commentInputFocus = false
+        if (this.suppressInputBlurClose) {
+          this.commentInputFocus = true
+          return
         }
+
+        this.commentInputFocus = false
       }, 200)
     },
 
     async sendComment() {
+      this.markInteractiveTap()
+
       const text = this.commentText.trim()
       if (!text) return
 
@@ -1357,8 +1948,8 @@ export default {
       this.commentText = ''
       this.commentPlaceholder = '说点什么...'
       this.replyingTo = null
-      this.showCommentInput = false
       this.commentInputFocus = false
+      this.suppressInputBlurClose = false
     },
 
     isSelfUser(userId) {
@@ -1404,6 +1995,8 @@ export default {
     },
 
     showCommentAction(target, parent, type) {
+      this.markInteractiveTap()
+
       if (this.commentTouch.moved) return
       if (!target || !target.user || !this.isSelfUser(target.user.user_id)) return
 
@@ -1646,7 +2239,6 @@ export default {
     },
 
     formatNumber(num) {
-      if (!num) return 0
       const n = Number(num) || 0
       if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
       if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
@@ -1689,116 +2281,187 @@ export default {
 
       if (year !== now.getFullYear()) return `${year}年${month}月${day}日`
       return `${month}月${day}日`
+    },
+
+    getTextUnits(text) {
+      if (!text) return 0
+
+      let units = 0
+      const str = String(text)
+
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i]
+
+        if (/[\x00-\xff]/.test(ch)) {
+          units += 0.55
+        } else {
+          units += 1
+        }
+      }
+
+      return units
+    },
+
+    sliceTextByUnits(text, maxUnits) {
+      if (!text) return ''
+
+      let units = 0
+      let result = ''
+      const str = String(text)
+
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i]
+        const chUnits = /[\x00-\xff]/.test(ch) ? 0.55 : 1
+
+        if (units + chUnits > maxUnits) break
+
+        result += ch
+        units += chUnits
+      }
+
+      return result
     }
   }
 }
 </script>
 
 <style>
+.violet-font {
+  font-family: VioletSans;
+  font-weight: 400;
+}
+
+.iconfont {
+  font-family: violetIcon;
+  font-weight: 400;
+  font-style: normal;
+  text-align: center;
+}
+
+.author-name,
+.title-text,
+.detail-text,
+.detail-expand,
+.meta-text,
+.follow-plus-text,
+.action-count,
+.center-icon-text,
+.comments-title,
+.comments-sort-label,
+.comments-close,
+.comment-username,
+.author-badge,
+.comment-like-count,
+.comment-text,
+.comment-time,
+.comment-reply,
+.comment-replies-toggle-text,
+.reply-username,
+.reply-at,
+.reply-like-count,
+.reply-text,
+.reply-time,
+.reply-reply,
+.reply-footer-text,
+.reply-footer-loading,
+.reply-footer-collapse,
+.empty-comments-text,
+.comments-footer-text,
+.comment-input,
+.send-btn-text,
+.comment-action-delete-text,
+.video-action-text,
+.share-panel-title,
+.share-option-text {
+  font-family: VioletSans;
+  font-weight: 400;
+}
+
 .page {
-  flex: 1;
   background-color: #000000;
   position: relative;
+  overflow: hidden;
 }
 
-/* 视频 */
 .video {
-  width: 750rpx;
-  flex: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-color: #000000;
 }
 
-/* 透明触摸层：低于顶部、右侧、底部信息层，高于 video 原生层 */
 .video-touch-layer {
   position: absolute;
   left: 0;
-  right: 0;
   top: 0;
-  bottom: 0;
-  z-index: 1;
   background-color: rgba(0, 0, 0, 0);
+  z-index: 1;
 }
 
-/* 顶部返回左上角 */
 .top-bar {
   position: absolute;
-  top: 0;
   left: 0;
+  top: 0;
   width: 750rpx;
-  height: 64px;
-  padding-left: 20px;
-  padding-top: 20px;
+  padding-left: 16px;
+  padding-right: 16px;
   flex-direction: row;
-  justify-content: flex-start;
   align-items: center;
+  z-index: 8;
 }
 
 .back-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  background-color: rgba(0, 0, 0, 0.4);
+  width: 38px;
+  height: 38px;
+  border-radius: 19px;
+  background-color: rgba(0, 0, 0, 0.38);
   justify-content: center;
   align-items: center;
 }
 
 .back-icon {
-  font-size: 22px;
   color: #ffffff;
+  font-weight: 400;
+  line-height: 38px;
 }
 
-/* 右侧操作栏 */
 .right-actions {
   position: absolute;
-  right: 12px;
-  bottom: 36px;
-  width: 56px;
+  right: 8px;
   align-items: center;
+  z-index: 8;
 }
 
 .action-item {
-  width: 56px;
-  height: 56px;
   justify-content: center;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .avatar-item {
-  height: 68px;
   position: relative;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
 }
 
 .avatar-touch {
-  width: 56px;
-  height: 52px;
   justify-content: center;
   align-items: center;
 }
 
 .avatar-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 24px;
   background-color: #ffffff;
   justify-content: center;
   align-items: center;
 }
 
 .avatar-img {
-  width: 42px;
-  height: 42px;
-  border-radius: 21px;
+  background-color: #eeeeee;
 }
 
 .follow-plus {
   position: absolute;
   bottom: 2px;
-  left: 18px;
-  width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  background-color: #ff4757;
+  background-color: #ff4d67;
   border-width: 2px;
   border-style: solid;
   border-color: #ffffff;
@@ -1809,48 +2472,33 @@ export default {
 .follow-plus-text {
   font-size: 13px;
   color: #ffffff;
-  font-weight: bold;
+  font-weight: 400;
+  line-height: 16px;
 }
 
 .action-hit {
-  width: 56px;
   justify-content: center;
   align-items: center;
 }
 
 .action-icon {
-  font-size: 26px;
   color: #ffffff;
   text-align: center;
+  font-weight: 400;
+  line-height: 40px;
 }
 
 .action-icon.liked {
-  color: #ff4757;
+  color: #ff4d67;
 }
 
 .action-count {
-  font-size: 11px;
   color: #ffffff;
-  margin-top: 1px;
+  margin-top: -1px;
   text-align: center;
+  font-weight: 400;
 }
 
-.share-action-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 15px;
-  background-color: #667eea;
-  justify-content: center;
-  align-items: center;
-}
-
-.share-action-text {
-  font-size: 19px;
-  color: #ffffff;
-}
-
-
-/* 中间播放提示 */
 .center-icon {
   position: absolute;
   left: 0;
@@ -1859,99 +2507,102 @@ export default {
   bottom: 0;
   justify-content: center;
   align-items: center;
-  z-index: 2;
+  z-index: 3;
 }
 
 .center-icon-text {
-  font-size: 54px;
-  color: rgba(255, 255, 255, 0.72);
-  text-align: center;
-  font-weight: 700;
+  font-size: 58px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
 }
 
-/* 底部信息 */
 .bottom-info {
   position: absolute;
-  left: 10px;
-  right: 82px;
-  bottom: 10px;
+  left: 14px;
+  z-index: 7;
 }
 
 .author-row {
-  margin-bottom: 8px;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .author-name {
-  font-size: 17px;
-  font-weight: 700;
   color: #ffffff;
+  font-weight: 400;
+  line-height: 20px;
 }
 
 .title-row {
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .title-text {
-  font-size: 16px;
   color: #ffffff;
+  font-weight: 400;
   line-height: 20px;
-  margin-left: 6px;
 }
 
 .detail-row {
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .detail-text {
-  font-size: 13px;
   color: #f5f5f5;
-  line-height: 18px;
-  margin-left: 6px;
+  font-weight: 400;
+  line-height: 19px;
 }
 
 .detail-expand {
-  margin-top: 1px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.78);
+  margin-top: 3px;
+  font-weight: 400;
+  line-height: 16px;
 }
 
-/* 评论遮罩和抽屉 */
+.meta-row {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.meta-text {
+  color: rgba(255, 255, 255, 0.72);
+  margin-right: 10px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
 .comments-mask {
   position: absolute;
   left: 0;
-  right: 0;
   top: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  justify-content: flex-end;
-  align-items: center;
+  background-color: rgba(0, 0, 0, 0.22);
+  z-index: 20;
 }
 
 .comments-panel {
-  width: 750rpx;
-  height: 1000rpx;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: #ffffff;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  border-radius: 0;
 }
 
-/* 评论头部 */
 .comments-header {
-  height: 48px;
-  padding-left: 16px;
-  padding-right: 16px;
+  padding-left: 15px;
+  padding-right: 15px;
   flex-direction: row;
-  justify-content: space-between;
   align-items: center;
-  border-bottom-width: 1px;
-  border-bottom-style: solid;
-  border-bottom-color: #f0f0f0;
+  justify-content: space-between;
+  border-bottom-width: 0;
 }
 
 .comments-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #333333;
+  color: #1f2329;
+  font-weight: 400;
 }
 
 .comments-header-right {
@@ -1960,43 +2611,37 @@ export default {
 }
 
 .comments-sort {
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: #f5f5f5;
-  margin-right: 8px;
+  height: 28px;
+  justify-content: center;
+  align-items: center;
+  margin-right: 10px;
 }
 
 .comments-sort-label {
-  font-size: 12px;
-  color: #666666;
+  color: #606266;
+  font-weight: 400;
 }
 
 .comments-close {
-  font-size: 20px;
   color: #999999;
+  font-weight: 400;
+  line-height: 24px;
 }
 
-/* 评论列表滚动 */
 .comments-scroll {
-  flex: 1;
-  padding-left: 16px;
-  padding-right: 16px;
+  background-color: #ffffff;
 }
 
-/* 单条评论 */
 .comment-item {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-bottom-width: 1px;
-  border-bottom-style: solid;
-  border-bottom-color: #f5f5f5;
   flex-direction: row;
+  padding-left: 15px;
+  padding-right: 15px;
+  background-color: #ffffff;
+  border-bottom-width: 0;
 }
 
 .comment-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
+  background-color: #eeeeee;
   margin-right: 10px;
 }
 
@@ -2008,36 +2653,60 @@ export default {
   flex-direction: column;
 }
 
-.comment-header {
+.comment-header-row {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
 }
 
+.comment-name-line {
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+}
+
 .comment-username {
-  font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   color: #333333;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.author-badge {
+  margin-left: 6px;
+  padding-left: 7px;
+  padding-right: 7px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  border-radius: 99px;
+  background-color: rgba(253, 231, 209, 0.9);
+  color: #8a5a2b;
+  font-weight: 400;
+  line-height: 13px;
 }
 
 .comment-like {
-  flex-direction: row;
+  width: 28px;
   align-items: center;
+  justify-content: center;
+  margin-left: 8px;
 }
 
 .comment-like-icon {
-  font-size: 18px;
   color: #999999;
+  font-weight: 400;
+  text-align: center;
+}
+
+.comment-like-icon.liked {
+  color: #ff4d67;
 }
 
 .comment-like-count {
-  font-size: 12px;
   color: #999999;
-  margin-left: 4px;
-}
-
-.comment-like.liked .comment-like-icon {
-  color: #ff4757;
+  margin-top: 2px;
+  font-weight: 400;
+  text-align: center;
 }
 
 .comment-text-wrap {
@@ -2045,8 +2714,8 @@ export default {
 }
 
 .comment-text {
-  font-size: 14px;
   color: #333333;
+  font-weight: 400;
   line-height: 20px;
 }
 
@@ -2057,28 +2726,33 @@ export default {
 }
 
 .comment-time {
-  font-size: 12px;
   color: #999999;
   margin-right: 16px;
+  font-weight: 400;
 }
 
 .comment-reply {
-  font-size: 13px;
   color: #666666;
+  font-weight: 400;
 }
 
-/* 展开 X 条回复 */
 .comment-replies-toggle {
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .comment-replies-toggle-text {
-  font-size: 12px;
   color: #666666;
+  font-weight: 400;
 }
 
 .reply-list {
-  margin-top: 6px;
+  margin-top: 10px;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background-color: #f8f8f8;
+  border-radius: 12px;
 }
 
 .reply-item {
@@ -2088,9 +2762,7 @@ export default {
 }
 
 .reply-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 14px;
+  background-color: #eeeeee;
   margin-right: 8px;
 }
 
@@ -2107,44 +2779,55 @@ export default {
 .reply-name-line {
   flex-direction: row;
   align-items: center;
-  flex-wrap: wrap;
+  flex: 1;
 }
 
 .reply-username {
-  font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: #333333;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+.reply-author-badge {
+  margin-left: 5px;
 }
 
 .reply-at {
   margin-left: 6px;
-  font-size: 12px;
   color: #666666;
+  font-weight: 400;
+  lines: 1;
+  text-overflow: ellipsis;
 }
 
 .reply-like {
-  flex-direction: row;
+  width: 26px;
   align-items: center;
+  justify-content: center;
+  margin-left: 8px;
 }
 
 .reply-like-icon {
-  font-size: 16px;
   color: #999999;
+  font-weight: 400;
+  text-align: center;
+}
+
+.reply-like-icon.liked {
+  color: #ff4d67;
 }
 
 .reply-like-count {
-  font-size: 11px;
   color: #999999;
-  margin-left: 4px;
-}
-
-.reply-like.liked .reply-like-icon {
-  color: #ff4757;
+  margin-top: 2px;
+  font-weight: 400;
+  text-align: center;
 }
 
 .reply-text {
-  font-size: 13px;
   color: #333333;
+  font-weight: 400;
   line-height: 18px;
   margin-top: 2px;
 }
@@ -2152,233 +2835,184 @@ export default {
 .reply-meta {
   flex-direction: row;
   align-items: center;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .reply-time {
-  font-size: 11px;
   color: #999999;
   margin-right: 12px;
+  font-weight: 400;
 }
 
 .reply-reply {
-  font-size: 12px;
   color: #666666;
+  font-weight: 400;
 }
 
 .reply-footer {
   flex-direction: row;
   align-items: center;
-  margin-top: 2px;
-  margin-bottom: 4px;
-  font-size: 12px;
-  color: #666666;
+  margin-top: 6px;
+  margin-bottom: 2px;
 }
 
-.reply-footer-loading {
-  margin-left: 8px;
-  font-size: 12px;
-  color: #999999;
-}
-
+.reply-footer-text,
+.reply-footer-loading,
 .reply-footer-collapse {
-  margin-left: 12px;
-  font-size: 12px;
   color: #666666;
+  font-weight: 400;
+  margin-right: 14px;
 }
 
-/* 空状态 */
 .empty-comments {
-  padding-top: 32px;
-  padding-bottom: 32px;
   justify-content: center;
   align-items: center;
 }
 
 .empty-comments-text {
-  font-size: 14px;
   color: #999999;
+  font-weight: 400;
 }
 
-/* 默认占位输入条 */
-.comment-placeholder-bar {
-  height: 52px;
-  padding-left: 12px;
-  padding-right: 12px;
-  border-top-width: 1px;
-  border-top-style: solid;
-  border-top-color: #f0f0f0;
-  flex-direction: row;
+.comments-footer {
+  height: 28px;
+  justify-content: center;
   align-items: center;
 }
 
-.comment-placeholder-input {
-  flex: 1;
-  height: 36px;
-  background-color: #f5f5f5;
-  border-radius: 18px;
-  padding-left: 12px;
-  justify-content: center;
-}
-
-.comment-placeholder-text {
-  font-size: 14px;
+.comments-footer-text {
   color: #999999;
+  font-weight: 400;
 }
 
-/* 评论输入条 */
 .comment-input-bar {
-  height: 52px;
-  padding-left: 12px;
-  padding-right: 12px;
-  border-top-width: 1px;
-  border-top-style: solid;
-  border-top-color: #f0f0f0;
+  padding-left: 14px;
+  padding-right: 14px;
+  padding-top: 7px;
+  background-color: #ffffff;
+  border-top-width: 0;
   flex-direction: row;
   align-items: center;
 }
 
 .comment-input {
   flex: 1;
-  height: 36px;
   background-color: #f5f5f5;
-  border-radius: 18px;
-  padding-left: 12px;
-  padding-right: 12px;
-  font-size: 14px;
+  padding-left: 14px;
+  padding-right: 14px;
+  color: #333333;
+  font-weight: 400;
 }
 
 .send-btn {
   margin-left: 8px;
-  padding-left: 14px;
-  padding-right: 14px;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  border-radius: 18px;
-  background-color: #f0f0f0;
-}
-
-.send-btn-text {
-  font-size: 14px;
-  color: #999999;
+  background-color: #eeeeee;
+  justify-content: center;
+  align-items: center;
 }
 
 .send-btn.active {
-  background-color: #667eea;
+  background-color: rgba(253, 231, 209, 1);
+}
+
+.send-btn-text {
+  color: #999999;
+  font-weight: 400;
 }
 
 .send-btn-text-active {
-  color: #ffffff;
+  color: #8a5a2b;
 }
 
-/* 删除评论/回复菜单 */
-.comment-action-mask {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 300;
-  background-color: rgba(0, 0, 0, 0.25);
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.comment-action-sheet {
-  width: 750rpx;
-  background-color: #f7f7f7;
-  padding: 8px;
-}
-
-.comment-action-delete {
-  height: 52px;
-  border-radius: 12px;
-  background-color: #ffffff;
-  justify-content: center;
-  align-items: center;
-}
-
-.comment-action-delete-text {
-  color: #ff4d4f;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-/* 长按视频操作菜单 */
-.video-action-mask {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 320;
-  background-color: rgba(0, 0, 0, 0.25);
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.video-action-sheet {
-  width: 750rpx;
-  background-color: #f7f7f7;
-  padding: 8px;
-}
-
-.video-action-item {
-  width: 734rpx;
-  height: 44px;
-  border-radius: 12px;
-  background-color: #ffffff;
-  justify-content: center;
-  align-items: center;
-}
-
-.video-action-item.disabled {
-  opacity: 0.6;
-}
-
-.video-action-text {
-  font-size: 14px;
-  color: #333333;
-  font-weight: 500;
-}
-
-
-/* 分享面板 */
+.comment-action-mask,
+.video-action-mask,
 .share-mask {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 300;
-  background-color: rgba(0, 0, 0, 0.25);
+  background-color: rgba(0, 0, 0, 0.28);
   justify-content: flex-end;
+  z-index: 50;
+}
+
+.comment-action-sheet,
+.video-action-sheet {
+  width: 750rpx;
+  background-color: #ffffff;
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-top: 10px;
+  border-radius: 0;
+}
+
+.comment-action-delete {
+  height: 50px;
+  background-color: #ffffff;
+  justify-content: center;
   align-items: center;
+  border-radius: 0;
+}
+
+.comment-action-delete-text {
+  font-size: 15px;
+  color: #ff4d4f;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.video-action-item {
+  height: 50px;
+  background-color: #ffffff;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0;
+}
+
+.video-action-item.disabled {
+  opacity: 0.5;
+}
+
+.video-action-icon {
+  font-size: 17px;
+  color: #333333;
+  margin-right: 6px;
+  font-weight: 400;
+}
+
+.video-action-text {
+  font-size: 15px;
+  color: #333333;
+  font-weight: 400;
 }
 
 .share-panel {
   width: 750rpx;
   background-color: #ffffff;
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
-  padding-top: 14px;
-  padding-bottom: 18px;
+  border-radius: 0;
+  padding-top: 16px;
 }
 
 .share-panel-title-wrap {
+  height: 24px;
+  justify-content: center;
   align-items: center;
-  margin-bottom: 14px;
 }
 
 .share-panel-title {
   font-size: 14px;
-  color: #666666;
+  color: #1f2329;
+  font-weight: 400;
+  text-align: center;
 }
 
 .share-options-row {
-  width: 750rpx;
+  margin-top: 18px;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-around;
 }
 
 .share-option {
@@ -2388,75 +3022,29 @@ export default {
 }
 
 .share-option-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 23px;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 7px;
+  width: 30px;
+  height: 30px;
+  font-size: 22px;
+  color: #333333;
+  font-weight: 400;
+  line-height: 30px;
+  text-align: center;
+  background-color: transparent;
+  border-radius: 0;
+  margin-bottom: 8px;
 }
 
-.chat-icon {
-  background-color: #667eea;
-}
-
-.friend-icon {
-  background-color: #667eea;
-}
-
-.friend-person-icon {
-  width: 24px;
-  height: 24px;
-  position: relative;
-}
-
-.friend-person-head {
-  position: absolute;
-  left: 7px;
-  top: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 5px;
-  background-color: #ffffff;
-}
-
-.friend-person-body {
-  position: absolute;
-  left: 4px;
-  bottom: 2px;
-  width: 16px;
-  height: 10px;
-  border-radius: 8px;
-  background-color: #ffffff;
-}
-
-.wechat-icon {
-  background-color: #1ecb5c;
-}
-
-.timeline-icon {
-  background-color: #1ecb5c;
-}
-
-.qq-icon {
-  background-color: #3b82f6;
-}
-
-.share-icon-text {
-  font-size: 20px;
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.share-icon-text-small {
-  font-size: 17px;
-  color: #ffffff;
-  font-weight: 600;
+.share-option-icon-small {
+  font-size: 18px;
 }
 
 .share-option-text {
+  width: 150rpx;
   font-size: 12px;
-  color: #333333;
+  color: #4e5969;
+  font-weight: 400;
+  line-height: 14px;
   text-align: center;
+  lines: 1;
 }
 </style>

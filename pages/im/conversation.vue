@@ -1,25 +1,28 @@
 <template>
     <view class="chat-container">
-        <!-- 顶部导航栏：包含刘海 / 状态栏区域 -->
         <view class="chat-header" :style="chatHeaderStyle">
             <view class="chat-header-content" :style="chatHeaderContentStyle">
-                <view class="header-left" @click="goBack">
-                    <text class="iconfont icon-fanhui back-icon"></text>
+                <view class="header-left" :style="headerButtonStyle" @click="goBack">
+                    <text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
                 </view>
 
                 <view class="header-center">
-                    <text class="chat-title">{{ chatName }}</text>
+                    <text class="chat-title" :style="chatTitleStyle">{{ chatName }}</text>
                 </view>
 
-                <view class="header-right" @click="goToSettings" v-if="conversation.con_type == 2 && canSendMessage">
-                    <text class="iconfont icon-gengduo settings-icon"></text>
+                <view
+                    class="header-right"
+                    :style="headerButtonStyle"
+                    @click="goToSettings"
+                    v-if="conversation.con_type == 2 && canSendMessage"
+                >
+                    <text class="iconfont icon-gengduo settings-icon" :style="settingsIconStyle"></text>
                 </view>
 
-                <view class="header-right-placeholder" v-else></view>
+                <view class="header-right-placeholder" :style="headerButtonStyle" v-else></view>
             </view>
         </view>
 
-        <!-- 消息列表 -->
         <scroll-view
             class="chat-messages"
             :style="chatMessagesStyle"
@@ -29,8 +32,8 @@
         >
             <view class="messages">
                 <view v-if="isLoading" class="loading-tip" :style="systemRowStyle">
-                    <view class="loading-spinner"></view>
-                    <text class="loading-text">加载中...</text>
+                    <view class="loading-spinner" :style="loadingSpinnerStyle"></view>
+                    <text class="loading-text" :style="loadingTextStyle">加载中...</text>
                 </view>
 
                 <view
@@ -39,16 +42,22 @@
                     :id="'message-' + String(message.msg_id)"
                 >
                     <view class="message-time" :style="systemRowStyle" v-if="shouldShowTime(index)">
-                        <text class="time-text">{{ formatTime(message.create_time) }}</text>
+                        <text class="time-text" :style="timeTextStyle">{{ formatTime(message.create_time) }}</text>
                     </view>
 
                     <view class="message message-right" :style="messageRowStyle" v-if="isSelfMessage(message)">
                         <view class="message-content message-content-right" :style="messageContentStyle">
-                            <text v-if="message.nick_name" class="sender-name sender-name-right">{{ message.nick_name }}</text>
+                            <text
+                                v-if="message.nick_name"
+                                class="sender-name sender-name-right"
+                                :style="senderNameRightStyle"
+                            >
+                                {{ message.nick_name }}
+                            </text>
 
                             <view class="self-bubble-row">
-                                <view class="message-status">
-                                    <view class="status-loading" v-if="message.status == -1"></view>
+                                <view class="message-status" :style="messageStatusStyle">
+                                    <view class="status-loading" :style="statusLoadingStyle" v-if="message.status == -1"></view>
                                 </view>
 
                                 <view
@@ -64,20 +73,27 @@
                                 >
                                     <view class="share-image-wrapper" :style="shareImageWrapperStyle">
                                         <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                        <view class="share-video-badge" v-if="isShareVideo(message)">
-                                            <text class="share-video-badge-icon">▶</text>
+                                        <view class="share-video-badge" :style="shareVideoBadgeStyle" v-if="isShareVideo(message)">
+                                            <text class="share-video-badge-icon" :style="shareVideoBadgeIconStyle">▶</text>
                                         </view>
                                     </view>
 
                                     <view class="share-card-content" :style="shareCardContentStyle">
-                                        <view class="share-card-title-container">
-                                            <text class="share-card-title">{{ getShareTitle(message) }}</text>
+                                        <view class="share-card-title-container" :style="shareTitleContainerStyle">
+                                            <text class="share-card-title" :style="shareTitleStyle">{{ getShareTitle(message) }}</text>
                                         </view>
 
-                                        <view class="share-card-footer">
+                                        <view class="share-card-footer" :style="shareFooterStyle">
                                             <view class="share-card-author" @click.stop="goToShareUserPage(message)">
-                                                <image class="share-author-avatar" :src="getShareAuthorAvatar(message)" mode="aspectFill"></image>
-                                                <text class="share-author-name">{{ getShareAuthorName(message) }}</text>
+                                                <image
+                                                    class="share-author-avatar"
+                                                    :style="shareAuthorAvatarStyle"
+                                                    :src="getShareAuthorAvatar(message)"
+                                                    mode="aspectFill"
+                                                ></image>
+                                                <text class="share-author-name" :style="shareAuthorNameStyle">
+                                                    {{ getShareAuthorName(message) }}
+                                                </text>
                                             </view>
                                         </view>
                                     </view>
@@ -86,19 +102,25 @@
                                 <view
                                     v-else
                                     class="bubble bubble-right"
+                                    :style="bubbleStyle"
                                     @touchstart="onMessageTouchStart"
                                     @touchmove="onMessageTouchMove"
                                     @touchend="onMessageTouchEnd"
                                     @touchcancel="onMessageTouchEnd"
                                     @longpress.stop="showMessageActions($event, message)"
                                 >
-                                    <text class="bubble-text">{{ message.msg_content }}</text>
+                                    <text class="bubble-text" :style="bubbleTextStyle">{{ message.msg_content }}</text>
                                 </view>
                             </view>
                         </view>
 
                         <view class="avatar-box" :style="avatarBoxStyle" @click="goToUserProfile(message)">
-                            <image class="avatar" :style="avatarStyle" :src="message.avatar_uri || myAvatar || userDefaultAvatar" mode="aspectFill"></image>
+                            <image
+                                class="avatar"
+                                :style="avatarStyle"
+                                :src="message.avatar_uri || myAvatar || userDefaultAvatar"
+                                mode="aspectFill"
+                            ></image>
                         </view>
                     </view>
 
@@ -113,7 +135,9 @@
                         </view>
 
                         <view class="message-content message-content-left" :style="messageContentStyle">
-                            <text v-if="message.nick_name" class="sender-name">{{ message.nick_name }}</text>
+                            <text v-if="message.nick_name" class="sender-name" :style="senderNameStyle">
+                                {{ message.nick_name }}
+                            </text>
 
                             <view
                                 v-if="isShareMessage(message)"
@@ -128,20 +152,27 @@
                             >
                                 <view class="share-image-wrapper" :style="shareImageWrapperStyle">
                                     <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                    <view class="share-video-badge" v-if="isShareVideo(message)">
-                                        <text class="share-video-badge-icon">▶</text>
+                                    <view class="share-video-badge" :style="shareVideoBadgeStyle" v-if="isShareVideo(message)">
+                                        <text class="share-video-badge-icon" :style="shareVideoBadgeIconStyle">▶</text>
                                     </view>
                                 </view>
 
                                 <view class="share-card-content" :style="shareCardContentStyle">
-                                    <view class="share-card-title-container">
-                                        <text class="share-card-title">{{ getShareTitle(message) }}</text>
+                                    <view class="share-card-title-container" :style="shareTitleContainerStyle">
+                                        <text class="share-card-title" :style="shareTitleStyle">{{ getShareTitle(message) }}</text>
                                     </view>
 
-                                    <view class="share-card-footer">
+                                    <view class="share-card-footer" :style="shareFooterStyle">
                                         <view class="share-card-author" @click.stop="goToShareUserPage(message)">
-                                            <image class="share-author-avatar" :src="getShareAuthorAvatar(message)" mode="aspectFill"></image>
-                                            <text class="share-author-name">{{ getShareAuthorName(message) }}</text>
+                                            <image
+                                                class="share-author-avatar"
+                                                :style="shareAuthorAvatarStyle"
+                                                :src="getShareAuthorAvatar(message)"
+                                                mode="aspectFill"
+                                            ></image>
+                                            <text class="share-author-name" :style="shareAuthorNameStyle">
+                                                {{ getShareAuthorName(message) }}
+                                            </text>
                                         </view>
                                     </view>
                                 </view>
@@ -150,13 +181,14 @@
                             <view
                                 v-else
                                 class="bubble bubble-left"
+                                :style="bubbleStyle"
                                 @touchstart="onMessageTouchStart"
                                 @touchmove="onMessageTouchMove"
                                 @touchend="onMessageTouchEnd"
                                 @touchcancel="onMessageTouchEnd"
                                 @longpress.stop="showMessageActions($event, message)"
                             >
-                                <text class="bubble-text">{{ message.msg_content }}</text>
+                                <text class="bubble-text" :style="bubbleTextStyle">{{ message.msg_content }}</text>
                             </view>
                         </view>
                     </view>
@@ -170,7 +202,7 @@
                             @touchcancel="onMessageTouchEnd"
                             @longpress.stop="showMessageActions($event, message)"
                         >
-                            <text class="system-text">{{ message.msg_content }}</text>
+                            <text class="system-text" :style="systemTextStyle">{{ message.msg_content }}</text>
                         </view>
                     </view>
                 </view>
@@ -189,7 +221,7 @@
         </view>
 
         <view class="input-bar" :style="inputBarStyle" v-if="canSendMessage">
-            <view class="input-wrapper">
+            <view class="input-wrapper" :style="inputWrapperStyle">
                 <input
                     class="input-field"
                     :style="inputFieldStyle"
@@ -201,13 +233,18 @@
                 />
             </view>
 
-            <view class="send-btn" :class="{ 'send-btn-active': inputText.trim() }" :style="sendButtonStyle" @click="sendMessage">
-                <text class="send-text">发送</text>
+            <view
+                class="send-btn"
+                :class="{ 'send-btn-active': inputText.trim() }"
+                :style="sendButtonStyle"
+                @click="sendMessage"
+            >
+                <text class="send-text" :style="sendTextStyle">发送</text>
             </view>
         </view>
 
         <view class="disabled-input-bar" :style="inputBarStyle" v-else>
-            <text class="disabled-input-text">无法在已退出的群聊中发送消息</text>
+            <text class="disabled-input-text" :style="disabledInputTextStyle">无法在已退出的群聊中发送消息</text>
         </view>
     </view>
 </template>
@@ -219,6 +256,10 @@ import { sendMessage, getMessageByConversation, markRead, recallMessage, handleM
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 import { enqueueProfileRefresh } from '@/utils/im-cache.js';
 import { getUserInfos } from '@/request/user.js';
+
+const clamp = (value, min, max) => {
+    return Math.max(min, Math.min(max, value));
+};
 
 export default {
     data() {
@@ -247,20 +288,48 @@ export default {
             windowWidth: 375,
             statusBarHeight: 0,
             bottomSafeHeight: 0,
+
             headerHeight: 60,
             headerContentHeight: 44,
+            headerButtonSize: 36,
+            headerTitleFontSize: 15,
+            backIconSize: 18,
+            settingsIconSize: 20,
+
             inputBarHeight: 56,
             inputContentHeight: 36,
+            inputFontSize: 14,
             sendButtonHeight: 34,
-            sendButtonWidth: 52,
-            messageUnitHeight: 44,
-            halfMessageHeight: 22,
-            avatarSize: 36,
-            messageGap: 5,
-            shareCardWidth: 172,
-            shareCardHeight: 229,
-            shareImageHeight: 184,
-            shareContentHeight: 45,
+            sendButtonWidth: 54,
+            sendTextFontSize: 13,
+
+            messageUnitHeight: 46,
+            halfMessageHeight: 23,
+            avatarSize: 38,
+            messageGap: 8,
+            messageSidePadding: 10,
+            avatarGap: 8,
+            bubbleFontSize: 14,
+            bubbleLineHeight: 20,
+            bubbleVerticalPadding: 7,
+            bubbleHorizontalPadding: 11,
+            bubbleRadius: 14,
+            senderNameFontSize: 10,
+            senderNameLineHeight: 12,
+            timeFontSize: 10,
+            timeLineHeight: 13,
+            systemFontSize: 10,
+            systemLineHeight: 13,
+
+            shareCardWidth: 176,
+            shareCardHeight: 235,
+            shareImageHeight: 188,
+            shareContentHeight: 47,
+            shareTitleFontSize: 12,
+            shareTitleLineHeight: 18,
+            shareAuthorFontSize: 10,
+            shareAuthorAvatarSize: 16,
+            shareVideoBadgeSize: 20,
 
             messageAction: {
                 visible: false,
@@ -286,23 +355,63 @@ export default {
         },
 
         chatHeaderContentStyle() {
-            return 'height:' + this.headerContentHeight + 'px;margin-top:' + this.statusBarHeight + 'px;';
+            return [
+                'height:' + this.headerContentHeight + 'px',
+                'margin-top:' + this.statusBarHeight + 'px',
+                'padding-left:' + this.messageSidePadding + 'px',
+                'padding-right:' + this.messageSidePadding + 'px'
+            ].join(';') + ';';
+        },
+
+        headerButtonStyle() {
+            return 'width:' + this.headerButtonSize + 'px;height:' + this.headerButtonSize + 'px;';
+        },
+
+        backIconStyle() {
+            return 'font-size:' + this.backIconSize + 'px;';
+        },
+
+        settingsIconStyle() {
+            return 'font-size:' + this.settingsIconSize + 'px;';
+        },
+
+        chatTitleStyle() {
+            return [
+                'font-size:' + this.headerTitleFontSize + 'px',
+                'max-width:' + Math.floor(this.windowWidth * 0.62) + 'px'
+            ].join(';') + ';';
         },
 
         chatMessagesStyle() {
-            return 'top:' + this.headerHeight + 'px;bottom:' + this.inputBarHeight + 'px;';
+            return [
+                'top:' + this.headerHeight + 'px',
+                'bottom:' + this.inputBarHeight + 'px',
+                'padding:' + Math.max(8, Math.floor(this.messageGap * 0.9)) + 'px ' + this.messageSidePadding + 'px ' + Math.max(10, this.messageGap) + 'px'
+            ].join(';') + ';';
         },
 
         inputBarStyle() {
             return 'height:' + this.inputBarHeight + 'px;padding-bottom:' + this.bottomSafeHeight + 'px;';
         },
 
+        inputWrapperStyle() {
+            return 'border-radius:' + Math.floor(this.inputContentHeight / 2) + 'px;';
+        },
+
         inputFieldStyle() {
-            return 'height:' + this.inputContentHeight + 'px;';
+            return 'height:' + this.inputContentHeight + 'px;font-size:' + this.inputFontSize + 'px;padding-left:' + Math.floor(this.inputContentHeight * 0.38) + 'px;padding-right:' + Math.floor(this.inputContentHeight * 0.38) + 'px;';
         },
 
         sendButtonStyle() {
             return 'width:' + this.sendButtonWidth + 'px;height:' + this.sendButtonHeight + 'px;border-radius:' + Math.floor(this.sendButtonHeight / 2) + 'px;';
+        },
+
+        sendTextStyle() {
+            return 'font-size:' + this.sendTextFontSize + 'px;';
+        },
+
+        disabledInputTextStyle() {
+            return 'font-size:' + this.inputFontSize + 'px;';
         },
 
         messageRowStyle() {
@@ -310,7 +419,24 @@ export default {
         },
 
         systemRowStyle() {
-            return 'height:' + this.halfMessageHeight + 'px;margin-bottom:' + Math.max(2, Math.floor(this.messageGap / 2)) + 'px;';
+            return 'height:' + this.halfMessageHeight + 'px;margin-bottom:' + Math.max(3, Math.floor(this.messageGap * 0.45)) + 'px;';
+        },
+
+        loadingSpinnerStyle() {
+            const size = clamp(Math.floor(this.timeFontSize * 1.28), 12, 15);
+            return 'width:' + size + 'px;height:' + size + 'px;';
+        },
+
+        loadingTextStyle() {
+            return 'font-size:' + this.timeFontSize + 'px;';
+        },
+
+        timeTextStyle() {
+            return 'font-size:' + this.timeFontSize + 'px;line-height:' + this.timeLineHeight + 'px;';
+        },
+
+        systemTextStyle() {
+            return 'font-size:' + this.systemFontSize + 'px;line-height:' + this.systemLineHeight + 'px;';
         },
 
         avatarBoxStyle() {
@@ -322,7 +448,46 @@ export default {
         },
 
         messageContentStyle() {
-            return 'min-height:' + this.avatarSize + 'px;';
+            return [
+                'min-height:' + this.avatarSize + 'px',
+                'max-width:calc(100% - ' + (this.avatarSize + this.avatarGap + 46) + 'px)'
+            ].join(';') + ';';
+        },
+
+        senderNameStyle() {
+            return 'font-size:' + this.senderNameFontSize + 'px;line-height:' + this.senderNameLineHeight + 'px;margin-bottom:' + Math.max(3, Math.floor(this.messageGap * 0.32)) + 'px;';
+        },
+
+        senderNameRightStyle() {
+            return 'font-size:' + this.senderNameFontSize + 'px;line-height:' + this.senderNameLineHeight + 'px;margin-bottom:' + Math.max(3, Math.floor(this.messageGap * 0.32)) + 'px;';
+        },
+
+        bubbleStyle() {
+            return [
+                'padding:' + this.bubbleVerticalPadding + 'px ' + this.bubbleHorizontalPadding + 'px',
+                'border-radius:' + this.bubbleRadius + 'px',
+                'max-width:' + Math.floor(this.windowWidth * 0.68) + 'px'
+            ].join(';') + ';';
+        },
+
+        bubbleTextStyle() {
+            return 'font-size:' + this.bubbleFontSize + 'px;line-height:' + this.bubbleLineHeight + 'px;';
+        },
+
+        messageStatusStyle() {
+            const size = clamp(Math.floor(this.avatarSize * 0.42), 14, 18);
+            return [
+                'width:' + size + 'px',
+                'min-width:' + size + 'px',
+                'height:' + size + 'px',
+                'margin-right:' + Math.max(4, Math.floor(this.avatarGap * 0.55)) + 'px',
+                'padding-top:' + Math.floor(this.bubbleVerticalPadding + 1) + 'px'
+            ].join(';') + ';';
+        },
+
+        statusLoadingStyle() {
+            const size = clamp(Math.floor(this.avatarSize * 0.31), 11, 14);
+            return 'width:' + size + 'px;height:' + size + 'px;';
         },
 
         shareCardStyle() {
@@ -334,7 +499,35 @@ export default {
         },
 
         shareCardContentStyle() {
-            return 'height:' + this.shareContentHeight + 'px;';
+            return 'height:' + this.shareContentHeight + 'px;padding:' + Math.max(5, Math.floor(this.shareContentHeight * 0.12)) + 'px ' + Math.max(6, Math.floor(this.shareContentHeight * 0.15)) + 'px;';
+        },
+
+        shareTitleContainerStyle() {
+            return 'height:' + this.shareTitleLineHeight + 'px;';
+        },
+
+        shareTitleStyle() {
+            return 'font-size:' + this.shareTitleFontSize + 'px;line-height:' + this.shareTitleLineHeight + 'px;';
+        },
+
+        shareFooterStyle() {
+            return 'height:' + Math.max(18, this.shareAuthorAvatarSize + 2) + 'px;';
+        },
+
+        shareAuthorAvatarStyle() {
+            return 'width:' + this.shareAuthorAvatarSize + 'px;height:' + this.shareAuthorAvatarSize + 'px;border-radius:' + Math.floor(this.shareAuthorAvatarSize / 2) + 'px;';
+        },
+
+        shareAuthorNameStyle() {
+            return 'font-size:' + this.shareAuthorFontSize + 'px;line-height:' + Math.max(14, this.shareAuthorAvatarSize) + 'px;';
+        },
+
+        shareVideoBadgeStyle() {
+            return 'width:' + this.shareVideoBadgeSize + 'px;height:' + this.shareVideoBadgeSize + 'px;border-radius:' + Math.floor(this.shareVideoBadgeSize / 2) + 'px;';
+        },
+
+        shareVideoBadgeIconStyle() {
+            return 'font-size:' + clamp(Math.floor(this.shareVideoBadgeSize * 0.52), 10, 13) + 'px;';
         }
     },
 
@@ -367,19 +560,21 @@ export default {
                 this.hasMore = false;
             } else if (this.messages.length < 20) {
                 res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
-                if (res.length > 0) {
-                    await this.fillSenderInfos(res);
-                    this.normalizeMessages(res);
-                    await this.ensureShareAuthorInfos(res);
-
-                    res.reverse();
-                    this.messages = res.concat(this.messages);
-                    this.conIndex = this.messages[0].con_index - 1;
-                }
-
-                if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
-                    this.hasMore = false;
-                }
+				if (res) {
+					if (res.length > 0) {
+					    await this.fillSenderInfos(res);
+					    this.normalizeMessages(res);
+					    await this.ensureShareAuthorInfos(res);
+					
+					    res.reverse();
+					    this.messages = res.concat(this.messages);
+					    this.conIndex = this.messages[0].con_index - 1;
+					}
+					
+					if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
+					    this.hasMore = false;
+					}
+				}
             }
 
             this.refreshFirstPageGroupProfiles();
@@ -498,69 +693,59 @@ export default {
                 const statusBarHeight = Number(sys.statusBarHeight || 0);
                 const safeInsets = sys.safeAreaInsets || {};
                 const bottomSafeHeight = Number(safeInsets.bottom || 0);
+                const compact = windowWidth <= 360 || windowHeight <= 640;
 
                 this.windowWidth = windowWidth;
                 this.windowHeight = windowHeight;
                 this.statusBarHeight = statusBarHeight;
                 this.bottomSafeHeight = bottomSafeHeight;
 
-                this.headerContentHeight = Math.max(
-                    40,
-                    Math.min(48, Math.floor(windowWidth * 0.112))
-                );
+                this.messageSidePadding = clamp(Math.floor(windowWidth * 0.03), 10, 14);
 
+                this.headerContentHeight = clamp(Math.floor(windowWidth * 0.118), 42, 50);
                 this.headerHeight = statusBarHeight + this.headerContentHeight;
+                this.headerButtonSize = clamp(Math.floor(this.headerContentHeight * 0.82), 34, 40);
+                this.headerTitleFontSize = clamp(Math.floor(windowWidth * 0.041), 15, 17);
+                this.backIconSize = clamp(Math.floor(windowWidth * 0.052), 18, 21);
+                this.settingsIconSize = clamp(Math.floor(windowWidth * 0.058), 20, 23);
 
-                this.inputContentHeight = Math.max(
-                    34,
-                    Math.min(40, Math.floor(windowWidth * 0.096))
-                );
+                this.inputContentHeight = clamp(Math.floor(windowWidth * 0.102), 36, 42);
+                this.inputBarHeight = this.inputContentHeight + bottomSafeHeight + clamp(Math.floor(windowWidth * 0.034), 12, 16);
 
-                this.inputBarHeight = this.inputContentHeight + bottomSafeHeight + 10;
+                this.inputFontSize = clamp(Math.floor(windowWidth * 0.038), 14, 16);
+                this.sendButtonHeight = clamp(Math.floor(this.inputContentHeight * 0.92), 33, 39);
+                this.sendButtonWidth = clamp(Math.floor(this.sendButtonHeight * 1.55), 52, 62);
+                this.sendTextFontSize = clamp(Math.floor(windowWidth * 0.034), 13, 14);
 
-                this.sendButtonHeight = Math.max(
-                    32,
-                    Math.min(38, Math.floor(this.inputContentHeight * 0.96))
-                );
+                this.messageUnitHeight = clamp(Math.floor(windowWidth * 0.125), 46, 56);
+                this.messageGap = clamp(Math.floor(windowWidth * 0.026), compact ? 7 : 8, 11);
+                this.avatarSize = clamp(Math.floor(windowWidth * 0.105), 36, 44);
+                this.avatarGap = clamp(Math.floor(windowWidth * 0.023), 8, 10);
 
-                this.sendButtonWidth = Math.max(
-                    48,
-                    Math.min(56, Math.floor(this.sendButtonHeight * 1.45))
-                );
+                this.halfMessageHeight = clamp(Math.floor(this.messageUnitHeight * 0.52), 22, 28);
 
-                this.messageUnitHeight = Math.max(
-                    40,
-                    Math.min(50, Math.floor(windowWidth * 0.112))
-                );
+                this.bubbleFontSize = clamp(Math.floor(windowWidth * 0.038), 14, 16);
+                this.bubbleLineHeight = clamp(Math.floor(this.bubbleFontSize * 1.45), 20, 23);
+                this.bubbleVerticalPadding = clamp(Math.floor(windowWidth * 0.021), 7, 9);
+                this.bubbleHorizontalPadding = clamp(Math.floor(windowWidth * 0.032), 11, 14);
+                this.bubbleRadius = clamp(Math.floor(this.bubbleLineHeight * 0.78), 14, 18);
 
-                this.messageGap = Math.max(
-                    4,
-                    Math.min(6, Math.floor(windowWidth * 0.014))
-                );
+                this.senderNameFontSize = clamp(Math.floor(windowWidth * 0.028), 10, 12);
+                this.senderNameLineHeight = this.senderNameFontSize + 3;
+                this.timeFontSize = clamp(Math.floor(windowWidth * 0.026), 10, 11);
+                this.timeLineHeight = this.timeFontSize + 4;
+                this.systemFontSize = this.timeFontSize;
+                this.systemLineHeight = this.timeLineHeight;
 
-                this.avatarSize = Math.max(
-                    34,
-                    Math.min(42, Math.floor(windowWidth * 0.098))
-                );
-
-                this.halfMessageHeight = Math.max(
-                    18,
-                    Math.min(24, Math.floor(this.messageUnitHeight * 0.48))
-                );
-
-                this.shareCardWidth = Math.max(
-                    156,
-                    Math.min(188, Math.floor(windowWidth * 0.44))
-                );
-
+                this.shareCardWidth = clamp(Math.floor(windowWidth * 0.47), 168, 204);
                 this.shareCardHeight = Math.floor(this.shareCardWidth * 4 / 3);
-
-                this.shareContentHeight = Math.max(
-                    42,
-                    Math.min(50, Math.floor(this.shareCardWidth * 0.26))
-                );
-
+                this.shareContentHeight = clamp(Math.floor(this.shareCardWidth * 0.27), 45, 56);
                 this.shareImageHeight = this.shareCardHeight - this.shareContentHeight;
+                this.shareTitleFontSize = clamp(Math.floor(windowWidth * 0.032), 12, 14);
+                this.shareTitleLineHeight = this.shareTitleFontSize + 6;
+                this.shareAuthorFontSize = clamp(Math.floor(windowWidth * 0.027), 10, 12);
+                this.shareAuthorAvatarSize = clamp(Math.floor(windowWidth * 0.045), 16, 19);
+                this.shareVideoBadgeSize = clamp(Math.floor(windowWidth * 0.056), 20, 24);
             } catch (err) {
                 this.windowHeight = 667;
                 this.windowWidth = 375;
@@ -568,18 +753,42 @@ export default {
                 this.bottomSafeHeight = 0;
                 this.headerContentHeight = 44;
                 this.headerHeight = 44;
-                this.inputContentHeight = 36;
-                this.inputBarHeight = 46;
-                this.sendButtonHeight = 34;
-                this.sendButtonWidth = 52;
-                this.messageUnitHeight = 44;
-                this.messageGap = 5;
-                this.avatarSize = 36;
-                this.halfMessageHeight = 22;
-                this.shareCardWidth = 172;
-                this.shareCardHeight = 229;
-                this.shareContentHeight = 45;
-                this.shareImageHeight = 184;
+                this.headerButtonSize = 36;
+                this.headerTitleFontSize = 15;
+                this.backIconSize = 18;
+                this.settingsIconSize = 20;
+                this.inputContentHeight = 38;
+                this.inputBarHeight = 52;
+                this.inputFontSize = 14;
+                this.sendButtonHeight = 35;
+                this.sendButtonWidth = 54;
+                this.sendTextFontSize = 13;
+                this.messageUnitHeight = 48;
+                this.messageGap = 8;
+                this.avatarSize = 38;
+                this.avatarGap = 8;
+                this.halfMessageHeight = 24;
+                this.bubbleFontSize = 14;
+                this.bubbleLineHeight = 20;
+                this.bubbleVerticalPadding = 7;
+                this.bubbleHorizontalPadding = 11;
+                this.bubbleRadius = 14;
+                this.senderNameFontSize = 10;
+                this.senderNameLineHeight = 13;
+                this.timeFontSize = 10;
+                this.timeLineHeight = 14;
+                this.systemFontSize = 10;
+                this.systemLineHeight = 14;
+                this.messageSidePadding = 10;
+                this.shareCardWidth = 176;
+                this.shareCardHeight = 235;
+                this.shareContentHeight = 47;
+                this.shareImageHeight = 188;
+                this.shareTitleFontSize = 12;
+                this.shareTitleLineHeight = 18;
+                this.shareAuthorFontSize = 10;
+                this.shareAuthorAvatarSize = 16;
+                this.shareVideoBadgeSize = 20;
             }
         },
 
@@ -1085,20 +1294,21 @@ export default {
                         this.conIndex,
                         20 - res.length
                     );
-
-                    if (res.length > 0) {
-                        await this.fillSenderInfos(res);
-                        this.normalizeMessages(res);
-                        await this.ensureShareAuthorInfos(res);
-
-                        res.reverse();
-                        newMessages = res.concat(newMessages);
-                        this.conIndex = newMessages[0].con_index - 1;
-                    }
-
-                    if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
-                        this.hasMore = false;
-                    }
+					if (res) {
+						if (res.length > 0) {
+						    await this.fillSenderInfos(res);
+						    this.normalizeMessages(res);
+						    await this.ensureShareAuthorInfos(res);
+						
+						    res.reverse();
+						    newMessages = res.concat(newMessages);
+						    this.conIndex = newMessages[0].con_index - 1;
+						}
+						
+						if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
+						    this.hasMore = false;
+						}
+					}
                 }
 
                 const firstMsgId = this.messages.length > 0 ? this.messages[0].msg_id : '';
@@ -1344,15 +1554,12 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 10px;
     box-sizing: border-box;
 }
 
 .header-left,
 .header-right,
 .header-right-placeholder {
-    width: 34px;
-    height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1360,7 +1567,6 @@ export default {
 }
 
 .back-icon {
-    font-size: 18px;
     line-height: 1;
     color: #333;
     font-weight: 400;
@@ -1375,17 +1581,14 @@ export default {
 }
 
 .chat-title {
-    font-size: 15px;
     font-weight: 400;
     color: #333;
-    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .settings-icon {
-    font-size: 20px;
     color: #333;
     font-weight: 400;
     line-height: 1;
@@ -1396,7 +1599,6 @@ export default {
     left: 0;
     right: 0;
     overflow-y: auto;
-    padding: 6px 8px 6px 8px;
     box-sizing: border-box;
     background: #fdfdfd;
 }
@@ -1415,12 +1617,11 @@ export default {
 }
 
 .loading-spinner {
-    width: 13px;
-    height: 13px;
     border: 2px solid #f3f3f3;
     border-top-color: #d8a25d;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    box-sizing: border-box;
 }
 
 @keyframes spin {
@@ -1430,8 +1631,8 @@ export default {
 }
 
 .loading-text {
-    font-size: 11px;
     color: #d8dce4;
+    font-weight: 400;
 }
 
 .message-time {
@@ -1441,12 +1642,11 @@ export default {
 }
 
 .time-text {
-    font-size: 9px;
-    line-height: 12px;
     color: #999;
     background: transparent;
     padding: 0;
     border-radius: 0;
+    font-weight: 400;
 }
 
 .message {
@@ -1480,11 +1680,11 @@ export default {
 
 .message-left .avatar-box {
     margin-left: 0;
-    margin-right: 7px;
+    margin-right: 8px;
 }
 
 .message-right .avatar-box {
-    margin-left: 7px;
+    margin-left: 8px;
     margin-right: 0;
 }
 
@@ -1496,42 +1696,35 @@ export default {
 }
 
 .message-content-left {
-    max-width: calc(100% - 82px);
     align-items: flex-start;
 }
 
 .message-content-right {
     flex: 0 1 auto;
-    max-width: calc(100% - 82px);
     align-items: flex-end;
 }
 
 .sender-name {
-    font-size: 9px;
-    line-height: 11px;
     color: #999;
-    margin: 0 0 2px 6px;
+    margin: 0 0 0 6px;
     font-weight: 400;
 }
 
 .sender-name-right {
-    margin: 0 6px 2px 0;
+    margin: 0 6px 0 0;
     text-align: right;
     align-self: flex-end;
 }
 
 .bubble {
-    padding: 6px 10px;
-    border-radius: 14px;
     word-break: break-word;
     position: relative;
     display: inline-block;
     box-shadow: none;
+    box-sizing: border-box;
 }
 
 .bubble-text {
-    font-size: 13px;
-    line-height: 18px;
     text-align: left;
     font-weight: 400;
 }
@@ -1555,29 +1748,23 @@ export default {
 }
 
 .message-status {
-    width: 14px;
-    min-width: 14px;
-    height: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 4px;
-    padding-top: 7px;
     flex-shrink: 0;
     box-sizing: content-box;
 }
 
 .status-loading {
-    width: 11px;
-    height: 11px;
     border: 2px solid rgba(216, 162, 93, 0.25);
     border-top-color: #d8a25d;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    box-sizing: border-box;
 }
 
 .share-card {
-    border-radius: 8px;
+    border-radius: 9px;
     overflow: hidden;
     position: relative;
     display: flex;
@@ -1618,37 +1805,31 @@ export default {
     position: absolute;
     top: 6px;
     right: 6px;
-    width: 20px;
-    height: 20px;
     background: rgba(0, 0, 0, 0.42);
-    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .share-video-badge-icon {
-    font-size: 11px;
     color: rgba(255, 255, 255, 0.94);
     line-height: 1;
     margin-left: 1px;
+    font-weight: 400;
 }
 
 .share-card-content {
-    padding: 5px 6px 4px;
     box-sizing: border-box;
-	background: #f0f2f5;
+    background: #f0f2f5;
 }
 
 .share-card-title-container {
-    height: 17px;
+    overflow: hidden;
 }
 
 .share-card-title {
-    font-size: 11px;
-    font-weight: 500;
+    font-weight: 400;
     color: #333;
-    line-height: 17px;
     display: block;
     white-space: nowrap;
     overflow: hidden;
@@ -1659,7 +1840,6 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 18px;
 }
 
 .share-card-author {
@@ -1671,16 +1851,13 @@ export default {
 }
 
 .share-author-avatar {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
     border: 1px solid rgba(240, 240, 240, 0.8);
     flex-shrink: 0;
     background: #f0f0f0;
+    box-sizing: border-box;
 }
 
 .share-author-name {
-    font-size: 10px;
     color: #666;
     white-space: nowrap;
     overflow: hidden;
@@ -1696,8 +1873,6 @@ export default {
 }
 
 .system-text {
-    font-size: 9px;
-    line-height: 12px;
     color: #999;
     text-align: center;
     font-weight: 400;
@@ -1735,6 +1910,7 @@ export default {
     color: #333333;
     border-right: 1px solid #eeeeee;
     box-sizing: border-box;
+    font-weight: 400;
 }
 
 .message-action-item:last-child {
@@ -1756,7 +1932,7 @@ export default {
     bottom: 0;
     display: flex;
     align-items: center;
-    padding: 5px 10px 5px;
+    padding: 6px 10px 6px;
     background: #fdfdfd;
     border-top: none;
     gap: 8px;
@@ -1772,7 +1948,7 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 5px 10px;
+    padding: 6px 10px;
     background: #fdfdfd;
     border-top: none;
     box-sizing: border-box;
@@ -1780,7 +1956,6 @@ export default {
 }
 
 .disabled-input-text {
-    font-size: 13px;
     color: #999;
     font-weight: 400;
 }
@@ -1788,16 +1963,14 @@ export default {
 .input-wrapper {
     flex: 1;
     background: #f0f2f5;
-    border-radius: 18px;
     overflow: hidden;
 }
 
 .input-field {
-    padding: 0 13px;
-    font-size: 14px;
     color: #333;
     background: transparent;
     font-weight: 400;
+    box-sizing: border-box;
 }
 
 .input-placeholder {
@@ -1824,7 +1997,6 @@ export default {
 }
 
 .send-text {
-    font-size: 13px;
     font-weight: 400;
     color: #8a5a2b;
     line-height: 1;

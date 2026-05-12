@@ -71,10 +71,10 @@
           </view>
         </view>
 
-        <view v-if="!loading && notices.length === 0" class="empty">
-          <text class="empty-icon" :style="emptyIconStyle">🔔</text>
-          <text class="empty-text" :style="emptyTextStyle">暂无通知</text>
-        </view>
+		<view v-if="!loading && notices.length === 0" class="empty">
+		  <text class="iconfont icon-tongzhi empty-icon" :style="emptyIconStyle"></text>
+		  <text class="empty-text" :style="emptyTextStyle">暂无通知</text>
+		</view>
 
         <view v-if="notices.length > 0" class="footer" :style="footerStyle">
           <text v-if="loadingMore">加载中...</text>
@@ -731,6 +731,8 @@ export default {
 .empty-icon {
   margin-bottom: 10px;
   font-weight: 400;
+  color: #d8a25d;
+  line-height: 1;
 }
 
 .empty-text {

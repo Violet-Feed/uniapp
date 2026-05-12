@@ -1,103 +1,174 @@
 <template>
-	<view class="container">
-		<!-- 自定义导航栏 -->
-		<view class="nav-bar">
-			<view class="nav-back" @click="goBack">
-				<text class="nav-back-icon">←</text>
-				<text class="nav-back-text">返回</text>
+	<view class="edit-page">
+		<view class="nav-bar" :style="navBarStyle">
+			<view class="nav-content" :style="navContentStyle">
+				<view class="nav-left" @click.stop="goBack">
+					<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
+				</view>
+
+				<view class="nav-title-wrap">
+					<text class="nav-title" :style="navTitleStyle">编辑创作</text>
+				</view>
+
+				<view class="nav-right"></view>
 			</view>
-			<view class="nav-title">编辑创作</view>
 		</view>
 
-		<!-- 主体内容 -->
-		<view class="content">
-			<!-- 素材预览 -->
-			<view class="section">
-				<view class="section-title">素材预览</view>
-				<view class="preview-box">
-					<video
-						v-if="creation.type === 'video'"
-						class="preview-video"
-						:src="creation.coverImage"
-						controls
-						show-center-play-btn
-					></video>
-					<image
-						v-else
-						class="preview-image"
-						:src="creation.coverImage"
-						mode="aspectFill"
-					></image>
+		<view class="content" :style="contentStyle">
+			<view class="media-section" :style="mediaSectionStyle">
+				<video
+					v-if="isVideoCreation && creation.coverImage && !videoHiddenForScroll"
+					class="material-video"
+					:style="mediaInnerStyle"
+					:src="creation.coverImage"
+					controls
+					:show-center-play-btn="true"
+					:enable-play-gesture="true"
+					:show-fullscreen-btn="true"
+					object-fit="contain"
+					@error="onVideoError"
+				></video>
+
+				<view
+					v-else-if="isVideoCreation && creation.coverImage && videoHiddenForScroll"
+					class="video-placeholder"
+					:style="mediaInnerStyle"
+					@click="scrollBackToTop"
+				>
+					<view class="video-placeholder-play">
+						<text class="video-placeholder-play-text">▶</text>
+					</view>
+					<text class="video-placeholder-title">视频已收起</text>
+					<text class="video-placeholder-subtitle">返回顶部后继续播放</text>
+				</view>
+
+				<image
+					v-else-if="creation.coverImage"
+					class="material-image"
+					:style="mediaInnerStyle"
+					:src="creation.coverImage"
+					mode="aspectFit"
+					@click="previewImage"
+					@error="onMediaError"
+				></image>
+
+				<view v-else class="media-empty" :style="mediaInnerStyle">
+					<text class="iconfont icon-neirongchuangzuo media-empty-icon"></text>
+					<text class="media-empty-text">素材不存在</text>
 				</view>
 			</view>
 
-			<!-- 标题 -->
-			<view class="section">
-				<view class="section-title">标题</view>
-				<input
-					class="input"
-					v-model="creation.title"
-					placeholder="请输入标题"
-					maxlength="50"
-				/>
-				<view class="input-counter">{{ creation.title.length }}/50</view>
-			</view>
-
-			<!-- 正文内容 -->
-			<view class="section">
-				<view class="section-title">内容</view>
-				<textarea
-					class="textarea"
-					v-model="creation.detail"
-					placeholder="写点说明、心情或者创作故事..."
-					maxlength="500"
-					auto-height
-				/>
-				<view class="input-counter">{{ creation.detail.length }}/500</view>
-			</view>
-
-			<!-- 类目选择 -->
-			<view class="section">
-				<view class="section-title">类目</view>
-				<picker
-					mode="selector"
-					:range="categoryOptions"
-					range-key="label"
-					:value="selectedCategoryIndex"
-					@change="onCategoryChange"
-				>
-					<view class="picker-box">
-						<text
-							class="picker-text"
-							:class="{ placeholder: selectedCategoryIndex === -1 }"
-						>
-							{{
-								selectedCategoryIndex === -1
-									? '请选择类目'
-									: categoryOptions[selectedCategoryIndex].label
-							}}
-						</text>
-						<text class="picker-icon">▼</text>
+			<view class="form-card" :style="formCardStyle">
+				<view class="section">
+					<view class="section-header">
+						<view class="section-title-wrap">
+							<view class="section-dot"></view>
+							<text class="section-title" :style="sectionTitleStyle">标题</text>
+						</view>
+						<text class="input-counter">{{ creation.title.length }}/50</text>
 					</view>
-				</picker>
+
+					<input
+						class="input"
+						:style="inputStyle"
+						v-model="creation.title"
+						placeholder="请输入标题"
+						placeholder-class="input-placeholder"
+						maxlength="50"
+					/>
+				</view>
+
+				<view class="section">
+					<view class="section-header">
+						<view class="section-title-wrap">
+							<view class="section-dot"></view>
+							<text class="section-title" :style="sectionTitleStyle">内容</text>
+						</view>
+						<text class="input-counter">{{ creation.detail.length }}/500</text>
+					</view>
+
+					<textarea
+						class="textarea"
+						:style="textareaStyle"
+						v-model="creation.detail"
+						placeholder="写点说明、心情或者创作故事..."
+						placeholder-class="input-placeholder"
+						maxlength="500"
+					/>
+				</view>
+
+				<view class="section last-section">
+					<view class="section-header">
+						<view class="section-title-wrap">
+							<view class="section-dot"></view>
+							<text class="section-title" :style="sectionTitleStyle">标签</text>
+						</view>
+					</view>
+
+					<picker
+						mode="selector"
+						:range="categoryOptions"
+						range-key="label"
+						:value="selectedCategoryIndex"
+						@change="onCategoryChange"
+					>
+						<view class="picker-box" :style="inputStyle">
+							<text
+								class="picker-text"
+								:class="{ placeholder: selectedCategoryIndex === -1 }"
+								:style="formTextStyle"
+							>
+								{{
+									selectedCategoryIndex === -1
+										? '请选择标签'
+										: categoryOptions[selectedCategoryIndex].label
+								}}
+							</text>
+							<text class="picker-icon">›</text>
+						</view>
+					</picker>
+				</view>
 			</view>
 		</view>
 
-		<!-- 底部保存按钮 -->
-		<view class="bottom-bar">
+		<view class="bottom-bar" :style="bottomBarStyle">
 			<button
-				class="publish-btn"
+				class="submit-btn"
 				:class="{ disabled: !canSubmit || submitting }"
+				:style="submitBtnStyle"
 				@click="handleSubmit"
 			>
-				{{ submitting ? '保存中...' : '保存' }}
+				<text class="submit-btn-text" :style="submitTextStyle">
+					{{ submitting ? '保存中...' : '保存' }}
+				</text>
 			</button>
+		</view>
+
+		<view
+			v-if="preview.visible"
+			class="image-preview-mask"
+			@click="closePreview"
+		>
+			<image
+				class="image-preview-img"
+				:src="preview.url"
+				mode="aspectFit"
+				@click.stop="closePreview"
+			></image>
 		</view>
 	</view>
 </template>
 
 <script>
 import { getCreationById, updateCreation } from '@/request/creation.js'
+
+const PAGE_BG = '#f5f5f7'
+const THEME_YELLOW = 'rgba(253, 231, 209, 1)'
+const THEME_BROWN = '#8a5a2b'
+
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value))
+}
 
 export default {
 	data() {
@@ -124,29 +195,302 @@ export default {
 				{ label: '科技', value: 'tech' },
 				{ label: '娱乐', value: 'entertainment' }
 			],
-			selectedCategoryIndex: -1
+			selectedCategoryIndex: -1,
+
+			videoHiddenForScroll: false,
+
+			preview: {
+				visible: false,
+				url: ''
+			},
+
+			windowWidth: 375,
+			windowHeight: 667,
+			statusBarHeight: 0,
+			safeBottom: 0,
+
+			navContentHeight: 38,
+			navHeight: 38,
+
+			pagePaddingTop: 10,
+			pagePaddingBottom: 24,
+			pagePaddingX: 14,
+
+			mediaHeight: 330,
+
+			cardRadius: 16,
+			cardPaddingX: 14,
+			cardPaddingY: 14,
+			cardGap: 12,
+
+			inputHeight: 42,
+			textareaHeight: 116,
+
+			bottomPaddingTop: 8,
+			bottomPaddingX: 16,
+			submitHeight: 46,
+			bottomContentHeight: 66,
+
+			backIconSize: 20,
+			navTitleFontSize: 17,
+			sectionTitleFontSize: 15,
+			formFontSize: 14,
+			submitFontSize: 15
 		}
 	},
 
 	computed: {
+		isVideoCreation() {
+			return this.creation.type === 'video'
+		},
+
 		canSubmit() {
 			return this.creation.title.trim().length > 0 && this.selectedCategoryIndex !== -1
 		},
+
 		selectedCategory() {
 			if (this.selectedCategoryIndex === -1) return null
 			return this.categoryOptions[this.selectedCategoryIndex]
+		},
+
+		navBarStyle() {
+			return (
+				'height:' + this.navHeight + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;' +
+				'background:' + PAGE_BG + ';'
+			)
+		},
+
+		navContentStyle() {
+			return 'height:' + this.navContentHeight + 'px;'
+		},
+
+		backIconStyle() {
+			return 'font-size:' + this.backIconSize + 'px;'
+		},
+
+		navTitleStyle() {
+			return 'font-size:' + this.navTitleFontSize + 'px;'
+		},
+
+		contentStyle() {
+			return (
+				'padding-top:' + this.navHeight + 'px;' +
+				'padding-bottom:' + (this.bottomContentHeight + this.safeBottom + this.pagePaddingBottom) + 'px;'
+			)
+		},
+
+		mediaSectionStyle() {
+			return (
+				'height:' + this.mediaHeight + 'px;' +
+				'margin-top:' + this.pagePaddingTop + 'px;' +
+				'background:' + PAGE_BG + ';'
+			)
+		},
+
+		mediaInnerStyle() {
+			return (
+				'width:100%;' +
+				'height:' + this.mediaHeight + 'px;' +
+				'background:' + PAGE_BG + ';'
+			)
+		},
+
+		formCardStyle() {
+			return (
+				'border-radius:' + this.cardRadius + 'px;' +
+				'padding:' + this.cardPaddingY + 'px ' + this.cardPaddingX + 'px;' +
+				'margin:' + this.cardGap + 'px ' + this.pagePaddingX + 'px 0;'
+			)
+		},
+
+		sectionTitleStyle() {
+			return 'font-size:' + this.sectionTitleFontSize + 'px;'
+		},
+
+		formTextStyle() {
+			return 'font-size:' + this.formFontSize + 'px;'
+		},
+
+		inputStyle() {
+			return (
+				'height:' + this.inputHeight + 'px;' +
+				'font-size:' + this.formFontSize + 'px;' +
+				'border-radius:' + Math.floor(this.inputHeight * 0.28) + 'px;'
+			)
+		},
+
+		textareaStyle() {
+			return (
+				'height:' + this.textareaHeight + 'px;' +
+				'font-size:' + this.formFontSize + 'px;' +
+				'border-radius:12px;'
+			)
+		},
+
+		bottomBarStyle() {
+			return (
+				'padding:' +
+				this.bottomPaddingTop +
+				'px ' +
+				this.bottomPaddingX +
+				'px ' +
+				(12 + this.safeBottom) +
+				'px;'
+			)
+		},
+
+		submitBtnStyle() {
+			return (
+				'height:' + this.submitHeight + 'px;' +
+				'line-height:' + this.submitHeight + 'px;' +
+				'border-radius:' + Math.floor(this.submitHeight / 2) + 'px;' +
+				'background:' + THEME_YELLOW + ';'
+			)
+		},
+
+		submitTextStyle() {
+			return 'font-size:' + this.submitFontSize + 'px;color:' + THEME_BROWN + ';'
 		}
 	},
 
 	onLoad(options) {
+		this.initResponsiveLayout()
 		this.creationId = options.creationId || ''
 		this.authorId = options.userId || ''
 		this.fetchCreationDetail()
 	},
 
+	onShow() {
+		this.initResponsiveLayout()
+	},
+
+	onPageScroll(e) {
+		if (!this.isVideoCreation) return
+
+		const scrollTop = Number(e && e.scrollTop ? e.scrollTop : 0)
+		const shouldHideVideo = scrollTop > 2
+
+		if (this.videoHiddenForScroll !== shouldHideVideo) {
+			this.videoHiddenForScroll = shouldHideVideo
+		}
+	},
+
 	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync()
+				const windowWidth = Number(sys.windowWidth || 375)
+				const windowHeight = Number(sys.windowHeight || 667)
+				const statusBarHeight = Number(sys.statusBarHeight || 0)
+				const safeAreaInsets = sys.safeAreaInsets || {}
+				const safeBottom = Number(safeAreaInsets.bottom || 0)
+				const smallScreenBoost = windowWidth <= 360 ? 1 : 0
+
+				this.windowWidth = windowWidth
+				this.windowHeight = windowHeight
+				this.statusBarHeight = statusBarHeight
+				this.safeBottom = safeBottom
+
+				this.navContentHeight = 38
+				this.navHeight = statusBarHeight + this.navContentHeight
+
+				this.pagePaddingTop = clamp(Math.floor(windowWidth * 0.026), 8, 12)
+				this.pagePaddingBottom = clamp(Math.floor(windowWidth * 0.052), 18, 28)
+				this.pagePaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+
+				const availableHeight = windowHeight - this.navHeight - safeBottom
+				this.mediaHeight = clamp(
+					Math.floor(Math.min(windowWidth * 1.04, availableHeight * 0.42)),
+					250,
+					420
+				)
+
+				this.cardRadius = clamp(Math.floor(windowWidth * 0.042), 14, 18)
+				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.cardPaddingY = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.cardGap = clamp(Math.floor(windowWidth * 0.034), 10, 14)
+
+				this.inputHeight = clamp(Math.floor(windowWidth * 0.112), 40, 46)
+				this.textareaHeight = clamp(Math.floor(windowHeight * 0.17), 106, 138)
+
+				this.bottomPaddingTop = clamp(Math.floor(windowWidth * 0.018), 6, 8)
+				this.bottomPaddingX = clamp(Math.floor(windowWidth * 0.042), 14, 18)
+				this.submitHeight = clamp(Math.floor(windowWidth * 0.122), 42, 48)
+				this.bottomContentHeight = this.bottomPaddingTop + this.submitHeight + 12
+
+				this.backIconSize = clamp(Math.floor(this.navContentHeight * 0.52), 19, 22)
+				this.navTitleFontSize = clamp(Math.floor(this.navContentHeight * 0.44) + smallScreenBoost, 16, 18)
+				this.sectionTitleFontSize = clamp(Math.floor(windowWidth * 0.04) + smallScreenBoost, 15, 16)
+				this.formFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 13, 15)
+				this.submitFontSize = clamp(Math.floor(windowWidth * 0.04), 14, 16)
+			} catch (err) {
+				this.windowWidth = 375
+				this.windowHeight = 667
+				this.statusBarHeight = 0
+				this.safeBottom = 0
+
+				this.navContentHeight = 38
+				this.navHeight = 38
+
+				this.pagePaddingTop = 10
+				this.pagePaddingBottom = 24
+				this.pagePaddingX = 14
+
+				this.mediaHeight = 330
+
+				this.cardRadius = 16
+				this.cardPaddingX = 14
+				this.cardPaddingY = 14
+				this.cardGap = 12
+
+				this.inputHeight = 42
+				this.textareaHeight = 116
+
+				this.bottomPaddingTop = 8
+				this.bottomPaddingX = 16
+				this.submitHeight = 46
+				this.bottomContentHeight = 66
+
+				this.backIconSize = 20
+				this.navTitleFontSize = 17
+				this.sectionTitleFontSize = 15
+				this.formFontSize = 14
+				this.submitFontSize = 15
+			}
+		},
+
 		goBack() {
 			uni.navigateBack()
+		},
+
+		scrollBackToTop() {
+			uni.pageScrollTo({
+				scrollTop: 0,
+				duration: 220
+			})
+		},
+
+		previewImage() {
+			if (!this.creation.coverImage || this.isVideoCreation) return
+
+			uni.previewImage({
+				current: this.creation.coverImage,
+				urls: [this.creation.coverImage],
+				fail: () => {
+					this.preview = {
+						visible: true,
+						url: this.creation.coverImage
+					}
+				}
+			})
+		},
+
+		closePreview() {
+			this.preview = {
+				visible: false,
+				url: ''
+			}
 		},
 
 		onCategoryChange(e) {
@@ -154,9 +498,7 @@ export default {
 		},
 
 		syncCategoryIndex(categoryValue) {
-			const idx = this.categoryOptions.findIndex(
-				item => item.value === categoryValue
-			)
+			const idx = this.categoryOptions.findIndex(item => item.value === categoryValue)
 			this.selectedCategoryIndex = idx
 		},
 
@@ -202,7 +544,7 @@ export default {
 			if (!this.canSubmit || this.submitting) {
 				if (!this.canSubmit) {
 					uni.showToast({
-						title: '请填写标题并选择类目',
+						title: '请填写标题并选择标签',
 						icon: 'none'
 					})
 				}
@@ -210,6 +552,7 @@ export default {
 			}
 
 			this.submitting = true
+
 			try {
 				const ok = await updateCreation({
 					creationId: this.creation.creationId,
@@ -239,56 +582,195 @@ export default {
 			} finally {
 				this.submitting = false
 			}
+		},
+
+		onMediaError() {
+			uni.showToast({
+				title: '素材加载失败',
+				icon: 'none'
+			})
+		},
+
+		onVideoError(err) {
+			console.error('视频加载失败：', err)
+			uni.showToast({
+				title: '视频加载失败',
+				icon: 'none'
+			})
 		}
 	}
 }
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
-.container {
-	background-color: #f5f5f7;
+.edit-page {
 	min-height: 100vh;
+	background: #f5f5f7;
+	box-sizing: border-box;
 }
 
 .nav-bar {
 	position: fixed;
-	top: 0;
 	left: 0;
 	right: 0;
-	height: 88rpx;
-	padding: 0 16rpx;
+	top: 0;
+	z-index: 9999;
+	background: #f5f5f7;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.nav-content {
+	width: 100%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 4px;
+	box-sizing: border-box;
+	background: #f5f5f7;
+}
+
+.nav-left,
+.nav-right {
+	width: 76px;
+	height: 30px;
 	display: flex;
 	align-items: center;
-	background-color: #ffffff;
-	box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
-	z-index: 100;
+	flex-shrink: 0;
+	box-sizing: border-box;
 }
 
-.nav-back {
+.nav-left {
+	justify-content: flex-start;
+}
+
+.nav-right {
+	justify-content: flex-end;
+}
+
+.back-icon {
+	width: 44px;
+	height: 30px;
+	line-height: 30px;
+	text-align: center;
+	color: #222222;
+	font-weight: 400;
+}
+
+.nav-title-wrap {
+	flex: 1;
+	height: 30px;
 	display: flex;
 	align-items: center;
-	padding: 10rpx 10rpx 10rpx 0;
-}
-
-.nav-back-icon {
-	font-size: 34rpx;
-	margin-right: 4rpx;
-}
-
-.nav-back-text {
-	font-size: 28rpx;
+	justify-content: center;
+	min-width: 0;
+	box-sizing: border-box;
 }
 
 .nav-title {
-	flex: 1;
+	color: #222222;
+	font-weight: 400;
+	line-height: 30px;
 	text-align: center;
-	font-size: 32rpx;
-	font-weight: 600;
-	margin-right: 80rpx;
 }
 
 .content {
-	padding: 100rpx 12px 120rpx;
+	box-sizing: border-box;
+}
+
+.media-section {
+	width: 100%;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	box-sizing: border-box;
+	background: #f5f5f7;
+}
+
+.material-image,
+.material-video {
+	width: 100%;
+	background: #f5f5f7;
+	display: block;
+	object-fit: contain;
+}
+
+.video-placeholder {
+	background: #f5f5f7;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+}
+
+.video-placeholder-play {
+	width: 58px;
+	height: 58px;
+	border-radius: 29px;
+	background: rgba(253, 231, 209, 1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+}
+
+.video-placeholder-play-text {
+	margin-left: 4px;
+	font-size: 24px;
+	color: #8a5a2b;
+	line-height: 1;
+	font-weight: 400;
+}
+
+.video-placeholder-title {
+	margin-top: 14px;
+	font-size: 15px;
+	color: #333333;
+	line-height: 1.4;
+	font-weight: 400;
+}
+
+.video-placeholder-subtitle {
+	margin-top: 6px;
+	font-size: 12px;
+	color: #999999;
+	line-height: 1.4;
+	font-weight: 400;
+}
+
+.media-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+}
+
+.media-empty-icon {
+	font-size: 48px;
+	color: rgba(253, 190, 120, 1);
+	line-height: 1;
+	font-weight: 400;
+}
+
+.media-empty-text {
+	margin-top: 10px;
+	color: #999;
+	font-size: 14px;
+	font-weight: 400;
+}
+
+.form-card {
+	background: #ffffff;
+	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
 	box-sizing: border-box;
 }
 
@@ -296,83 +778,92 @@ export default {
 	margin-bottom: 16px;
 }
 
-.section-title {
-	font-size: 30rpx;
-	font-weight: 600;
-	color: #333;
+.last-section {
+	margin-bottom: 0;
+}
+
+.section-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 	margin-bottom: 8px;
 }
 
-.preview-box {
-	background: #fff;
-	border-radius: 8px;
-	overflow: hidden;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-	width: 48%;
-	margin: 0 auto;
-	padding: 0;
+.section-title-wrap {
+	display: flex;
+	align-items: center;
+	min-width: 0;
 }
 
-.preview-image,
-.preview-video {
-	width: 100%;
-	height: 240px;
-	border-radius: 0;
-	object-fit: cover;
+.section-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 3px;
+	background: rgba(253, 190, 120, 1);
+	margin-right: 8px;
+	flex-shrink: 0;
+}
+
+.section-title {
+	color: #1f2329;
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.input-counter {
+	color: #a0a7b4;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .input,
 .textarea,
 .picker-box {
 	width: 100%;
+	background: #fafafa;
+	color: #333;
+	font-weight: 400;
 	box-sizing: border-box;
 }
 
 .input {
-	background: #fff;
-	border-radius: 10px;
 	padding: 0 12px;
-	height: 80rpx;
-	font-size: 28rpx;
 }
 
 .textarea {
-	background: #fff;
-	border-radius: 10px;
-	padding: 8px 12px;
-	min-height: 160rpx;
-	font-size: 28rpx;
+	padding: 10px 12px;
+	line-height: 1.55;
 }
 
-.input-counter {
-	text-align: right;
-	font-size: 22rpx;
-	color: #aaa;
-	margin-top: 4px;
+.input-placeholder {
+	color: #a0a7b4;
+	font-weight: 400;
 }
 
 .picker-box {
-	background: #fff;
-	border-radius: 10px;
 	padding: 0 12px;
-	height: 80rpx;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 }
 
 .picker-text {
-	font-size: 28rpx;
 	color: #333;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .picker-text.placeholder {
-	color: #aaa;
+	color: #a0a7b4;
 }
 
 .picker-icon {
-	font-size: 26rpx;
-	color: #aaa;
+	color: #a0a7b4;
+	font-size: 20px;
+	line-height: 1;
+	transform: rotate(90deg);
+	font-weight: 400;
 }
 
 .bottom-bar {
@@ -380,24 +871,51 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	padding: 8px 16px 16px;
-	background: #ffffff;
-	box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
-	z-index: 90;
-}
-
-.publish-btn {
-	width: 100%;
-	height: 88rpx;
-	line-height: 88rpx;
-	border-radius: 44rpx;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-	color: #fff;
-	font-size: 30rpx;
+	background: #f5f5f7;
+	box-sizing: border-box;
+	z-index: 998;
+	box-shadow: none;
 	border: none;
 }
 
-.publish-btn.disabled {
-	opacity: 0.4;
+.submit-btn {
+	width: 100%;
+	padding: 0;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+}
+
+.submit-btn::after {
+	border: none;
+}
+
+.submit-btn.disabled {
+	opacity: 0.45;
+}
+
+.submit-btn-text {
+	font-weight: 400;
+	line-height: 1;
+}
+
+.image-preview-mask {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 3000;
+	background: rgba(0, 0, 0, 0.96);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.image-preview-img {
+	width: 100%;
+	height: 100%;
 }
 </style>

@@ -1,84 +1,102 @@
 <template>
-	<view class="create-page">
-		<view class="nav-bar">
-			<view class="nav-left" @click="goBack">
-				<text class="nav-action">返回</text>
+	<view class="create-page" :style="pageStyle">
+		<view class="nav-bar" :style="navBarStyle">
+			<view class="nav-left" :style="navSideStyle" @click="goBack">
+				<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
 			</view>
-			<view class="nav-title">创建智能体</view>
-			<view class="nav-right" @click="submitCreate">
-				<text class="nav-action nav-action-primary">
-					{{ submitting ? '创建中' : '创建' }}
-				</text>
+
+			<view class="nav-title-wrap" :style="navTitleWrapStyle">
+				<text class="nav-title" :style="titleStyle">创建智能体</text>
+			</view>
+
+			<view class="nav-right" :style="navSideStyle">
+				<view
+					class="nav-submit"
+					:class="{ disabled: submitting || uploadingAvatar }"
+					:style="submitButtonStyle"
+					@click="submitCreate"
+				>
+					<text class="nav-submit-text" :style="submitTextStyle">
+						{{ submitting ? '创建中' : '创建' }}
+					</text>
+				</view>
 			</view>
 		</view>
 
-		<view class="form-wrap">
-			<view class="form-card">
-				<view class="avatar-section">
-					<view class="avatar-click" @click="chooseAvatar">
+		<scroll-view
+			scroll-y
+			class="form-scroll"
+			:style="scrollStyle"
+			:show-scrollbar="false"
+		>
+			<view class="form-wrap" :style="formWrapStyle">
+				<view class="avatar-section" :style="avatarSectionStyle">
+					<view class="avatar-click" :style="avatarClickStyle" @click="chooseAvatar">
 						<image
 							class="avatar-preview"
+							:style="avatarStyle"
 							:src="form.avatarUri || defaultAvatar"
 							mode="aspectFill"
 						/>
+						<view class="avatar-mask">
+							<text class="avatar-mask-text" :style="avatarTipStyle">
+								{{ uploadingAvatar ? '上传中' : '更换头像' }}
+							</text>
+						</view>
 					</view>
 				</view>
 
-				<view class="form-item">
-					<text class="label">名称</text>
-					<view class="input-box">
-						<input
-							class="input"
-							type="text"
-							:value="form.agentName"
-							@input="onAgentNameInput"
-							placeholder="请输入智能体名称"
-							placeholder-class="input-placeholder"
-							maxlength="50"
-							confirm-type="done"
-							:adjust-position="true"
-							cursor-spacing="20"
-						/>
-					</view>
+				<view class="section-card" :style="cardStyle">
+					<text class="section-title" :style="sectionTitleStyle">名称</text>
+					<input
+						class="section-input"
+						:style="inputStyle"
+						type="text"
+						:value="form.agentName"
+						@input="onAgentNameInput"
+						placeholder="请输入智能体名称"
+						placeholder-class="input-placeholder"
+						maxlength="50"
+						confirm-type="done"
+						:adjust-position="true"
+						cursor-spacing="20"
+					/>
 				</view>
 
-				<view class="form-item">
-					<text class="label">简介</text>
-					<view class="textarea-box">
-						<textarea
-							class="textarea"
-							:value="form.description"
-							@input="onDescriptionInput"
-							placeholder="请输入智能体描述"
-							placeholder-class="input-placeholder"
-							maxlength="300"
-							auto-height
-							:adjust-position="true"
-							cursor-spacing="20"
-						/>
-					</view>
+				<view class="section-card" :style="cardStyle">
+					<text class="section-title" :style="sectionTitleStyle">简介</text>
+					<textarea
+						class="section-textarea"
+						:style="textareaStyle"
+						:value="form.description"
+						@input="onDescriptionInput"
+						placeholder="请输入智能体描述"
+						placeholder-class="input-placeholder"
+						maxlength="300"
+						:auto-height="false"
+						:adjust-position="true"
+						cursor-spacing="20"
+					/>
 				</view>
 
-				<view class="form-item">
-					<text class="label">人格设定</text>
-					<view class="textarea-box">
-						<textarea
-							class="textarea textarea-large"
-							:value="form.personality"
-							@input="onPersonalityInput"
-							placeholder="请输入智能体人格设定"
-							placeholder-class="input-placeholder"
-							maxlength="1000"
-							auto-height
-							:adjust-position="true"
-							cursor-spacing="20"
-						/>
-					</view>
+				<view class="section-card personality-card" :style="personalityCardStyle">
+					<text class="section-title" :style="sectionTitleStyle">人格设定</text>
+					<textarea
+						class="section-textarea"
+						:style="largeTextareaStyle"
+						:value="form.personality"
+						@input="onPersonalityInput"
+						placeholder="请输入智能体人格设定"
+						placeholder-class="input-placeholder"
+						maxlength="1000"
+						:auto-height="false"
+						:adjust-position="true"
+						cursor-spacing="20"
+					/>
 				</view>
 			</view>
-		</view>
+		</scroll-view>
 
-		<!-- 头像裁剪窗口 -->
 		<avatar-cropper
 			:visible="avatarCropper.visible"
 			:src="avatarCropper.src"
@@ -94,6 +112,8 @@
 import { createAgent } from '@/request/agent.js';
 import { uploadImage } from '@/request/common.js';
 import AvatarCropper from '@/components/avatar-cropper.vue';
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export default {
 	components: {
@@ -114,11 +134,264 @@ export default {
 				avatarUri: '',
 				description: '',
 				personality: ''
-			}
+			},
+
+			windowWidth: 375,
+			windowHeight: 667,
+			statusBarHeight: 0,
+			safeBottom: 0,
+
+			navContentHeight: 46,
+			navSideWidth: 86,
+			titleFontSize: 16,
+			backIconSize: 20,
+			buttonHeight: 32,
+			buttonWidth: 64,
+			buttonFontSize: 13,
+
+			pagePadding: 14,
+			cardPadding: 14,
+			cardRadius: 14,
+			cardGap: 10,
+
+			avatarSize: 92,
+			avatarRadius: 20,
+			avatarSectionHeight: 126,
+			avatarTipFontSize: 11,
+
+			sectionTitleFontSize: 15,
+			inputFontSize: 14,
+			inputHeight: 34,
+			textareaHeight: 104,
+			personalityCardMinHeight: 240,
+			largeTextareaMinHeight: 170
 		};
 	},
 
+	computed: {
+		pageStyle() {
+			return `min-height:${this.windowHeight}px;`;
+		},
+
+		navBarStyle() {
+			return [
+				`height:${this.statusBarHeight + this.navContentHeight}px`,
+				`padding-top:${this.statusBarHeight}px`,
+				`padding-left:${this.pagePadding}px`,
+				`padding-right:${this.pagePadding}px`
+			].join(';') + ';';
+		},
+
+		navSideStyle() {
+			return `width:${this.navSideWidth}px;height:${this.navContentHeight}px;`;
+		},
+
+		navTitleWrapStyle() {
+			return [
+				`height:${this.navContentHeight}px`,
+				`left:${this.navSideWidth + this.pagePadding}px`,
+				`right:${this.navSideWidth + this.pagePadding}px`
+			].join(';') + ';';
+		},
+
+		backIconStyle() {
+			return `font-size:${this.backIconSize}px;`;
+		},
+
+		titleStyle() {
+			return `font-size:${this.titleFontSize}px;`;
+		},
+
+		submitButtonStyle() {
+			return [
+				`width:${this.buttonWidth}px`,
+				`height:${this.buttonHeight}px`,
+				`border-radius:${Math.floor(this.buttonHeight / 2)}px`
+			].join(';') + ';';
+		},
+
+		submitTextStyle() {
+			return `font-size:${this.buttonFontSize}px;`;
+		},
+
+		scrollStyle() {
+			const top = this.statusBarHeight + this.navContentHeight;
+			return `top:${top}px;bottom:0;`;
+		},
+
+		formWrapStyle() {
+			return [
+				`padding:${this.pagePadding}px`,
+				`padding-bottom:${this.safeBottom + 24}px`
+			].join(';') + ';';
+		},
+
+		avatarSectionStyle() {
+			return [
+				`height:${this.avatarSectionHeight}px`,
+				`margin-bottom:${this.cardGap}px`
+			].join(';') + ';';
+		},
+
+		cardStyle() {
+			return [
+				`padding:${this.cardPadding}px`,
+				`border-radius:${this.cardRadius}px`,
+				`margin-bottom:${this.cardGap}px`
+			].join(';') + ';';
+		},
+
+		personalityCardStyle() {
+			return [
+				`padding:${this.cardPadding}px`,
+				`border-radius:${this.cardRadius}px`,
+				`margin-bottom:0`,
+				`min-height:${this.personalityCardMinHeight}px`
+			].join(';') + ';';
+		},
+
+		avatarClickStyle() {
+			return [
+				`width:${this.avatarSize}px`,
+				`height:${this.avatarSize}px`,
+				`border-radius:${this.avatarRadius}px`
+			].join(';') + ';';
+		},
+
+		avatarStyle() {
+			return [
+				`width:${this.avatarSize}px`,
+				`height:${this.avatarSize}px`,
+				`border-radius:${this.avatarRadius}px`
+			].join(';') + ';';
+		},
+
+		avatarTipStyle() {
+			return `font-size:${this.avatarTipFontSize}px;`;
+		},
+
+		sectionTitleStyle() {
+			return `font-size:${this.sectionTitleFontSize}px;`;
+		},
+
+		inputStyle() {
+			return [
+				`height:${this.inputHeight}px`,
+				`font-size:${this.inputFontSize}px`,
+				`line-height:${this.inputHeight}px`
+			].join(';') + ';';
+		},
+
+		textareaStyle() {
+			return [
+				`height:${this.textareaHeight}px`,
+				`font-size:${this.inputFontSize}px`,
+				`line-height:${Math.floor(this.inputFontSize * 1.7)}px`
+			].join(';') + ';';
+		},
+
+		largeTextareaStyle() {
+			return [
+				`height:${this.largeTextareaMinHeight}px`,
+				`font-size:${this.inputFontSize}px`,
+				`line-height:${Math.floor(this.inputFontSize * 1.7)}px`
+			].join(';') + ';';
+		}
+	},
+
+	onLoad() {
+		this.initResponsiveLayout();
+	},
+
+	onShow() {
+		this.initResponsiveLayout();
+	},
+
 	methods: {
+		initResponsiveLayout() {
+			try {
+				const sys = uni.getSystemInfoSync();
+				const width = Number(sys.windowWidth || 375);
+				const height = Number(sys.windowHeight || 667);
+				const statusBarHeight = Number(sys.statusBarHeight || 0);
+				const safeAreaInsets = sys.safeAreaInsets || {};
+				const safeBottom = Number(safeAreaInsets.bottom || 0);
+				const compact = width <= 360 || height <= 640;
+
+				this.windowWidth = width;
+				this.windowHeight = height;
+				this.statusBarHeight = statusBarHeight;
+				this.safeBottom = safeBottom;
+
+				this.navContentHeight = clamp(Math.floor(width * 0.122), 44, 50);
+				this.navSideWidth = clamp(Math.floor(width * 0.23), 78, 94);
+				this.titleFontSize = clamp(Math.floor(width * 0.043), 15, 17);
+				this.backIconSize = clamp(Math.floor(width * 0.054), 19, 22);
+
+				this.buttonHeight = clamp(Math.floor(width * 0.086), 30, 34);
+				this.buttonWidth = clamp(Math.floor(width * 0.17), 60, 70);
+				this.buttonFontSize = clamp(Math.floor(width * 0.034), 12, 14);
+
+				this.pagePadding = clamp(Math.floor(width * 0.038), 12, 18);
+				this.cardPadding = clamp(Math.floor(width * 0.038), 12, 18);
+				this.cardRadius = clamp(Math.floor(width * 0.038), 12, 18);
+				this.cardGap = clamp(Math.floor(width * 0.028), 9, 14);
+
+				this.avatarSize = clamp(Math.floor(width * 0.245), compact ? 82 : 88, 100);
+				this.avatarRadius = clamp(Math.floor(this.avatarSize * 0.22), 16, 22);
+				this.avatarTipFontSize = clamp(Math.floor(width * 0.03), 10, 12);
+				this.avatarSectionHeight = this.avatarSize + clamp(Math.floor(width * 0.07), 24, 34);
+
+				this.sectionTitleFontSize = clamp(Math.floor(width * 0.04), 14, 16);
+				this.inputFontSize = clamp(Math.floor(width * 0.037), 13, 15);
+				this.inputHeight = clamp(Math.floor(width * 0.092), 32, 38);
+				this.textareaHeight = clamp(Math.floor(height * 0.155), 94, 120);
+
+				const navHeight = this.statusBarHeight + this.navContentHeight;
+				const formVerticalPadding = this.pagePadding * 2 + this.safeBottom + 24;
+
+				const nameCardHeight =
+					this.cardPadding * 2 +
+					this.inputHeight +
+					clamp(Math.floor(this.sectionTitleFontSize * 1.4), 20, 24) +
+					10;
+
+				const descCardHeight =
+					this.cardPadding * 2 +
+					this.textareaHeight +
+					clamp(Math.floor(this.sectionTitleFontSize * 1.4), 20, 24) +
+					10;
+
+				const fixedHeights =
+					this.avatarSectionHeight +
+					this.cardGap +
+					nameCardHeight +
+					this.cardGap +
+					descCardHeight +
+					this.cardGap;
+
+				const remainHeight = height - navHeight - formVerticalPadding - fixedHeights;
+
+				this.personalityCardMinHeight = Math.max(
+					clamp(Math.floor(height * 0.34), 220, 320),
+					remainHeight
+				);
+
+				this.largeTextareaMinHeight = Math.max(
+					150,
+					this.personalityCardMinHeight -
+						this.cardPadding * 2 -
+						clamp(Math.floor(this.sectionTitleFontSize * 1.4), 20, 24) -
+						10
+				);
+			} catch (err) {
+				this.windowWidth = 375;
+				this.windowHeight = 667;
+				this.statusBarHeight = 0;
+				this.safeBottom = 0;
+			}
+		},
+
 		goBack() {
 			uni.navigateBack();
 		},
@@ -199,6 +472,7 @@ export default {
 		parseAvatarUri(uploadRes) {
 			if (!uploadRes) return '';
 			if (typeof uploadRes === 'string') return uploadRes;
+
 			if (typeof uploadRes === 'object') {
 				return (
 					uploadRes.source_url ||
@@ -208,6 +482,7 @@ export default {
 					''
 				);
 			}
+
 			return '';
 		},
 
@@ -215,6 +490,7 @@ export default {
 			if (this.submitting || this.uploadingAvatar) return;
 
 			const agentName = (this.form.agentName || '').trim();
+
 			if (!agentName) {
 				uni.showToast({
 					title: '请输入智能体名称',
@@ -255,26 +531,32 @@ export default {
 };
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .create-page {
-	min-height: 100vh;
+	position: relative;
 	background: #f7f8fa;
+	overflow: hidden;
 }
 
 .nav-bar {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	z-index: 20;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 88rpx;
-	padding: calc(var(--status-bar-height) + 12rpx) 24rpx 12rpx;
 	background: #ffffff;
-	border-bottom: 1rpx solid #eceef2;
-	box-sizing: content-box;
+	box-sizing: border-box;
 }
 
 .nav-left,
 .nav-right {
-	min-width: 100rpx;
 	display: flex;
 	align-items: center;
 }
@@ -287,103 +569,133 @@ export default {
 	justify-content: flex-end;
 }
 
+.nav-title-wrap {
+	position: absolute;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
 .nav-title {
-	font-size: 34rpx;
-	font-weight: 600;
 	color: #1f2329;
+	font-weight: 400;
+	line-height: 1;
+	text-align: center;
 }
 
-.nav-action {
-	font-size: 28rpx;
-	color: #4e5969;
+.back-icon {
+	color: #333333;
+	font-weight: 400;
+	line-height: 1;
 }
 
-.nav-action-primary {
-	color: #4f7cff;
-	font-weight: 600;
+.nav-submit {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(253, 231, 209, 1);
+	box-shadow: none;
+}
+
+.nav-submit.disabled {
+	opacity: 0.55;
+}
+
+.nav-submit-text {
+	color: #8a5a2b;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.form-scroll {
+	position: fixed;
+	left: 0;
+	right: 0;
+	background: #f7f8fa;
+	box-sizing: border-box;
 }
 
 .form-wrap {
-	padding: 24rpx;
-}
-
-.form-card {
-	background: #ffffff;
-	border-radius: 20rpx;
-	padding: 24rpx;
-	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
+	box-sizing: border-box;
 }
 
 .avatar-section {
 	display: flex;
-	flex-direction: column;
 	align-items: center;
-	padding-bottom: 24rpx;
-	margin-bottom: 24rpx;
-	border-bottom: 1rpx solid #f0f2f5;
-}
-
-.avatar-click {
-	padding: 8rpx;
-}
-
-.avatar-preview {
-	width: 132rpx;
-	height: 132rpx;
-	border-radius: 28rpx;
-	background: #eef1f6;
-}
-
-.form-item {
-	display: flex;
-	flex-direction: column;
-	margin-bottom: 24rpx;
-}
-
-.form-item:last-child {
-	margin-bottom: 0;
-}
-
-.label {
-	font-size: 28rpx;
-	font-weight: 600;
-	color: #1f2329;
-	margin-bottom: 12rpx;
-}
-
-.input-box,
-.textarea-box {
-	width: 100%;
-	background: #f7f8fa;
-	border-radius: 16rpx;
-	padding: 0 20rpx;
+	justify-content: center;
 	box-sizing: border-box;
 }
 
-.input {
-	width: 100%;
-	height: 88rpx;
-	font-size: 28rpx;
+.avatar-click {
+	position: relative;
+	overflow: hidden;
+	background: #eef1f6;
+}
+
+.avatar-preview {
+	background: #eef1f6;
+	display: block;
+}
+
+.avatar-mask {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 30%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.32);
+}
+
+.avatar-mask-text {
+	color: #ffffff;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.section-card {
+	background: #ffffff;
+	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
+	box-sizing: border-box;
+}
+
+.personality-card {
+	box-sizing: border-box;
+}
+
+.section-title {
+	display: block;
 	color: #1f2329;
+	font-weight: 400;
+	line-height: 1.4;
+	margin-bottom: 10px;
 }
 
-.textarea-box {
-	padding: 20rpx;
-}
-
-.textarea {
+.section-input,
+.section-textarea {
 	width: 100%;
-	min-height: 180rpx;
-	font-size: 28rpx;
-	line-height: 1.6;
-	color: #1f2329;
+	color: #4e5969;
+	font-weight: 400;
+	background: transparent;
+	padding: 0;
+	box-sizing: border-box;
 }
 
-.textarea-large {
-	min-height: 260rpx;
+.section-input {
+	line-height: 1;
+}
+
+.section-textarea {
+	display: block;
+	line-height: 1.75;
 }
 
 .input-placeholder {
 	color: #a0a7b4;
+	font-weight: 400;
 }
 </style>

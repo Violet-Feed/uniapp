@@ -3,8 +3,9 @@
     <!-- 顶部作者信息 -->
     <view class="top-bar">
       <view class="back-btn" @click="goBack">
-        <text class="back-icon">←</text>
+        <text class="iconfont icon-fanhui back-icon"></text>
       </view>
+
       <view class="author-info" @click="goToUserPage(creation.author.user_id)">
         <image
           class="author-avatar"
@@ -16,35 +17,53 @@
           <text class="author-desc">{{ formatNumber(creation.author.followerCount) }} 粉丝</text>
         </view>
       </view>
-      <!-- 自己的作品不显示关注按钮 -->
+
       <view
-        class="follow-btn"
         v-if="!isSelfAuthor"
-        :class="{ followed: isFollowed }"
+        :class="isFollowed ? 'following-btn' : 'follow-btn'"
         @click.stop="toggleFollow"
       >
-        <text>{{ isFollowed ? '已关注' : '+ 关注' }}</text>
+        <text class="btn-text">{{ isFollowed ? '已关注' : '+ 关注' }}</text>
       </view>
     </view>
 
-    <!-- 图片展示区域：固定高度，完整展示，不足区域为黑色 -->
-    <swiper
-      class="image-swiper"
-      :indicator-dots="creation.images.length > 1"
-      indicator-color="rgba(255,255,255,0.5)"
-      indicator-active-color="#fff"
-    >
-      <swiper-item v-for="(image, index) in creation.images" :key="index">
-        <image
-          class="creation-image"
-          :src="image"
-          mode="aspectFit"
-          @click="openImagePreview(index)"
-        ></image>
-      </swiper-item>
-    </swiper>
+    <!-- 创作展示区域 -->
+    <view class="media-section">
+      <video
+        v-if="creation.type === 'video' && creation.coverImage"
+        class="creation-video"
+        :src="creation.coverImage"
+        controls
+        :show-center-play-btn="true"
+        :enable-play-gesture="true"
+        :show-fullscreen-btn="true"
+        object-fit="contain"
+      ></video>
 
-    <!-- 图片全屏预览：点击放大后，再点击图片或遮罩缩小 -->
+      <swiper
+        v-else-if="creation.images.length"
+        class="image-swiper"
+        :indicator-dots="creation.images.length > 1"
+        indicator-color="rgba(0,0,0,0.18)"
+        indicator-active-color="rgba(253,190,120,1)"
+      >
+        <swiper-item v-for="(image, index) in creation.images" :key="index">
+          <image
+            class="creation-image"
+            :src="image"
+            mode="aspectFit"
+            @click="openImagePreview(index)"
+          ></image>
+        </swiper-item>
+      </swiper>
+
+      <view v-else class="media-empty">
+        <text class="iconfont icon-neirongchuangzuo media-empty-icon"></text>
+        <text class="media-empty-text">素材不存在</text>
+      </view>
+    </view>
+
+    <!-- 图片全屏预览 -->
     <view
       v-if="imagePreview.visible"
       class="image-preview-mask"
@@ -62,7 +81,7 @@
         :class="{ disabled: imagePreview.saving }"
         @click.stop="downloadCurrentPreviewImage"
       >
-        <text class="download-icon">↓</text>
+        <text class="iconfont icon-xiazai download-icon"></text>
       </view>
     </view>
 
@@ -71,20 +90,13 @@
       <view class="title-row">
         <text class="creation-title">{{ creation.title || '无标题作品' }}</text>
       </view>
-      <view class="detail-text" :class="{ expanded: isDetailExpanded }">
-        <text>{{ creation.detail }}</text>
-      </view>
-      <text
-        v-if="creation.detail && creation.detail.length > 100"
-        class="expand-btn"
-        @click="toggleDetail"
-      >
-        {{ isDetailExpanded ? '收起' : '展开' }}
-      </text>
 
-      <!-- category 灰色圆角矩形 -->
-      <view class="category-row" v-if="categoryLabel">
-        <text class="category-text"># {{ categoryLabel }}</text>
+      <view
+        class="detail-line"
+        v-if="creation.detail || categoryLabel"
+      >
+        <text class="detail-text" v-if="creation.detail">{{ creation.detail }}</text>
+        <text class="category-text" v-if="categoryLabel"># {{ categoryLabel }}</text>
       </view>
 
       <view class="tags-row" v-if="creation.tags.length">
@@ -95,9 +107,11 @@
 
       <view class="meta-info">
         <text class="meta-time">{{ formatRelativeTime(creation.time) }}</text>
-        <text class="meta-location" v-if="creation.location">📍 {{ creation.location }}</text>
+        <text class="meta-location" v-if="creation.location">{{ creation.location }}</text>
       </view>
     </view>
+
+    <view class="content-comment-divider"></view>
 
     <!-- 评论区域 -->
     <view class="comments-section" id="commentsSection">
@@ -111,7 +125,6 @@
       </view>
 
       <view class="comment-list">
-        <!-- 一级评论 -->
         <view
           class="comment-item"
           v-for="comment in commentList"
@@ -131,19 +144,27 @@
 
           <view class="comment-content-wrapper">
             <view class="comment-header-row">
-              <text
-                class="comment-username"
-                @click="goToUserPage(comment.user.user_id)"
-              >
-                {{ comment.user.name }}
-              </text>
+              <view class="comment-name-line">
+                <text
+                  class="comment-username"
+                  @click="goToUserPage(comment.user.user_id)"
+                >
+                  {{ comment.user.name }}
+                </text>
+                <text v-if="isAuthorComment(comment.user.user_id)" class="author-badge">
+                  作者
+                </text>
+              </view>
 
               <view
                 class="comment-like-btn"
                 :class="{ liked: comment.isLiked }"
                 @click="toggleCommentLike(comment)"
               >
-                <text class="comment-like-icon">{{ comment.isLiked ? '♥️' : '♡' }}</text>
+                <text
+                  class="iconfont comment-like-icon"
+                  :class="comment.isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
+                ></text>
                 <text class="comment-like-count">{{ formatNumber(comment.likes) }}</text>
               </view>
             </view>
@@ -157,7 +178,6 @@
               <text class="comment-reply-btn" @click="replyToComment(comment, comment)">回复</text>
             </view>
 
-            <!-- 一级评论下方：展开 X 条回复 -->
             <view
               v-if="comment.replyCount && !comment.showReplies"
               class="comment-replies-toggle"
@@ -168,7 +188,6 @@
               </text>
             </view>
 
-            <!-- 二级回复列表 -->
             <view v-if="comment.showReplies" class="reply-list">
               <view
                 class="reply-item"
@@ -197,7 +216,10 @@
                         {{ reply.user.name }}
                       </text>
 
-                      <!-- 仅二级回复展示 @sib_username，放在用户名右侧，可点击 -->
+                      <text v-if="isAuthorComment(reply.user.user_id)" class="author-badge reply-author-badge">
+                        作者
+                      </text>
+
                       <text
                         v-if="reply.replyToUser && reply.replyToUserId"
                         class="reply-at"
@@ -212,7 +234,10 @@
                       :class="{ liked: reply.isLiked }"
                       @click="toggleCommentLike(reply)"
                     >
-                      <text class="comment-like-icon">{{ reply.isLiked ? '♥️' : '♡' }}</text>
+                      <text
+                        class="iconfont comment-like-icon"
+                        :class="reply.isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
+                      ></text>
                       <text class="comment-like-count">{{ formatNumber(reply.likes) }}</text>
                     </view>
                   </view>
@@ -230,7 +255,6 @@
                 </view>
               </view>
 
-              <!-- 展开更多 / 收起：与“展开 X 条回复”同一左边界，横向排布 -->
               <view class="reply-footer" v-if="comment.replies.length > 0">
                 <text
                   v-if="comment.replyHasMore && !comment.replyLoading"
@@ -263,10 +287,17 @@
         >
           <text>评论加载中...</text>
         </view>
+
+        <view
+          v-if="!commentHasMore && commentList.length"
+          class="loading-comments no-more-comments"
+        >
+          <text>没有更多评论了</text>
+        </view>
       </view>
     </view>
 
-    <!-- 底部操作栏：抽屉打开时隐藏 -->
+    <!-- 底部操作栏 -->
     <view class="bottom-bar" v-if="!showCommentInput && !imagePreview.visible">
       <view class="comment-input-wrapper" @click="startNewComment">
         <text class="comment-placeholder">说点什么...</text>
@@ -274,21 +305,20 @@
 
       <view class="action-group">
         <view class="action-item" @click="toggleLike">
-          <text class="action-icon" :class="{ liked: isLiked }">
-            {{ isLiked ? '♥️' : '♡' }}
-          </text>
+          <text
+            class="iconfont action-icon"
+            :class="isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
+          ></text>
           <text class="action-count">{{ formatNumber(creation.likes) }}</text>
         </view>
 
         <view class="action-item" @click="scrollToComments">
-          <text class="action-icon">💬</text>
+          <text class="iconfont icon-comment action-icon"></text>
           <text class="action-count">{{ formatNumber(creation.comments) }}</text>
         </view>
 
         <view class="action-item share-action" @click="openSharePanel">
-          <view class="share-action-icon">
-            <text>↗</text>
-          </view>
+          <text class="iconfont icon-fenxiang action-icon"></text>
           <text class="action-count">{{ formatNumber(creation.shares) }}</text>
         </view>
       </view>
@@ -313,7 +343,9 @@
     <view class="comment-action-mask" v-if="commentAction.visible" @click="hideCommentAction">
       <view class="comment-action-sheet" @click.stop>
         <view class="comment-action-delete" @click="confirmDeleteSelectedComment">
-          删除
+          <text class="comment-action-delete-text">
+            {{ commentAction.deleting ? '删除中...' : '删除' }}
+          </text>
         </view>
       </view>
     </view>
@@ -322,30 +354,30 @@
     <view class="share-mask" v-if="showSharePanel" @click="closeSharePanel">
       <view class="share-panel" @click.stop>
         <view class="share-panel-title">分享至</view>
+
         <view class="share-options-row">
           <view class="share-option" @click="shareToChat">
-            <view class="share-option-icon chat-icon">💬</view>
+            <text class="iconfont icon-xiaoxi share-option-icon"></text>
             <text class="share-option-text">聊天</text>
           </view>
+
           <view class="share-option" @click="shareToFriend">
-            <view class="share-option-icon friend-icon">
-              <view class="friend-person-icon">
-                <view class="friend-person-head"></view>
-                <view class="friend-person-body"></view>
-              </view>
-            </view>
+            <text class="iconfont icon-qunliaox share-option-icon share-option-icon-small"></text>
             <text class="share-option-text">朋友</text>
           </view>
+
           <view class="share-option" @click="shareToWechat">
-            <view class="share-option-icon wechat-icon">微</view>
+            <text class="iconfont icon-weixin share-option-icon"></text>
             <text class="share-option-text">微信</text>
           </view>
+
           <view class="share-option" @click="shareToTimeline">
-            <view class="share-option-icon timeline-icon">朋</view>
+            <text class="iconfont icon-pengyouquan share-option-icon share-option-icon-small"></text>
             <text class="share-option-text">朋友圈</text>
           </view>
+
           <view class="share-option" @click="shareToQQ">
-            <view class="share-option-icon qq-icon">Q</view>
+            <text class="iconfont icon-QQ share-option-icon"></text>
             <text class="share-option-text">QQ</text>
           </view>
         </view>
@@ -422,7 +454,6 @@ export default {
 
       isLiked: false,
       isFollowed: false,
-      isDetailExpanded: false,
 
       imagePreview: {
         visible: false,
@@ -431,10 +462,8 @@ export default {
         saving: false
       },
 
-      // 评论相关
       commentList: [],
       commentLoading: false,
-      // 默认按热度排序
       commentSortType: 'digg',
       commentPage: 1,
       commentHasMore: true,
@@ -443,7 +472,6 @@ export default {
       commentText: '',
       commentPlaceholder: '说点什么...',
       commentInputFocus: false,
-      // replyingTo: { parentId, displayName, isReplyToReply, sibId, sibUserId }
       replyingTo: null,
 
       commentAction: {
@@ -471,7 +499,6 @@ export default {
   },
 
   computed: {
-    // category -> 中文标签
     categoryLabel() {
       const map = {
         life: '生活',
@@ -481,7 +508,7 @@ export default {
       }
       return map[this.creation.category] || ''
     },
-    // 是否作者本人
+
     isSelfAuthor() {
       if (!this.currentUserId || !this.creation.author.user_id) return false
       return String(this.currentUserId) === String(this.creation.author.user_id)
@@ -586,7 +613,7 @@ export default {
         entityType: 'creation',
         entityId: BigInt(this.creationId),
         page: pageToLoad,
-        sortType: this.commentSortType // 'time' | 'digg'
+        sortType: this.commentSortType
       }
 
       const res = await getCommentList(payload)
@@ -735,6 +762,11 @@ export default {
       })
     },
 
+    isAuthorComment(userId) {
+      if (!userId || !this.creation.author.user_id) return false
+      return String(userId) === String(this.creation.author.user_id)
+    },
+
     scrollToComments() {
       uni.pageScrollTo({
         selector: '#commentsSection',
@@ -781,7 +813,6 @@ export default {
         this.imagePreview.saving = false
       }
 
-      // H5：使用浏览器下载。
       // #ifdef H5
       try {
         const a = document.createElement('a')
@@ -805,7 +836,6 @@ export default {
       return
       // #endif
 
-      // App / 小程序：下载到临时文件后保存到系统相册。
       const saveToAlbum = (filePath) => {
         uni.saveImageToPhotosAlbum({
           filePath,
@@ -912,10 +942,6 @@ export default {
       }
     },
 
-    toggleDetail() {
-      this.isDetailExpanded = !this.isDetailExpanded
-    },
-
     async toggleCommentLike(comment) {
       if (!comment || comment._loading) return
       comment._loading = true
@@ -945,14 +971,12 @@ export default {
       comment._loading = false
     },
 
-    // parentComment 是一级评论，targetComment 可能是一级也可能是二级
     replyToComment(targetComment, parentComment) {
       if (!targetComment) return
       const parent = parentComment || targetComment
 
       const isReplyToReply = parent.id !== targetComment.id
 
-      // 对一级评论的回复：sibId / sibUserId 设为 0
       this.replyingTo = {
         parentId: parent.id,
         displayName: targetComment.user.name || '',
@@ -1010,20 +1034,17 @@ export default {
       let res
 
       if (this.replyingTo) {
-        // 回复
         const payload = {
           parentId: BigInt(this.replyingTo.parentId),
           entityType: 'creation',
           entityId: BigInt(this.creationId),
           contentType: 1,
           content: text,
-          // 对一级评论的回复 sibId / sibUserId 为 0
           sibId: BigInt(this.replyingTo.sibId || 0),
           sibUserId: BigInt(this.replyingTo.sibUserId || 0)
         }
         res = await createReply(payload)
       } else {
-        // 一级评论
         const payload = {
           entityType: 'creation',
           entityId: BigInt(this.creationId),
@@ -1041,7 +1062,6 @@ export default {
       const newId = res.comment_id
 
       if (this.replyingTo) {
-        // 本地补一条二级回复
         const parentIndex = this.commentList.findIndex(
           (c) => String(c.id) === String(this.replyingTo.parentId)
         )
@@ -1060,7 +1080,6 @@ export default {
             time: Date.now(),
             likes: 0,
             isLiked: false,
-            // 仅二级回复展示 @sib_username
             replyToUser: isReplyToReply ? (this.replyingTo.displayName || '') : '',
             replyToUserId: isReplyToReply ? (this.replyingTo.sibUserId || null) : null,
             replyCount: 0,
@@ -1080,7 +1099,6 @@ export default {
           parent.showReplies = true
         }
       } else {
-        // 本地补一条一级评论
         const newComment = {
           id: newId,
           user: {
@@ -1450,29 +1468,37 @@ export default {
 }
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .container {
   min-height: 100vh;
   background: #fff;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: calc(50px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-/* 顶部作者信息 */
 .top-bar {
   position: sticky;
   top: 0;
+  z-index: 100;
+  background: #fff;
+  padding-top: var(--status-bar-height);
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-  z-index: 100;
-  gap: 12px;
+  height: calc(42px + var(--status-bar-height));
+  padding-left: 12px;
+  padding-right: 12px;
+  box-sizing: border-box;
+  gap: 8px;
 }
 
 .back-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1480,80 +1506,150 @@ export default {
 }
 
 .back-icon {
-  font-size: 24px;
-  color: #333;
-  font-weight: 500;
+  font-size: 19px;
+  color: #222;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .author-info {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex: 1;
+  min-width: 0;
 }
 
 .author-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.author-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.author-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-}
-
-.author-desc {
-  font-size: 12px;
-  color: #999;
-}
-
-.follow-btn {
-  padding: 6px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  background: #eee;
   flex-shrink: 0;
 }
 
-.follow-btn.followed {
+.author-details {
+  margin-left: 8px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.author-name {
+  font-size: 13px;
+  color: #1f2329;
+  font-weight: 400;
+  line-height: 1.25;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.author-desc {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #999;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.follow-btn,
+.following-btn {
+  height: 28px;
+  min-width: 66px;
+  padding: 0 12px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.follow-btn {
+  background: #ff4d67;
+  box-shadow: 0 2px 8px rgba(255, 77, 103, 0.28);
+}
+
+.following-btn {
   background: #f0f0f0;
+  box-shadow: none;
+}
+
+.follow-btn .btn-text,
+.following-btn .btn-text {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.follow-btn .btn-text {
+  color: #ffffff;
+}
+
+.following-btn .btn-text {
   color: #666;
 }
 
-/* 图片展示：固定高度，完整展示；横向或纵向不足区域为白色 */
-.image-swiper {
+.media-section {
   width: 100%;
-  height: 320px;
+  height: 76vw;
+  min-height: 286px;
+  max-height: 430px;
   background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.creation-image {
+.image-swiper,
+.creation-image,
+.creation-video {
   width: 100%;
   height: 100%;
   background: #fff;
 }
 
-/* 图片全屏预览 */
+.creation-image,
+.creation-video {
+  display: block;
+}
+
+.media-empty {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-empty-icon {
+  font-size: 44px;
+  color: rgba(253, 190, 120, 1);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.media-empty-text {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #999;
+  font-weight: 400;
+  line-height: 1;
+}
+
 .image-preview-mask {
   position: fixed;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 1000;
   background: rgba(0, 0, 0, 0.96);
+  z-index: 3000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1567,408 +1663,462 @@ export default {
 .image-preview-download {
   position: fixed;
   right: 18px;
-  bottom: calc(30px + env(safe-area-inset-bottom));
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  width: 38px;
+  height: 38px;
+  border-radius: 19px;
   background: rgba(255, 255, 255, 0.16);
-  color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.28);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 
 .image-preview-download.disabled {
-  opacity: 0.6;
+  opacity: 0.52;
 }
 
 .download-icon {
-  font-size: 18px;
+  font-size: 19px;
+  color: #fff;
+  font-weight: 400;
   line-height: 1;
-  font-weight: 600;
 }
 
-/* 内容区域 */
 .content-section {
-  padding: 20px 16px;
+  padding: 14px 15px 10px;
+  background: #fff;
+  box-sizing: border-box;
 }
 
 .title-row {
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .creation-title {
   font-size: 18px;
-  font-weight: 600;
+  color: #1f2329;
+  font-weight: 400;
+  line-height: 1.42;
+  word-break: break-word;
+}
+
+.detail-line {
+  margin-top: 7px;
+  font-size: 14px;
+  line-height: 1.65;
   color: #333;
-  line-height: 1.4;
+  word-break: break-word;
+  display: block;
+  overflow: visible;
+  white-space: normal;
 }
 
 .detail-text {
-  font-size: 15px;
-  color: #666;
-  line-height: 1.6;
-  max-height: 72px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.detail-text.expanded {
-  max-height: none;
-}
-
-.expand-btn {
+  display: inline;
   font-size: 14px;
-  color: #5b7dff;
-  margin-bottom: 8px;
-  display: inline-block;
-}
-
-/* category 灰色圆角矩形 */
-.category-row {
-  margin-bottom: 8px;
+  color: #333;
+  font-weight: 400;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .category-text {
-  display: inline-block;
-  padding: 4px 10px;
-  font-size: 13px;
-  color: #666;
-  background: #f5f5f5;
+  margin-left: 6px;
+  display: inline;
+  padding: 2px 7px;
   border-radius: 999px;
+  background: rgba(253, 231, 209, 0.86);
+  color: #8a5a2b;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  vertical-align: baseline;
 }
 
 .tags-row {
+  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0 16px;
+  gap: 6px;
 }
 
 .tag-item {
-  font-size: 14px;
-  color: #5b7dff;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(253, 231, 209, 0.7);
+  color: #8a5a2b;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .meta-info {
+  margin-top: 8px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  gap: 10px;
 }
 
-.meta-time {
-  font-size: 13px;
-  color: #999;
-}
-
+.meta-time,
 .meta-location {
-  font-size: 13px;
   color: #999;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
 }
 
-/* 评论区域 */
+.content-comment-divider {
+  height: 1px;
+  margin: 0 15px;
+  background: #f0f0f0;
+  transform: scaleY(0.5);
+  transform-origin: center;
+}
+
 .comments-section {
-  padding: 0 16px 64px;
-  background: #fafafa;
+  padding: 0 15px 2px;
+  background: #fff;
+  box-sizing: border-box;
+  min-height: 28vh;
 }
 
 .comments-header {
-  padding: 16px 0;
-  border-bottom: 1px solid #f0f0f0;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .comments-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
+  font-size: 15px;
+  color: #1f2329;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .comments-sort {
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: #f5f5f5;
+  display: flex;
+  align-items: center;
 }
 
 .sort-label {
-  font-size: 12px;
-  color: #666;
+  font-size: 13px;
+  color: #606266;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .comment-list {
-  background: #fff;
+  box-sizing: border-box;
 }
 
-.empty-comments {
-  padding: 60px 0;
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-}
-
-.loading-comments {
-  padding: 10px 0 14px;
-  text-align: center;
-  font-size: 13px;
-  color: #999;
-}
-
-/* 一级评论 */
 .comment-item {
   display: flex;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f5f5f5;
+  align-items: flex-start;
+  padding: 11px 0;
+  box-sizing: border-box;
 }
 
 .comment-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  border-radius: 19px;
   flex-shrink: 0;
+  background: #eee;
 }
 
 .comment-content-wrapper {
   flex: 1;
+  min-width: 0;
+  margin-left: 10px;
 }
 
-.comment-header-row {
+.comment-header-row,
+.reply-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  min-width: 0;
 }
 
-.comment-username {
+.comment-name-line,
+.reply-name-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.comment-username,
+.reply-username {
   font-size: 14px;
-  font-weight: 500;
-  color: #333;
+  color: #1f2329;
+  font-weight: 400;
+  line-height: 1.35;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.author-badge {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(253, 231, 209, 0.86);
+  color: #8a5a2b;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.reply-author-badge {
+  margin-left: 5px;
 }
 
 .comment-like-btn {
+  min-width: 30px;
+  margin-left: 8px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
 }
 
 .comment-like-icon {
   font-size: 18px;
-  color: #999;
+  color: #666;
+  font-weight: 400;
+  line-height: 1;
 }
 
-.comment-like-btn.liked .comment-like-icon {
-  color: #ff4757;
+.comment-like-icon.active {
+  color: #ff4d67;
 }
 
 .comment-like-count {
-  font-size: 12px;
-  color: #999;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #8f959e;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .comment-main-text {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  margin-bottom: 4px;
+  margin-top: 4px;
 }
 
 .comment-text {
   font-size: 14px;
   color: #333;
-  line-height: 1.5;
+  font-weight: 400;
+  line-height: 1.55;
+  word-break: break-word;
 }
 
 .comment-meta-row {
+  margin-top: 5px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 2px;
+  gap: 12px;
 }
 
-.comment-time {
+.comment-time,
+.comment-reply-btn {
   font-size: 12px;
   color: #999;
+  font-weight: 400;
+  line-height: 1;
 }
 
-.comment-reply-btn {
-  font-size: 13px;
-  color: #666;
-}
-
-/* 展开 X 条回复 */
 .comment-replies-toggle {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .comment-replies-toggle-text {
   font-size: 12px;
-  color: #666;
+  color: #999;
+  font-weight: 400;
+  line-height: 1;
 }
 
-/* 二级回复列表 */
 .reply-list {
-  margin-top: 6px;
+  margin-top: 10px;
+  padding: 10px;
+  background: #f8f8f8;
+  border-radius: 12px;
+  box-sizing: border-box;
 }
 
 .reply-item {
   display: flex;
-  gap: 8px;
-  padding: 6px 0;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.reply-item:last-child {
+  margin-bottom: 0;
 }
 
 .reply-avatar {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: 14px;
   flex-shrink: 0;
+  background: #eee;
 }
 
 .reply-content-wrapper {
   flex: 1;
+  min-width: 0;
+  margin-left: 8px;
 }
 
-.reply-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2px;
-}
-
-.reply-name-line {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.reply-username {
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-}
-
-/* @sib_username 样式 */
 .reply-at {
   margin-left: 6px;
+  color: #8f959e;
   font-size: 12px;
-  color: #666;
+  font-weight: 400;
+  line-height: 1.2;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 展开更多 / 收起 在同一行 */
 .reply-footer {
+  margin-top: 10px;
   display: flex;
   align-items: center;
-  font-size: 12px;
-  color: #666;
-  margin: 2px 0 4px;
+  gap: 14px;
 }
 
+.reply-footer text,
+.reply-footer-collapse,
 .reply-footer-loading {
-  margin-left: 8px;
   font-size: 12px;
   color: #999;
+  font-weight: 400;
+  line-height: 1;
 }
 
-.reply-footer-collapse {
-  margin-left: 12px;
-  font-size: 12px;
-  color: #666;
+.empty-comments {
+  padding: 22px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* 底部操作栏 & 抽屉：统一高度 */
-.bottom-bar,
-.comment-input-bar {
+.loading-comments {
+  padding: 8px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.no-more-comments {
+  padding-bottom: 2px;
+}
+
+.empty-comments text,
+.loading-comments text {
+  font-size: 13px;
+  color: #999;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.bottom-bar {
   position: fixed;
   left: 0;
   right: 0;
+  bottom: 0;
+  z-index: 100;
+  min-height: 50px;
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  background: #fff;
   display: flex;
   align-items: center;
-  padding: 8px 16px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
-  min-height: 52px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-  z-index: 99;
-}
-
-/* 底部操作栏具体布局 */
-.bottom-bar {
-  bottom: 0;
-  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  box-shadow: none;
 }
 
 .comment-input-wrapper {
   flex: 1;
   height: 36px;
-  background: #f5f5f5;
   border-radius: 18px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  margin-right: 12px;
+  padding: 0 14px;
+  box-sizing: border-box;
 }
 
 .comment-placeholder {
   font-size: 14px;
   color: #999;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .action-group {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .action-item {
+  min-width: 28px;
+  height: 36px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
 }
 
 .action-icon {
-  font-size: 22px;
+  font-size: 20px;
   color: #666;
+  font-weight: 400;
+  line-height: 1;
 }
 
-.action-icon.liked {
-  color: #ff4757;
+.action-icon.active {
+  color: #ff4d67;
 }
 
 .action-count {
-  font-size: 11px;
+  margin-top: 2px;
+  font-size: 10px;
   color: #999;
+  font-weight: 400;
+  line-height: 1;
 }
 
-.share-action-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+.comment-input-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: -110px;
+  z-index: 100;
+  min-height: 50px;
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  background: #fff;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  line-height: 1;
-  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.24);
-}
-
-.share-action:active .share-action-icon {
-  transform: scale(0.94);
-}
-
-/* 评论输入框抽屉 */
-.comment-input-bar {
-  bottom: -100px;
-  justify-content: flex-start;
-  gap: 12px;
-  transition: bottom 0.3s;
-  z-index: 100;
+  gap: 10px;
+  box-sizing: border-box;
+  transition: bottom 0.25s;
+  box-shadow: none;
 }
 
 .comment-input-bar.show {
@@ -1978,36 +2128,36 @@ export default {
 .comment-input {
   flex: 1;
   height: 36px;
-  background: #f5f5f5;
+  background: #fff;
+  border: 1px solid #f0f0f0;
   border-radius: 18px;
-  padding: 0 16px;
+  padding: 0 14px;
   font-size: 14px;
+  color: #333;
+  font-weight: 400;
+  box-sizing: border-box;
 }
 
 .send-btn {
-  padding: 6px 16px;
-  background: #f0f0f0;
-  color: #999;
+  width: 56px;
+  height: 36px;
   border-radius: 18px;
-  font-size: 14px;
-  font-weight: 500;
+  background: #eee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .send-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  background: rgba(253, 231, 209, 1);
 }
 
-.share-mask {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 300;
-  background: rgba(0, 0, 0, 0.2);
-  display: flex;
-  align-items: flex-end;
+.send-btn text {
+  font-size: 14px;
+  color: #8a5a2b;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .comment-action-mask {
@@ -2016,61 +2166,83 @@ export default {
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 300;
-  background: rgba(0, 0, 0, 0.25);
+  z-index: 2600;
+  background: rgba(0, 0, 0, 0.28);
   display: flex;
   align-items: flex-end;
+  padding: 0 12px calc(18px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .comment-action-sheet {
   width: 100%;
-  background: #f7f7f7;
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
 .comment-action-delete {
-  height: 52px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ff4d4f;
-  font-size: 16px;
-  font-weight: 500;
-  background: #fff;
-  border-radius: 12px;
 }
 
 .comment-action-delete:active {
-  background: #fff1f0;
+  background: #f7f7f7;
+}
+
+.comment-action-delete-text {
+  font-size: 15px;
+  color: #ff4d4f;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.share-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2500;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: flex-end;
 }
 
 .share-panel {
   width: 100%;
   background: #fff;
-  border-radius: 18px 18px 0 0;
-  padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 0;
+  padding: 16px 8px calc(18px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
 .share-panel-title {
-  font-size: 14px;
-  color: #666;
+  display: block;
   text-align: center;
-  margin-bottom: 14px;
+  font-size: 14px;
+  color: #1f2329;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .share-options-row {
+  margin-top: 18px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: space-around;
 }
 
 .share-option {
   width: 20%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
 .share-option:active {
@@ -2078,70 +2250,33 @@ export default {
 }
 
 .share-option-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 28px;
+  height: 28px;
   font-size: 22px;
-  font-weight: 600;
-  color: #fff;
+  color: #333;
+  font-weight: 400;
+  line-height: 28px;
+  text-align: center;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
   margin-bottom: 7px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-.chat-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.friend-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.friend-person-icon {
-  width: 24px;
-  height: 24px;
-  position: relative;
-}
-
-.friend-person-head {
-  position: absolute;
-  left: 7px;
-  top: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.friend-person-body {
-  position: absolute;
-  left: 4px;
-  bottom: 2px;
-  width: 16px;
-  height: 10px;
-  border-radius: 10px 10px 4px 4px;
-  background: #fff;
-}
-
-.wechat-icon {
-  background: linear-gradient(135deg, #1ecb5c 0%, #0fa849 100%);
-  font-size: 17px;
-}
-
-.timeline-icon {
-  background: linear-gradient(135deg, #1ecb5c 0%, #0fa849 100%);
-  font-size: 17px;
-}
-
-.qq-icon {
-  background: linear-gradient(135deg, #12c2e9 0%, #3b82f6 100%);
-  font-size: 20px;
+.share-option-icon-small {
+  font-size: 18px;
+  transform: scale(0.88);
+  transform-origin: center;
 }
 
 .share-option-text {
+  width: 100%;
+  display: block;
   font-size: 12px;
-  color: #333;
+  color: #4e5969;
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
 }
 </style>
