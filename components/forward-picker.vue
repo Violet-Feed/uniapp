@@ -1,46 +1,58 @@
 <template>
   <view v-if="visible" class="forward-mask" @click="handleClose">
-    <view class="forward-panel" @click.stop>
-      <view class="forward-header">
-        <text class="forward-title">{{ title }}</text>
-        <text class="forward-close" @click="handleClose">×</text>
+    <view class="forward-panel" :style="panelStyle" @click.stop>
+      <view class="forward-header" :style="headerStyle">
+        <text class="forward-title" :style="titleStyle">{{ title }}</text>
+        <text class="forward-close" :style="closeStyle" @click="handleClose">×</text>
       </view>
 
       <scroll-view
         class="forward-scroll"
+        :style="scrollStyle"
         scroll-y
         @scrolltolower="handleScrollToLower"
       >
-        <view v-if="loading && list.length === 0" class="forward-empty">
-          <text>加载中...</text>
+        <view v-if="loading && list.length === 0" class="forward-empty" :style="emptyStyle">
+          <text class="forward-empty-text" :style="emptyTextStyle">加载中...</text>
         </view>
 
-        <view v-else-if="list.length === 0" class="forward-empty">
-          <text>{{ emptyText }}</text>
+        <view v-else-if="list.length === 0" class="forward-empty" :style="emptyStyle">
+          <text class="forward-empty-text" :style="emptyTextStyle">{{ emptyText }}</text>
         </view>
 
         <view v-else class="forward-list">
           <view
             class="forward-item"
+            :style="itemStyle"
             v-for="item in list"
             :key="item.key"
             @click="handleSelect(item)"
           >
-            <image class="forward-avatar" :src="item.avatar" mode="aspectFill"></image>
+            <image
+              class="forward-avatar"
+              :style="avatarStyle"
+              :src="item.avatar"
+              mode="aspectFill"
+            ></image>
+
             <view class="forward-info">
-              <text class="forward-name">{{ item.name }}</text>
+              <text class="forward-name" :style="nameStyle">{{ item.name }}</text>
             </view>
-            <view class="forward-status">
+
+            <view class="forward-status" :style="statusStyle">
               <view v-if="forwardingKey === item.key" class="forward-loading"></view>
-              <text v-else class="forward-arrow">›</text>
+              <text v-else class="forward-arrow" :style="arrowStyle">›</text>
             </view>
           </view>
         </view>
 
-        <view v-if="mode === 'friend' && loading && list.length > 0" class="forward-footer">
-          <text>加载中...</text>
+        <view
+          v-if="mode === 'friend' && loading && list.length > 0"
+          class="forward-footer"
+          :style="footerStyle"
+        >
+          <text class="forward-footer-text" :style="footerTextStyle">加载中...</text>
         </view>
-
       </scroll-view>
     </view>
   </view>
@@ -49,6 +61,10 @@
 <script>
 import DB from '@/utils/sqlite.js'
 import { getFriendList, forward } from '@/request/action.js'
+
+const clamp = (value, min, max) => {
+  return Math.max(min, Math.min(max, value))
+}
 
 export default {
   name: 'ForwardPicker',
@@ -78,7 +94,21 @@ export default {
       loading: false,
       hasMore: true,
       page: 1,
-      forwardingKey: ''
+      forwardingKey: '',
+
+      windowWidth: 375,
+      windowHeight: 667,
+      safeBottom: 0,
+      panelHeight: 480,
+      headerHeight: 50,
+      itemHeight: 62,
+      avatarSize: 44,
+      titleFontSize: 16,
+      nameFontSize: 15,
+      emptyFontSize: 14,
+      footerFontSize: 12,
+      closeFontSize: 25,
+      arrowFontSize: 23
     }
   },
 
@@ -89,12 +119,103 @@ export default {
 
     emptyText() {
       return this.mode === 'friend' ? '暂无可分享的朋友' : '暂无可分享的聊天'
+    },
+
+    panelStyle() {
+      return {
+        height: `${this.panelHeight}px`,
+        paddingBottom: `${this.safeBottom}px`
+      }
+    },
+
+    headerStyle() {
+      return {
+        height: `${this.headerHeight}px`
+      }
+    },
+
+    scrollStyle() {
+      return {
+        height: `${Math.max(220, this.panelHeight - this.headerHeight - this.safeBottom)}px`
+      }
+    },
+
+    itemStyle() {
+      return {
+        height: `${this.itemHeight}px`
+      }
+    },
+
+    avatarStyle() {
+      return {
+        width: `${this.avatarSize}px`,
+        height: `${this.avatarSize}px`,
+        borderRadius: `${Math.floor(this.avatarSize / 2)}px`
+      }
+    },
+
+    titleStyle() {
+      return {
+        fontSize: `${this.titleFontSize}px`
+      }
+    },
+
+    nameStyle() {
+      return {
+        fontSize: `${this.nameFontSize}px`
+      }
+    },
+
+    closeStyle() {
+      return {
+        height: `${this.headerHeight}px`,
+        lineHeight: `${this.headerHeight}px`,
+        fontSize: `${this.closeFontSize}px`
+      }
+    },
+
+    statusStyle() {
+      return {
+        width: `${clamp(Math.floor(this.windowWidth * 0.09), 30, 42)}px`,
+        height: `${clamp(Math.floor(this.itemHeight * 0.46), 26, 32)}px`
+      }
+    },
+
+    arrowStyle() {
+      return {
+        fontSize: `${this.arrowFontSize}px`
+      }
+    },
+
+    emptyStyle() {
+      return {
+        minHeight: `${clamp(Math.floor(this.panelHeight * 0.34), 140, 220)}px`
+      }
+    },
+
+    emptyTextStyle() {
+      return {
+        fontSize: `${this.emptyFontSize}px`
+      }
+    },
+
+    footerStyle() {
+      return {
+        height: `${clamp(Math.floor(this.itemHeight * 0.58), 32, 40)}px`
+      }
+    },
+
+    footerTextStyle() {
+      return {
+        fontSize: `${this.footerFontSize}px`
+      }
     }
   },
 
   watch: {
     visible(val) {
       if (val) {
+        this.initLayout()
         this.init()
       }
     },
@@ -106,7 +227,45 @@ export default {
     }
   },
 
+  mounted() {
+    this.initLayout()
+  },
+
   methods: {
+    initLayout() {
+      try {
+        const sys = uni.getSystemInfoSync()
+        const width = Number(sys.windowWidth || 375)
+        const height = Number(sys.windowHeight || 667)
+        const safeAreaInsets = sys.safeAreaInsets || {}
+        const safeBottom = Number(safeAreaInsets.bottom || 0)
+
+        this.windowWidth = width
+        this.windowHeight = height
+        this.safeBottom = safeBottom
+
+        this.panelHeight = clamp(Math.floor(height * 0.68), 420, Math.floor(height * 0.78))
+        this.headerHeight = clamp(Math.floor(width * 0.13), 46, 54)
+        this.itemHeight = clamp(Math.floor(width * 0.165), 58, 68)
+        this.avatarSize = clamp(Math.floor(this.itemHeight * 0.68), 40, 48)
+
+        this.titleFontSize = clamp(Math.floor(width * 0.041), 15, 17)
+        this.nameFontSize = clamp(Math.floor(width * 0.039), 14, 16)
+        this.emptyFontSize = clamp(Math.floor(width * 0.036), 13, 15)
+        this.footerFontSize = clamp(Math.floor(width * 0.032), 11, 13)
+        this.closeFontSize = clamp(Math.floor(width * 0.068), 24, 28)
+        this.arrowFontSize = clamp(Math.floor(width * 0.064), 22, 26)
+      } catch (err) {
+        this.windowWidth = 375
+        this.windowHeight = 667
+        this.safeBottom = 0
+        this.panelHeight = 480
+        this.headerHeight = 50
+        this.itemHeight = 62
+        this.avatarSize = 44
+      }
+    },
+
     async init() {
       this.list = []
       this.page = 1
@@ -166,14 +325,16 @@ export default {
           page: pageToLoad
         })
 
-        const rawList = Array.isArray(res?.user_infos) ? res.user_infos : []
-        const mapped = rawList.map(u => ({
-          key: `friend_${String(u.user_id || '')}`,
-          type: 'friend',
-          userId: String(u.user_id || ''),
-          name: u.username || '用户',
-          avatar: u.avatar || '/static/user_avatar.png'
-        })).filter(item => item.userId)
+        const rawList = Array.isArray(res && res.user_infos) ? res.user_infos : []
+        const mapped = rawList
+          .map(u => ({
+            key: `friend_${String(u.user_id || '')}`,
+            type: 'friend',
+            userId: String(u.user_id || ''),
+            name: u.username || '用户',
+            avatar: u.avatar || '/static/user_avatar.png'
+          }))
+          .filter(item => item.userId)
 
         if (reset) {
           this.list = mapped
@@ -200,6 +361,7 @@ export default {
 
     async handleSelect(item) {
       if (!item || this.forwardingKey) return
+
       if (!this.entityId) {
         uni.showToast({ title: '分享内容不存在', icon: 'none' })
         return
@@ -286,40 +448,33 @@ export default {
 
 .forward-panel {
   width: 100%;
-  height: 72vh;
   background: #fff;
-  border-radius: 18px 18px 0 0;
-  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: 0;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .forward-header {
-  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   border-bottom: 1px solid #f2f2f2;
+  box-sizing: border-box;
 }
 
 .forward-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-weight: 400;
   color: #333;
+  line-height: 1;
 }
 
 .forward-close {
   position: absolute;
   right: 16px;
   top: 0;
-  height: 52px;
-  line-height: 52px;
-  font-size: 26px;
   color: #999;
-}
-
-.forward-scroll {
-  height: calc(72vh - 52px);
+  font-weight: 400;
 }
 
 .forward-list {
@@ -330,8 +485,9 @@ export default {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: 0 16px;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .forward-item::after {
@@ -341,7 +497,9 @@ export default {
   right: 16px;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(to right, transparent 0%, rgba(225, 228, 232, 0.45) 18%, rgba(225, 228, 232, 0.45) 82%, transparent 100%);
+  background: rgba(225, 228, 232, 0.65);
+  transform: scaleY(0.5);
+  transform-origin: center;
   pointer-events: none;
 }
 
@@ -350,9 +508,6 @@ export default {
 }
 
 .forward-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
   background: #f2f2f2;
   flex-shrink: 0;
 }
@@ -364,17 +519,16 @@ export default {
 }
 
 .forward-name {
-  font-size: 15px;
+  display: block;
   color: #333;
   line-height: 1.4;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .forward-status {
-  width: 28px;
-  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,33 +536,43 @@ export default {
 }
 
 .forward-arrow {
-  font-size: 24px;
   color: #bbb;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .forward-loading {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid rgba(102, 126, 234, 0.25);
-  border-top-color: #667eea;
+  border: 2px solid rgba(253, 231, 209, 0.65);
+  border-top-color: #8a5a2b;
   animation: spin 0.8s linear infinite;
+  box-sizing: border-box;
 }
 
 .forward-empty {
-  min-height: 180px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.forward-empty-text {
   color: #999;
-  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .forward-footer {
-  padding: 10px 0 14px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.forward-footer-text {
   color: #999;
-  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 @keyframes spin {

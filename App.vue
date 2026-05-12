@@ -444,6 +444,7 @@ export default {
 </script>
 
 <style>
+/* #ifndef APP-NVUE */
 @font-face {
 	font-family: "VioletSans";
 	src: url("/static/fonts/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
@@ -465,5 +466,7 @@ input,
 textarea,
 button {
 	font-family: "VioletSans", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	font-weight: 400;
 }
+/* #endif */
 </style>

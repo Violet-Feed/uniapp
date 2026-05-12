@@ -349,7 +349,7 @@ export default {
 	justify-content: space-around;
 	background: #ffffff;
 	border-radius: 0;
-	box-shadow: 0 -3px 16px rgba(0, 0, 0, 0.09);
+	box-shadow: none;
 	box-sizing: border-box;
 }
 

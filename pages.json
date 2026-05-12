@@ -44,16 +44,25 @@
 			}
 		},
 		{
+			"path": "pages/workspace/material_detail",
+			"style": {
+				"navigationBarTitleText": "素材预览",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
 			"path" : "pages/workspace/publish",
 			"style" : 
 			{
-				"navigationBarTitleText" : "发布"
+				"navigationBarTitleText" : "发布",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
 			"path": "pages/workspace/edit_creation",
 			"style": {
-				"navigationBarTitleText": "编辑创作"
+				"navigationBarTitleText": "编辑创作",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
@@ -179,13 +188,15 @@
 		{
 			"path": "pages/user/login",
 			"style": {
-				"navigationBarTitleText":"登录"
+				"navigationBarTitleText":"登录",
+				"enablePullDownRefresh": false
 			}
 		},
 		{
 			"path": "pages/user/register",
 			"style": {
-				"navigationBarTitleText":"注册"
+				"navigationBarTitleText":"注册",
+				"enablePullDownRefresh": false
 			}
 		}
 	],

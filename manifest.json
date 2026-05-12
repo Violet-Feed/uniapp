@@ -94,12 +94,13 @@
                 }
             },
             "splashscreen" : {
-                "androidStyle" : "common",
+                "androidStyle" : "default",
                 "android" : {
-                    "hdpi" : "static/logo.png",
-                    "xhdpi" : "static/logo.png",
-                    "xxhdpi" : "static/logo.png"
-                }
+                    "hdpi" : "D:/H/Downloads/start.png",
+                    "xhdpi" : "D:/H/Downloads/start.png",
+                    "xxhdpi" : "D:/H/Downloads/start.png"
+                },
+                "iosStyle" : "common"
             }
         }
     },

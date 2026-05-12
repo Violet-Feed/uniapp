@@ -6,6 +6,27 @@
   "description": "",
   "glyphs": [
     {
+      "icon_id": "37288905",
+      "name": "下载",
+      "font_class": "xiazai",
+      "unicode": "e656",
+      "unicode_decimal": 58966
+    },
+    {
+      "icon_id": "2076247",
+      "name": "附件",
+      "font_class": "fujian",
+      "unicode": "e88a",
+      "unicode_decimal": 59530
+    },
+    {
+      "icon_id": "46887450",
+      "name": "四芒星",
+      "font_class": "simangxing",
+      "unicode": "e7e2",
+      "unicode_decimal": 59362
+    },
+    {
       "icon_id": "7791978",
       "name": "密码",
       "font_class": "ziyuanxhdpi",
