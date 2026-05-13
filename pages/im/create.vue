@@ -29,16 +29,28 @@
 			</view>
 		</view>
 
+		<view
+			v-if="pullDistance > 0 || isRefreshing"
+			class="refresh-overlay"
+			:style="refreshOverlayStyle"
+		>
+			<view class="loading-spinner tiny" v-if="isRefreshing"></view>
+			<text class="refresh-overlay-text">{{ refresherText }}</text>
+		</view>
+
 		<!-- 好友列表 -->
 		<scroll-view
 			class="friend-scroll"
 			scroll-y
 			:lower-threshold="120"
+			@scroll="onListScroll"
 			@scrolltolower="loadMore"
-			refresher-enabled
-			:refresher-triggered="refreshing"
-			@refresherrefresh="onRefresh"
+			@touchstart="onScrollTouchStart"
+			@touchmove="onScrollTouchMove"
+			@touchend="onScrollTouchEnd"
+			@touchcancel="onScrollTouchEnd"
 		>
+			<view class="scroll-content" :style="scrollContentStyle">
 			<view class="friend-list" :style="friendListStyle">
 				<view
 					class="friend-item"
@@ -74,9 +86,9 @@
 
 				<view v-if="userList.length > 0" class="bottom-status">
 					<text class="bottom-text" :style="bottomTextStyle" v-if="loadingMore">正在加载更多...</text>
-					<text class="bottom-text" :style="bottomTextStyle" v-else-if="!hasMore">没有更多了</text>
-					<text class="bottom-text" :style="bottomTextStyle" v-else>上拉加载更多</text>
+					<text class="bottom-text" :style="bottomTextStyle" v-else-if="hasMore">上拉加载更多</text>
 				</view>
+			</view>
 			</view>
 		</scroll-view>
 	</view>
@@ -90,6 +102,12 @@ const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value));
 };
 
+
+const PULL_TRIGGER_DISTANCE = 64
+const PULL_MAX_DISTANCE = 92
+const PULL_MOVE_RATIO = 0.62
+const REFRESH_HOLD_OFFSET = 42
+
 export default {
 	data() {
 		return {
@@ -101,7 +119,12 @@ export default {
 
 			loading: false,
 			loadingMore: false,
-			refreshing: false,
+			isRefreshing: false,
+
+			scrollTop: 0,
+			pulling: false,
+			pullStartY: 0,
+			pullDistance: 0,
 			creating: false,
 
 			windowWidth: 375,
@@ -216,7 +239,51 @@ export default {
 
 		bottomTextStyle() {
 			return 'font-size:' + this.bottomTextFontSize + 'px;';
-		}
+		},
+
+		pullVisualOffset() {
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+
+			return Math.min(
+				REFRESH_HOLD_OFFSET,
+				Math.round(this.pullDistance * PULL_MOVE_RATIO)
+			)
+		},
+
+		scrollContentStyle() {
+			const transition = this.pulling ? 'none' : 'transform 0.16s ease'
+
+			return [
+				'transform: translateY(' + this.pullVisualOffset + 'px)',
+				'transition:' + transition
+			].join(';')
+		},
+
+		refreshOverlayStyle() {
+			const top = this.headerHeight
+			const active = this.isRefreshing
+
+			const height = active
+				? 34
+				: Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)))
+
+			const opacity = active
+				? 1
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+
+			return [
+				'top:' + top + 'px',
+				'height:' + height + 'px',
+				'opacity:' + opacity
+			].join(';')
+		},
+
+		refresherText() {
+			if (this.isRefreshing) return '正在刷新...'
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
+			if (this.pullDistance > 0) return '下拉刷新'
+			return ''
+		},
 	},
 
 	onLoad() {
@@ -229,6 +296,60 @@ export default {
 	},
 
 	methods: {
+
+		onListScroll(e) {
+			this.scrollTop = Number(e?.detail?.scrollTop || 0)
+		},
+
+		getTouchY(e) {
+			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
+			return Number(touch.clientY ?? touch.pageY ?? 0)
+		},
+
+		onScrollTouchStart(e) {
+			if (this.loading || this.loadingMore || this.isRefreshing) return
+
+			this.pullStartY = this.getTouchY(e)
+			this.pulling = this.scrollTop <= 2
+			this.pullDistance = 0
+		},
+
+		onScrollTouchMove(e) {
+			if (!this.pulling || this.loading || this.loadingMore || this.isRefreshing) return
+
+			if (this.scrollTop > 2) {
+				this.pulling = false
+				this.pullDistance = 0
+				return
+			}
+
+			const currentY = this.getTouchY(e)
+			const deltaY = currentY - this.pullStartY
+
+			if (deltaY <= 0) {
+				this.pullDistance = 0
+				return
+			}
+
+			this.pullDistance = Math.min(
+				PULL_MAX_DISTANCE,
+				Math.floor(deltaY * 0.38)
+			)
+		},
+
+		async onScrollTouchEnd() {
+			if (!this.pulling) return
+
+			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE
+			this.pulling = false
+
+			if (!shouldRefresh) {
+				this.pullDistance = 0
+				return
+			}
+
+			await this.onRefresh()
+		},
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync();
@@ -320,11 +441,20 @@ export default {
 		},
 
 		async onRefresh() {
-			this.refreshing = true;
-			const p = this.loadFriendList(true);
-			Promise.resolve(p).finally(() => {
-				this.refreshing = false;
-			});
+			if (this.loading || this.loadingMore || this.isRefreshing) {
+				this.pullDistance = 0;
+				return;
+			}
+
+			this.isRefreshing = true;
+			this.pullDistance = PULL_TRIGGER_DISTANCE;
+
+			try {
+				await this.loadFriendList(true);
+			} finally {
+				this.isRefreshing = false;
+				this.pullDistance = 0;
+			}
 		},
 
 		loadMore() {
@@ -363,7 +493,7 @@ export default {
 				this.hasMore = false;
 				this.loading = false;
 				this.loadingMore = false;
-				this.refreshing = false;
+				this.isRefreshing = false;
 				return;
 			}
 
@@ -386,7 +516,7 @@ export default {
 
 			this.loading = false;
 			this.loadingMore = false;
-			this.refreshing = false;
+			this.isRefreshing = false;
 		},
 
 		async createConversation() {
@@ -480,6 +610,55 @@ export default {
 
 .nav-right {
 	justify-content: flex-end;
+}
+
+
+.refresh-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 19;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	background: #f7f8fa;
+	overflow: hidden;
+	box-sizing: border-box;
+	pointer-events: none;
+	transition: height 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: #999999;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.scroll-content {
+	will-change: transform;
+}
+
+.loading-spinner {
+	width: 20px;
+	height: 20px;
+	border: 2px solid rgba(216, 162, 93, 0.22);
+	border-top-color: #d8a25d;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .back-icon {

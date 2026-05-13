@@ -6,6 +6,13 @@
   "description": "",
   "glyphs": [
     {
+      "icon_id": "25886693",
+      "name": "动态",
+      "font_class": "dongtai1",
+      "unicode": "e610",
+      "unicode_decimal": 58896
+    },
+    {
       "icon_id": "37288905",
       "name": "下载",
       "font_class": "xiazai",
@@ -172,13 +179,6 @@
       "font_class": "sousuo",
       "unicode": "e60d",
       "unicode_decimal": 58893
-    },
-    {
-      "icon_id": "18211372",
-      "name": "动态",
-      "font_class": "dongtai",
-      "unicode": "e7ae",
-      "unicode_decimal": 59310
     },
     {
       "icon_id": "21235531",

@@ -2,45 +2,32 @@
 </template>
 
 <script>
-import DB from '@/utils/sqlite.js'
-import Snowflake from '@/utils/snowflake.js'
-import { init } from '@/utils/init.js'
 import { flushClickReportQueue } from '@/utils/track.js'
 
 export default {
 	onLaunch(options) {
 		this.ensureDeepLinkState()
+		this._launchOptions = options || {}
 
 		const systemInfo = uni.getSystemInfoSync()
-		const deviceId = systemInfo.deviceId
-		const platform = systemInfo.platform
+		const app = getApp()
 
-		getApp().globalData.deviceId = deviceId
-		getApp().globalData.platform = platform
+		app.globalData.deviceId = systemInfo.deviceId
+		app.globalData.platform = systemInfo.platform
+		app.globalData.appReadyForDeepLink = false
 
-		if (platform !== 'android') {
-			console.log('暂不支持该平台')
-			return
-		}
-
-		DB.openSqlite()
-		init()
-		getApp().globalData.randomIdGenerator = new Snowflake()
-
+		this.registerAuthReadyListener()
 		this.setupDeepLinkListener()
-
-		setTimeout(() => {
-			this.handleDeepLink('onLaunch', options, {
-				force: false
-			})
-		}, 800)
 	},
 
 	onShow(options) {
 		this.ensureDeepLinkState()
+		this._lastShowOptions = options || {}
 
-		const platform = getApp()?.globalData?.platform
-		if (platform !== 'android') {
+		const app = getApp()
+		const platform = app?.globalData?.platform
+
+		if (platform !== 'android' || !app?.globalData?.appReadyForDeepLink) {
 			return
 		}
 
@@ -72,6 +59,43 @@ export default {
 			if (!this._deepLinkListenerReady) {
 				this._deepLinkListenerReady = false
 			}
+
+			if (!this._authReadyListenerRegistered) {
+				this._authReadyListenerRegistered = false
+			}
+		},
+
+		registerAuthReadyListener() {
+			this.ensureDeepLinkState()
+
+			if (this._authReadyListenerRegistered) {
+				return
+			}
+
+			this._authReadyListenerRegistered = true
+
+			uni.$on('app-auth-ready', (payload = {}) => {
+				const app = getApp()
+				app.globalData.appReadyForDeepLink = true
+
+				if (app?.globalData?.platform !== 'android') {
+					return
+				}
+
+				const pending = this._pendingDeepLink || null
+				this._pendingDeepLink = null
+
+				const options = pending?.options || payload.options || this._launchOptions || this._lastShowOptions || {}
+				const source = pending?.source || 'authReady'
+				const force = !!pending?.config?.force
+				const delay = Number(payload.delay || 500)
+
+				setTimeout(() => {
+					this.handleDeepLink(source, options, {
+						force
+					})
+				}, delay)
+			})
 		},
 
 		setupDeepLinkListener() {
@@ -116,6 +140,12 @@ export default {
 			// #endif
 
 			this.ensureDeepLinkState()
+
+			const app = getApp()
+			if (!app?.globalData?.appReadyForDeepLink) {
+				this._pendingDeepLink = { source, options, config }
+				return
+			}
 
 			const force = !!config.force
 

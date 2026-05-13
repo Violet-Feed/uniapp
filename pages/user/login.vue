@@ -9,10 +9,12 @@
 
 		<view class="login-main" :style="mainStyle">
 			<view class="logo-section" :style="logoSectionStyle">
-				<view class="brand-wrap">
-					<text class="brand-text" :style="brandTextStyle">Violet</text>
-					<view class="brand-dot" :style="brandDotStyle"></view>
-				</view>
+				<image
+					class="brand-image"
+					:style="brandImageStyle"
+					src="/static/violet.png"
+					mode="widthFix"
+				></image>
 
 				<view class="slogan-row" :style="sloganRowStyle">
 					<text class="slogan-mark" :style="sloganMarkStyle">≺</text>
@@ -34,6 +36,7 @@
 						v-model="username"
 						placeholder="用户名"
 						placeholder-class="input-placeholder"
+						:adjust-position="false"
 						@focus="onFocus('username')"
 						@blur="onBlur"
 					/>
@@ -50,6 +53,7 @@
 						type="password"
 						placeholder="密码"
 						placeholder-class="input-placeholder"
+						:adjust-position="false"
 						@focus="onFocus('password')"
 						@blur="onBlur"
 					/>
@@ -102,11 +106,9 @@ export default {
 			logoBottom: 66,
 			formWidth: 320,
 
-			brandFontSize: 54,
-			brandDotWidth: 22,
-			brandDotHeight: 8,
-			brandDotTop: 4,
+			brandImageWidth: 210,
 
+			sloganTop: 20,
 			sloganFontSize: 15,
 			sloganMarkFontSize: 27,
 			sloganGap: 10,
@@ -120,7 +122,7 @@ export default {
 
 			loginBtnHeight: 58,
 			loginBtnRadius: 20,
-			loginBtnMarginTop: 26,
+			loginBtnMarginTop: 16,
 			btnFontSize: 20,
 
 			footerMarginTop: 26,
@@ -150,22 +152,13 @@ export default {
 			return 'margin-bottom:' + this.logoBottom + 'px;';
 		},
 
-		brandTextStyle() {
-			return 'font-size:' + this.brandFontSize + 'px;';
-		},
-
-		brandDotStyle() {
-			return (
-				'width:' + this.brandDotWidth + 'px;' +
-				'height:' + this.brandDotHeight + 'px;' +
-				'border-radius:' + Math.floor(this.brandDotHeight / 2) + 'px;' +
-				'top:' + this.brandDotTop + 'px;'
-			);
+		brandImageStyle() {
+			return 'width:' + this.brandImageWidth + 'px;';
 		},
 
 		sloganRowStyle() {
 			return (
-				'margin-top:' + Math.floor(this.brandFontSize * 0.42) + 'px;' +
+				'margin-top:' + this.sloganTop + 'px;' +
 				'gap:' + this.sloganGap + 'px;'
 			);
 		},
@@ -293,11 +286,9 @@ export default {
 					isShort ? 48 : 74
 				);
 
-				this.brandFontSize = clamp(Math.floor(windowWidth * 0.145), 46, 58);
-				this.brandDotWidth = clamp(Math.floor(windowWidth * 0.06), 18, 24);
-				this.brandDotHeight = clamp(Math.floor(windowWidth * 0.02), 7, 9);
-				this.brandDotTop = clamp(Math.floor(windowWidth * 0.01), 3, 5);
+				this.brandImageWidth = clamp(Math.floor(windowWidth * 0.48), 160, 200);
 
+				this.sloganTop = clamp(Math.floor(windowWidth * 0.05), 16, 22);
 				this.sloganFontSize = clamp(Math.floor(windowWidth * 0.04), 14, 16);
 				this.sloganMarkFontSize = clamp(Math.floor(windowWidth * 0.072), 24, 30);
 				this.sloganGap = clamp(Math.floor(windowWidth * 0.024), 8, 12);
@@ -311,7 +302,7 @@ export default {
 
 				this.loginBtnHeight = clamp(Math.floor(windowWidth * 0.155), 52, 60);
 				this.loginBtnRadius = clamp(Math.floor(this.loginBtnHeight * 0.36), 18, 22);
-				this.loginBtnMarginTop = clamp(Math.floor(windowHeight * 0.033), isShort ? 18 : 22, isShort ? 24 : 30);
+				this.loginBtnMarginTop = this.inputGap;
 				this.btnFontSize = clamp(Math.floor(windowWidth * 0.052), 18, 21);
 
 				this.footerMarginTop = clamp(Math.floor(windowHeight * 0.036), isShort ? 18 : 22, isShort ? 26 : 32);
@@ -331,11 +322,9 @@ export default {
 				this.logoBottom = 66;
 				this.formWidth = 320;
 
-				this.brandFontSize = 54;
-				this.brandDotWidth = 22;
-				this.brandDotHeight = 8;
-				this.brandDotTop = 4;
+				this.brandImageWidth = 180;
 
+				this.sloganTop = 20;
 				this.sloganFontSize = 15;
 				this.sloganMarkFontSize = 27;
 				this.sloganGap = 10;
@@ -349,7 +338,7 @@ export default {
 
 				this.loginBtnHeight = 58;
 				this.loginBtnRadius = 20;
-				this.loginBtnMarginTop = 26;
+				this.loginBtnMarginTop = this.inputGap;
 				this.btnFontSize = 20;
 
 				this.footerMarginTop = 26;
@@ -499,27 +488,8 @@ export default {
 	width: 100%;
 }
 
-.brand-wrap {
-	position: relative;
-	display: flex;
-	align-items: flex-start;
-	justify-content: center;
-}
-
-.brand-text {
-	font-family: "Trebuchet MS", "Comic Sans MS", "Arial Rounded MT Bold", "PingFang SC", sans-serif;
-	font-weight: 700;
-	font-style: italic;
-	color: #202124;
-	line-height: 1;
-	letter-spacing: 2px;
-	text-shadow: 0 2px 2px rgba(255, 255, 255, 0.62);
-}
-
-.brand-dot {
-	position: absolute;
-	left: 38%;
-	background: #f5a623;
+.brand-image {
+	display: block;
 }
 
 .slogan-row {

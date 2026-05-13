@@ -303,7 +303,7 @@ const avatarQueue = createQueue({
       if (!rows || rows.length === 0) return;
 
       const row = rows[0];
-      const avatarUri = row.avatar_uri || "/static/ai.png";
+      const avatarUri = row.avatar_uri || "/static/ai_avatar.png";
       const oldLocal = row.local_avatar_uri || "";
 
       if (avatarUri.startsWith("/static/")) {
@@ -424,7 +424,7 @@ export async function ensureAgentsCached(agentIds) {
     upserts.push({
       agent_id: a.agent_id,
       agent_name: a.agent_name || "AI",
-      avatar_uri: a.avatar_uri || "/static/ai.png",
+      avatar_uri: a.avatar_uri || "/static/ai_avatar.png",
       local_avatar_uri: "",
       description: a.description || "",
       owner_id: a.owner_id ?? 0n,
@@ -555,8 +555,8 @@ const profileRefreshQueue = createQueue({
         const na = infoMap.get(key);
         if (!old || !na) continue;
 
-        const newAvatar = na.avatar_uri || "/static/ai.png";
-        const oldAvatar = old.avatar_uri || "/static/ai.png";
+        const newAvatar = na.avatar_uri || "/static/ai_avatar.png";
+        const oldAvatar = old.avatar_uri || "/static/ai_avatar.png";
         const oldLocal = old.local_avatar_uri || "";
         const avatarChanged = newAvatar !== oldAvatar;
         const localMissing = !oldLocal;
@@ -693,7 +693,7 @@ const rosterQueue = createQueue({
             agentRows.push({
               agent_id: aid,
               agent_name: a.agent_name || "AI",
-              avatar_uri: a.avatar_uri || "/static/ai.png",
+              avatar_uri: a.avatar_uri || "/static/ai_avatar.png",
               local_avatar_uri: "",
               description: a.description || "",
               owner_id: a.owner_id ?? 0n,

@@ -52,6 +52,7 @@
 					:style="popupInputStyle"
 					v-model.trim="tempUsername"
 					placeholder="请输入新用户名"
+					:adjust-position="false"
 					maxlength="20"
 				/>
 				<view class="popup-actions">
@@ -72,6 +73,7 @@
 					type="password"
 					password
 					placeholder="请输入新密码"
+					:adjust-position="false"
 				/>
 				<input
 					class="popup-input"
@@ -80,6 +82,7 @@
 					type="password"
 					password
 					placeholder="请再次输入新密码"
+					:adjust-position="false"
 				/>
 				<view class="popup-actions">
 					<view class="popup-btn cancel" :style="popupBtnStyle" @click="closePopup">取消</view>

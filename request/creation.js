@@ -8,6 +8,13 @@ export const createMaterial = async (payload) => {
 	return httpRequestBackData("/aigc/create_material",data);
 }
 
+export const reCreateMaterial = async (payload) => {
+	const data = {
+		material_id: payload.materialId
+	};
+	return httpRequestBackBool("/aigc/re_create_material",data);
+}
+
 export const deleteMaterial = async (payload) => {
 	const data = {
 		material_id: payload.materialId

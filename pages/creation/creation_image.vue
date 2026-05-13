@@ -27,315 +27,327 @@
       </view>
     </view>
 
-    <!-- 创作展示区域 -->
-    <view class="media-section">
-      <video
-        v-if="creation.type === 'video' && creation.coverImage"
-        class="creation-video"
-        :src="creation.coverImage"
-        controls
-        :show-center-play-btn="true"
-        :enable-play-gesture="true"
-        :show-fullscreen-btn="true"
-        object-fit="contain"
-      ></video>
-
-      <swiper
-        v-else-if="creation.images.length"
-        class="image-swiper"
-        :indicator-dots="creation.images.length > 1"
-        indicator-color="rgba(0,0,0,0.18)"
-        indicator-active-color="rgba(253,190,120,1)"
-      >
-        <swiper-item v-for="(image, index) in creation.images" :key="index">
-          <image
-            class="creation-image"
-            :src="image"
-            mode="aspectFit"
-            @click="openImagePreview(index)"
-          ></image>
-        </swiper-item>
-      </swiper>
-
-      <view v-else class="media-empty">
-        <text class="iconfont icon-neirongchuangzuo media-empty-icon"></text>
-        <text class="media-empty-text">素材不存在</text>
-      </view>
-    </view>
-
-    <!-- 图片全屏预览 -->
-    <view
-      v-if="imagePreview.visible"
-      class="image-preview-mask"
-      @click="closeImagePreview"
+    <!-- 页面内部滚动区域 -->
+    <scroll-view
+      class="page-scroll"
+      scroll-y
+      :scroll-top="contentScrollTop"
+      :show-scrollbar="false"
+      @scroll="onContentScroll"
+      @scrolltolower="fetchComments(false)"
+      @touchstart="onPageScrollTouchStart"
     >
-      <image
-        class="image-preview-img"
-        :src="imagePreview.url"
-        mode="aspectFit"
-        @click.stop="closeImagePreview"
-      ></image>
+      <!-- 创作展示区域 -->
+      <view class="media-section">
+        <video
+          v-if="creation.type === 'video' && creation.coverImage"
+          class="creation-video"
+          :src="creation.coverImage"
+          controls
+          :show-center-play-btn="true"
+          :enable-play-gesture="true"
+          :show-fullscreen-btn="true"
+          object-fit="contain"
+        ></video>
 
-      <view
-        class="image-preview-download"
-        :class="{ disabled: imagePreview.saving }"
-        @click.stop="downloadCurrentPreviewImage"
-      >
-        <text class="iconfont icon-xiazai download-icon"></text>
-      </view>
-    </view>
+        <swiper
+          v-else-if="creation.images.length"
+          class="image-swiper"
+          :indicator-dots="creation.images.length > 1"
+          indicator-color="rgba(0,0,0,0.18)"
+          indicator-active-color="rgba(253,190,120,1)"
+        >
+          <swiper-item v-for="(image, index) in creation.images" :key="index">
+            <image
+              class="creation-image"
+              :src="image"
+              mode="aspectFit"
+              @touchstart="onCreationImageTouchStart($event, index)"
+              @touchmove="onCreationImageTouchMove"
+              @touchend="onCreationImageTouchEnd"
+              @touchcancel="onCreationImageTouchEnd"
+              @click="openImagePreview(index)"
+            ></image>
+          </swiper-item>
+        </swiper>
 
-    <!-- 内容区域 -->
-    <view class="content-section">
-      <view class="title-row">
-        <text class="creation-title">{{ creation.title || '无标题作品' }}</text>
-      </view>
-
-      <view
-        class="detail-line"
-        v-if="creation.detail || categoryLabel"
-      >
-        <text class="detail-text" v-if="creation.detail">{{ creation.detail }}</text>
-        <text class="category-text" v-if="categoryLabel"># {{ categoryLabel }}</text>
-      </view>
-
-      <view class="tags-row" v-if="creation.tags.length">
-        <text class="tag-item" v-for="(tag, index) in creation.tags" :key="index">
-          # {{ tag }}
-        </text>
-      </view>
-
-      <view class="meta-info">
-        <text class="meta-time">{{ formatRelativeTime(creation.time) }}</text>
-        <text class="meta-location" v-if="creation.location">{{ creation.location }}</text>
-      </view>
-    </view>
-
-    <view class="content-comment-divider"></view>
-
-    <!-- 评论区域 -->
-    <view class="comments-section" id="commentsSection">
-      <view class="comments-header">
-        <text class="comments-title">评论 {{ formatNumber(creation.comments) }}</text>
-        <view class="comments-sort" @click="toggleCommentSort">
-          <text class="sort-label">
-            {{ commentSortType === 'time' ? '按时间' : '按热度' }}
-          </text>
+        <view v-else class="media-empty">
+          <text class="iconfont icon-neirongchuangzuo media-empty-icon"></text>
+          <text class="media-empty-text">素材不存在</text>
         </view>
       </view>
 
-      <view class="comment-list">
-        <view
-          class="comment-item"
-          v-for="comment in commentList"
-          :key="comment.id"
-          @touchstart="onCommentTouchStart"
-          @touchmove="onCommentTouchMove"
-          @touchend="onCommentTouchEnd"
-          @touchcancel="onCommentTouchEnd"
-          @longpress.stop="showCommentAction(comment, null, 'comment')"
-        >
-          <image
-            class="comment-avatar"
-            :src="comment.user.avatar || '/static/user_avatar.png'"
-            mode="aspectFill"
-            @click="goToUserPage(comment.user.user_id)"
-          ></image>
+      <!-- 内容区域 -->
+      <view class="content-section">
+        <view class="title-row">
+          <text class="creation-title">{{ creation.title || '无标题作品' }}</text>
+        </view>
 
-          <view class="comment-content-wrapper">
-            <view class="comment-header-row">
-              <view class="comment-name-line">
-                <text
-                  class="comment-username"
-                  @click="goToUserPage(comment.user.user_id)"
-                >
-                  {{ comment.user.name }}
-                </text>
-                <text v-if="isAuthorComment(comment.user.user_id)" class="author-badge">
-                  作者
-                </text>
-              </view>
+        <view class="detail-line" v-if="creation.detail || categoryLabel">
+          <text class="detail-text" v-if="creation.detail">{{ creation.detail }}</text>
+          <text class="category-text" v-if="categoryLabel"># {{ categoryLabel }}</text>
+        </view>
 
-              <view
-                class="comment-like-btn"
-                :class="{ liked: comment.isLiked }"
-                @click="toggleCommentLike(comment)"
-              >
-                <text
-                  class="iconfont comment-like-icon"
-                  :class="comment.isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
-                ></text>
-                <text class="comment-like-count">{{ formatNumber(comment.likes) }}</text>
-              </view>
-            </view>
+        <view class="tags-row" v-if="creation.tags.length">
+          <text class="tag-item" v-for="(tag, index) in creation.tags" :key="index">
+            # {{ tag }}
+          </text>
+        </view>
 
-            <view class="comment-main-text">
-              <text class="comment-text">{{ comment.text }}</text>
-            </view>
+        <view class="meta-info">
+          <text class="meta-time">{{ formatRelativeTime(creation.time) }}</text>
+          <text class="meta-location" v-if="creation.location">{{ creation.location }}</text>
+        </view>
+      </view>
 
-            <view class="comment-meta-row">
-              <text class="comment-time">{{ formatRelativeTime(comment.time) }}</text>
-              <text class="comment-reply-btn" @click="replyToComment(comment, comment)">回复</text>
-            </view>
+      <view class="content-comment-divider"></view>
 
-            <view
-              v-if="comment.replyCount && !comment.showReplies"
-              class="comment-replies-toggle"
-              @click="toggleReplies(comment)"
-            >
-              <text class="comment-replies-toggle-text">
-                展开{{ comment.replyCount }}条回复
-              </text>
-            </view>
-
-            <view v-if="comment.showReplies" class="reply-list">
-              <view
-                class="reply-item"
-                v-for="reply in comment.replies"
-                :key="reply.id"
-                @touchstart="onCommentTouchStart"
-                @touchmove="onCommentTouchMove"
-                @touchend="onCommentTouchEnd"
-                @touchcancel="onCommentTouchEnd"
-                @longpress.stop="showCommentAction(reply, comment, 'reply')"
-              >
-                <image
-                  class="reply-avatar"
-                  :src="reply.user.avatar || '/static/user_avatar.png'"
-                  mode="aspectFill"
-                  @click="goToUserPage(reply.user.user_id)"
-                ></image>
-
-                <view class="reply-content-wrapper">
-                  <view class="reply-header-row">
-                    <view class="reply-name-line">
-                      <text
-                        class="reply-username"
-                        @click="goToUserPage(reply.user.user_id)"
-                      >
-                        {{ reply.user.name }}
-                      </text>
-
-                      <text v-if="isAuthorComment(reply.user.user_id)" class="author-badge reply-author-badge">
-                        作者
-                      </text>
-
-                      <text
-                        v-if="reply.replyToUser && reply.replyToUserId"
-                        class="reply-at"
-                        @click.stop="goToUserPage(reply.replyToUserId)"
-                      >
-                        回复 @{{ reply.replyToUser }}
-                      </text>
-                    </view>
-
-                    <view
-                      class="comment-like-btn"
-                      :class="{ liked: reply.isLiked }"
-                      @click="toggleCommentLike(reply)"
-                    >
-                      <text
-                        class="iconfont comment-like-icon"
-                        :class="reply.isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
-                      ></text>
-                      <text class="comment-like-count">{{ formatNumber(reply.likes) }}</text>
-                    </view>
-                  </view>
-
-                  <view class="comment-main-text">
-                    <text class="comment-text">{{ reply.text }}</text>
-                  </view>
-
-                  <view class="comment-meta-row">
-                    <text class="comment-time">{{ formatRelativeTime(reply.time) }}</text>
-                    <text class="comment-reply-btn" @click="replyToComment(reply, comment)">
-                      回复
-                    </text>
-                  </view>
-                </view>
-              </view>
-
-              <view class="reply-footer" v-if="comment.replies.length > 0">
-                <text
-                  v-if="comment.replyHasMore && !comment.replyLoading"
-                  @click="loadMoreReplies(comment)"
-                >
-                  展开更多回复
-                </text>
-                <text v-if="comment.replyLoading" class="reply-footer-loading">
-                  回复加载中...
-                </text>
-                <text class="reply-footer-collapse" @click="toggleReplies(comment)">
-                  收起
-                </text>
-              </view>
-            </view>
+      <!-- 评论区域 -->
+      <view class="comments-section" id="commentsSection">
+        <view class="comments-header">
+          <text class="comments-title">评论 {{ formatNumber(creation.comments) }}</text>
+          <view class="comments-sort" @click="toggleCommentSort">
+            <text class="sort-label">
+              {{ commentSortType === 'time' ? '按时间' : '按热度' }}
+            </text>
           </view>
         </view>
 
-        <view v-if="!commentList.length && !commentLoading" class="empty-comments">
-          <text>还没有评论，快来抢沙发吧~</text>
-        </view>
+        <view class="comment-list">
+          <view
+            class="comment-item"
+            v-for="comment in commentList"
+            :key="comment.id"
+            @touchstart="onCommentTouchStart"
+            @touchmove="onCommentTouchMove"
+            @touchend="onCommentTouchEnd"
+            @touchcancel="onCommentTouchEnd"
+            @longpress.stop="showCommentAction(comment, null, 'comment')"
+          >
+            <image
+              class="comment-avatar"
+              :src="comment.user.avatar || '/static/user_avatar.png'"
+              mode="aspectFill"
+              @click="goToUserPage(comment.user.user_id)"
+            ></image>
 
-        <view v-if="commentLoading && !commentList.length" class="empty-comments">
-          <text>评论加载中...</text>
-        </view>
+            <view class="comment-content-wrapper">
+              <view class="comment-header-row">
+                <view class="comment-name-line">
+                  <text class="comment-username" @click="goToUserPage(comment.user.user_id)">
+                    {{ comment.user.name }}
+                  </text>
+                  <text v-if="isAuthorComment(comment.user.user_id)" class="author-badge">
+                    作者
+                  </text>
+                </view>
 
+                <view
+                  class="comment-like-btn"
+                  :class="{ liked: comment.isLiked }"
+                  @click="toggleCommentLike(comment)"
+                >
+                  <text
+                    class="iconfont comment-like-icon"
+                    :class="comment.isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
+                  ></text>
+                  <text class="comment-like-count">{{ formatNumber(comment.likes) }}</text>
+                </view>
+              </view>
+
+              <view class="comment-main-text">
+                <text class="comment-text">{{ comment.text }}</text>
+              </view>
+
+              <view class="comment-meta-row">
+                <text class="comment-time">{{ formatRelativeTime(comment.time) }}</text>
+                <text class="comment-reply-btn" @click="replyToComment(comment, comment)">回复</text>
+              </view>
+
+              <view
+                v-if="comment.replyCount && !comment.showReplies"
+                class="comment-replies-toggle"
+                @click="toggleReplies(comment)"
+              >
+                <text class="comment-replies-toggle-text">
+                  展开{{ comment.replyCount }}条回复
+                </text>
+              </view>
+
+              <view v-if="comment.showReplies" class="reply-list">
+                <view
+                  class="reply-item"
+                  v-for="reply in comment.replies"
+                  :key="reply.id"
+                  @touchstart="onCommentTouchStart"
+                  @touchmove="onCommentTouchMove"
+                  @touchend="onCommentTouchEnd"
+                  @touchcancel="onCommentTouchEnd"
+                  @longpress.stop="showCommentAction(reply, comment, 'reply')"
+                >
+                  <image
+                    class="reply-avatar"
+                    :src="reply.user.avatar || '/static/user_avatar.png'"
+                    mode="aspectFill"
+                    @click="goToUserPage(reply.user.user_id)"
+                  ></image>
+
+                  <view class="reply-content-wrapper">
+                    <view class="reply-header-row">
+                      <view class="reply-name-line">
+                        <text class="reply-username" @click="goToUserPage(reply.user.user_id)">
+                          {{ reply.user.name }}
+                        </text>
+
+                        <text
+                          v-if="isAuthorComment(reply.user.user_id)"
+                          class="author-badge reply-author-badge"
+                        >
+                          作者
+                        </text>
+
+                        <text
+                          v-if="reply.replyToUser && reply.replyToUserId"
+                          class="reply-at"
+                          @click.stop="goToUserPage(reply.replyToUserId)"
+                        >
+                          回复 @{{ reply.replyToUser }}
+                        </text>
+                      </view>
+
+                      <view
+                        class="comment-like-btn"
+                        :class="{ liked: reply.isLiked }"
+                        @click="toggleCommentLike(reply)"
+                      >
+                        <text
+                          class="iconfont comment-like-icon"
+                          :class="reply.isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
+                        ></text>
+                        <text class="comment-like-count">{{ formatNumber(reply.likes) }}</text>
+                      </view>
+                    </view>
+
+                    <view class="comment-main-text">
+                      <text class="comment-text">{{ reply.text }}</text>
+                    </view>
+
+                    <view class="comment-meta-row">
+                      <text class="comment-time">{{ formatRelativeTime(reply.time) }}</text>
+                      <text class="comment-reply-btn" @click="replyToComment(reply, comment)">
+                        回复
+                      </text>
+                    </view>
+                  </view>
+                </view>
+
+                <view class="reply-footer" v-if="comment.replies.length > 0">
+                  <text
+                    v-if="comment.replyHasMore && !comment.replyLoading"
+                    @click="loadMoreReplies(comment)"
+                  >
+                    展开更多回复
+                  </text>
+                  <text v-if="comment.replyLoading" class="reply-footer-loading">
+                    回复加载中...
+                  </text>
+                  <text class="reply-footer-collapse" @click="toggleReplies(comment)">
+                    收起
+                  </text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view v-if="!commentList.length && !commentLoading" class="empty-comments">
+            <text>还没有评论，快来抢沙发吧~</text>
+          </view>
+
+          <view v-if="commentLoading && !commentList.length" class="empty-comments">
+            <text>评论加载中...</text>
+          </view>
+
+          <view v-if="commentLoading && commentList.length" class="loading-comments">
+            <text>评论加载中...</text>
+          </view>
+
+          <view
+            v-if="!commentHasMore && commentList.length"
+            class="loading-comments no-more-comments"
+          >
+            <text>没有更多评论了</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+
+    <!-- 单一常驻底栏 -->
+    <view class="bottom-bar">
+      <view class="comment-input-wrapper" @click.stop="startNewComment">
+        <input
+          class="bottom-comment-input"
+          v-model="commentText"
+          :placeholder="commentPlaceholder"
+          :focus="commentInputFocus"
+          :adjust-position="false"
+          cursor-spacing="0"
+          confirm-type="send"
+          @focus="handleInputFocus"
+          @blur="handleInputBlur"
+          @keyboardheightchange="handleKeyboardHeightChange"
+          @confirm="sendComment"
+        />
+      </view>
+
+      <view class="bottom-right-slot">
         <view
-          v-if="commentLoading && commentList.length"
-          class="loading-comments"
+          class="send-btn"
+          v-if="showCommentInput"
+          :class="{ active: commentText.trim() }"
+          @click="sendComment"
         >
-          <text>评论加载中...</text>
+          <text>发送</text>
         </view>
 
-        <view
-          v-if="!commentHasMore && commentList.length"
-          class="loading-comments no-more-comments"
-        >
-          <text>没有更多评论了</text>
+        <view class="action-group" v-else>
+          <view class="action-item" @click="toggleLike">
+            <text
+              class="iconfont action-icon"
+              :class="isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
+            ></text>
+            <text class="action-count">{{ formatNumber(creation.likes) }}</text>
+          </view>
+
+          <view class="action-item" @click="scrollToComments">
+            <text class="iconfont icon-comment action-icon"></text>
+            <text class="action-count">{{ formatNumber(creation.comments) }}</text>
+          </view>
+
+          <view class="action-item share-action" @click="openSharePanel">
+            <text class="iconfont icon-fenxiang action-icon"></text>
+            <text class="action-count">{{ formatNumber(creation.shares) }}</text>
+          </view>
         </view>
       </view>
     </view>
 
-    <!-- 底部操作栏 -->
-    <view class="bottom-bar" v-if="!showCommentInput && !imagePreview.visible">
-      <view class="comment-input-wrapper" @click="startNewComment">
-        <text class="comment-placeholder">说点什么...</text>
-      </view>
-
-      <view class="action-group">
-        <view class="action-item" @click="toggleLike">
-          <text
-            class="iconfont action-icon"
-            :class="isLiked ? 'icon-xihuan active' : 'icon-xihuan1'"
-          ></text>
-          <text class="action-count">{{ formatNumber(creation.likes) }}</text>
+    <!-- 长按图片保存菜单 -->
+    <view
+      class="image-save-mask"
+      v-if="imageSaveAction.visible"
+      @click="hideImageSaveAction"
+    >
+      <view class="image-save-sheet" @click.stop>
+        <view
+          class="image-save-item"
+          :class="{ disabled: imageSaveAction.saving }"
+          @click="saveSelectedImageToAlbum"
+        >
+          <text class="image-save-text">
+            {{ imageSaveAction.saving ? '保存中...' : '保存到相册' }}
+          </text>
         </view>
-
-        <view class="action-item" @click="scrollToComments">
-          <text class="iconfont icon-comment action-icon"></text>
-          <text class="action-count">{{ formatNumber(creation.comments) }}</text>
-        </view>
-
-        <view class="action-item share-action" @click="openSharePanel">
-          <text class="iconfont icon-fenxiang action-icon"></text>
-          <text class="action-count">{{ formatNumber(creation.shares) }}</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 评论输入框抽屉 -->
-    <view class="comment-input-bar" :class="{ show: showCommentInput }">
-      <input
-        class="comment-input"
-        v-model="commentText"
-        :placeholder="commentPlaceholder"
-        :focus="commentInputFocus"
-        @blur="handleInputBlur"
-        @confirm="sendComment"
-      />
-      <view class="send-btn" :class="{ active: commentText.trim() }" @click="sendComment">
-        <text>发送</text>
       </view>
     </view>
 
@@ -384,7 +396,6 @@
       </view>
     </view>
 
-    <!-- 站内转发选择器 -->
     <forward-picker
       :visible="forwardPicker.visible"
       :mode="forwardPicker.mode"
@@ -455,11 +466,20 @@ export default {
       isLiked: false,
       isFollowed: false,
 
-      imagePreview: {
+      imageSaveAction: {
         visible: false,
-        url: '',
         index: 0,
+        url: '',
         saving: false
+      },
+      imageLongPressing: false,
+
+      imageTouch: {
+        startX: 0,
+        startY: 0,
+        moved: false,
+        timer: null,
+        index: 0
       },
 
       commentList: [],
@@ -472,7 +492,13 @@ export default {
       commentText: '',
       commentPlaceholder: '说点什么...',
       commentInputFocus: false,
+      keyboardVisible: false,
+      keyboardHeight: 0,
+      inputBlurTimer: null,
       replyingTo: null,
+
+      contentScrollTop: 0,
+      currentContentScrollTop: 0,
 
       commentAction: {
         visible: false,
@@ -512,36 +538,46 @@ export default {
     isSelfAuthor() {
       if (!this.currentUserId || !this.creation.author.user_id) return false
       return String(this.currentUserId) === String(this.creation.author.user_id)
-    }
+    },
   },
 
   onLoad(options) {
     this.creationId = options.creationId || options.creation_id || ''
     this.authorId = options.userId || options.user_id || ''
+
     const app = getApp()
     this.currentUserId = app && app.globalData ? app.globalData.userId : null
+
     enqueueClickReport(this.creationId)
     this.initPage()
-  },
-
-  onReachBottom() {
-    this.fetchComments(false)
   },
 
   onShow() {
     this.shareLoading = false
   },
 
+  onUnload() {
+    this.clearImageLongPressTimer()
+
+    if (this.inputBlurTimer) {
+      clearTimeout(this.inputBlurTimer)
+      this.inputBlurTimer = null
+    }
+  },
+
   methods: {
     async initPage() {
       uni.showLoading({ title: '加载中...' })
+
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
       const ok3 = await this.fetchActionInfo()
       const ok4 = await this.fetchComments(true)
+
       if (!ok1 || !ok3 || !ok4) {
         uni.showToast({ title: '加载失败', icon: 'none' })
       }
+
       uni.hideLoading()
     },
 
@@ -582,22 +618,27 @@ export default {
         avatar: info.avatar || '/static/user_avatar.png',
         followerCount: res.follower_count || 0
       }
+
       this.isFollowed = !!res.is_following
       return true
     },
 
     async fetchActionInfo() {
       if (!this.creationId) return false
+
       const payload = {
         entityType: 'creation',
         entityId: BigInt(this.creationId)
       }
+
       const res = await getActionInfo(payload)
       if (!res) return false
+
       this.creation.likes = res.digg_count
       this.isLiked = res.is_digg
       this.creation.comments = res.comment_count
       this.creation.shares = res.forward_count
+
       return true
     },
 
@@ -607,8 +648,8 @@ export default {
       if (!this.creationId) return false
 
       this.commentLoading = true
-      const pageToLoad = reset ? 1 : this.commentPage + 1
 
+      const pageToLoad = reset ? 1 : this.commentPage + 1
       const payload = {
         entityType: 'creation',
         entityId: BigInt(this.creationId),
@@ -638,7 +679,6 @@ export default {
         replyToUser: c.sib_username || '',
         replyToUserId: c.sib_user_id || null,
         replyCount: c.reply_count || 0,
-
         showReplies: false,
         replies: [],
         replyPage: 0,
@@ -658,7 +698,51 @@ export default {
       const pageSize = 10
       this.commentHasMore = list.length >= pageSize
       this.commentLoading = false
+
       return true
+    },
+
+    onContentScroll(e) {
+      this.currentContentScrollTop = Number(e.detail.scrollTop || 0)
+    },
+
+    noop() {},
+
+    hideKeyboardOnly() {
+      try {
+        uni.hideKeyboard()
+      } catch (err) {}
+    },
+
+    onPageScrollTouchStart() {
+      if (!this.commentInputFocus && !this.keyboardVisible) return
+
+      this.hideKeyboardOnly()
+    },
+
+    scrollToComments() {
+      const query = uni.createSelectorQuery().in(this)
+
+      query.select('.page-scroll').boundingClientRect()
+      query.select('#commentsSection').boundingClientRect()
+
+      query.exec((res) => {
+        const scrollRect = res && res[0]
+        const commentsRect = res && res[1]
+
+        if (!scrollRect || !commentsRect) return
+
+        const targetTop = this.currentContentScrollTop + commentsRect.top - scrollRect.top
+
+        this.contentScrollTop = targetTop
+
+        this.$nextTick(() => {
+          this.contentScrollTop = targetTop + 1
+          this.$nextTick(() => {
+            this.contentScrollTop = targetTop
+          })
+        })
+      })
     },
 
     toggleCommentSort() {
@@ -670,8 +754,10 @@ export default {
 
     async toggleReplies(comment) {
       if (!comment) return
+
       if (!comment.showReplies) {
         comment.showReplies = true
+
         if (!comment.replies.length && comment.replyCount) {
           await this.loadReplies(comment, true)
         }
@@ -687,8 +773,8 @@ export default {
       if (!this.creationId) return
 
       comment.replyLoading = true
-      const pageToLoad = reset ? 1 : (comment.replyPage || 0) + 1
 
+      const pageToLoad = reset ? 1 : (comment.replyPage || 0) + 1
       const payload = {
         entityType: 'creation',
         entityId: BigInt(this.creationId),
@@ -750,13 +836,16 @@ export default {
     goToUserPage(userId) {
       const targetId = userId || this.creation.author.user_id
       if (!targetId) return
+
       const currentUserId = getApp().globalData.userId
+
       if (String(targetId) === String(currentUserId)) {
         uni.navigateTo({
           url: '/pages/user/my_profile_copy'
         })
         return
       }
+
       uni.navigateTo({
         url: `/pages/user/user_profile?userId=${targetId}`
       })
@@ -767,50 +856,161 @@ export default {
       return String(userId) === String(this.creation.author.user_id)
     },
 
-    scrollToComments() {
-      uni.pageScrollTo({
-        selector: '#commentsSection',
-        duration: 300
-      })
+    clearImageLongPressTimer() {
+      if (this.imageTouch && this.imageTouch.timer) {
+        clearTimeout(this.imageTouch.timer)
+        this.imageTouch.timer = null
+      }
+    },
+
+    getTouchPoint(e) {
+      const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+
+      return {
+        x: Number(touch.clientX ?? touch.pageX ?? 0),
+        y: Number(touch.clientY ?? touch.pageY ?? 0)
+      }
+    },
+
+    onCreationImageTouchStart(e, index) {
+      this.clearImageLongPressTimer()
+
+      const point = this.getTouchPoint(e)
+
+      this.imageLongPressing = false
+
+      this.imageTouch = {
+        startX: point.x,
+        startY: point.y,
+        moved: false,
+        timer: null,
+        index
+      }
+
+      this.imageTouch.timer = setTimeout(() => {
+        if (!this.imageTouch.moved && Number(this.imageTouch.index) === Number(index)) {
+          this.showImageSaveAction(index)
+        }
+      }, 520)
+    },
+
+    onCreationImageTouchMove(e) {
+      const point = this.getTouchPoint(e)
+
+      const dx = Math.abs(point.x - this.imageTouch.startX)
+      const dy = Math.abs(point.y - this.imageTouch.startY)
+
+      if (dx > 8 || dy > 8) {
+        this.imageTouch.moved = true
+        this.clearImageLongPressTimer()
+      }
+    },
+
+    onCreationImageTouchEnd() {
+      this.clearImageLongPressTimer()
+
+      setTimeout(() => {
+        if (!this.imageSaveAction.visible) {
+          this.imageTouch = {
+            startX: 0,
+            startY: 0,
+            moved: false,
+            timer: null,
+            index: 0
+          }
+        }
+      }, 80)
     },
 
     openImagePreview(index = 0) {
-      const images = this.creation.images || []
-      const url = images[index]
+      if (this.imageLongPressing) {
+        return
+      }
 
-      if (!url) return
+      if (this.imageTouch && this.imageTouch.moved) {
+        return
+      }
+
+      const images = this.creation.images || []
+      if (!images.length) return
 
       this.showSharePanel = false
-      this.showCommentInput = false
       this.forwardPicker.visible = false
+      this.hideImageSaveAction()
 
-      this.imagePreview = {
+      uni.previewImage({
+        current: index,
+        urls: images
+      })
+    },
+
+    showImageSaveAction(index = 0) {
+      if (this.imageTouch && this.imageTouch.moved) return
+
+      const images = this.creation.images || []
+      const url = images[index]
+      if (!url) return
+
+      this.imageLongPressing = true
+      this.showSharePanel = false
+      this.forwardPicker.visible = false
+      this.clearInputFocus()
+
+      this.imageSaveAction = {
         visible: true,
-        url,
         index,
+        url,
         saving: false
       }
     },
 
-    closeImagePreview() {
-      if (this.imagePreview.saving) return
+    hideImageSaveAction() {
+      if (this.imageSaveAction.saving) return
 
-      this.imagePreview.visible = false
-      this.imagePreview.url = ''
-      this.imagePreview.index = 0
+      this.clearImageLongPressTimer()
+
+      this.imageSaveAction = {
+        visible: false,
+        index: 0,
+        url: '',
+        saving: false
+      }
+
+      setTimeout(() => {
+        this.imageLongPressing = false
+        this.imageTouch = {
+          startX: 0,
+          startY: 0,
+          moved: false,
+          timer: null,
+          index: 0
+        }
+      }, 80)
     },
 
-    downloadCurrentPreviewImage() {
-      this.downloadImage(this.imagePreview.url)
+    saveSelectedImageToAlbum() {
+      if (this.imageSaveAction.saving) return
+
+      const url = this.imageSaveAction.url
+      if (!url) {
+        uni.showToast({
+          title: '暂无可保存图片',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.downloadImage(url)
     },
 
     downloadImage(url) {
-      if (!url || this.imagePreview.saving) return
+      if (!url || this.imageSaveAction.saving) return
 
-      this.imagePreview.saving = true
+      this.imageSaveAction.saving = true
 
       const finish = () => {
-        this.imagePreview.saving = false
+        this.imageSaveAction.saving = false
+        this.hideImageSaveAction()
       }
 
       // #ifdef H5
@@ -887,9 +1087,11 @@ export default {
 
     async toggleLike() {
       if (this.likeLoading || !this.creation.creationId) return
+
       this.likeLoading = true
 
       let ok = false
+
       if (this.isLiked) {
         ok = await cancelDigg('creation', this.creation.creationId)
         if (ok) {
@@ -907,15 +1109,18 @@ export default {
       if (!ok) {
         uni.showToast({ title: '操作失败', icon: 'none' })
       }
+
       this.likeLoading = false
     },
 
     async toggleFollow() {
       const currentUserId = this.currentUserId
       const targetUserId = this.creation.author.user_id
+
       if (!currentUserId || !targetUserId) return
 
       let ok = false
+
       if (this.isFollowed) {
         ok = await unfollow(currentUserId, targetUserId)
         if (ok) {
@@ -944,6 +1149,7 @@ export default {
 
     async toggleCommentLike(comment) {
       if (!comment || comment._loading) return
+
       comment._loading = true
 
       const payload = {
@@ -951,6 +1157,7 @@ export default {
       }
 
       let ok = false
+
       if (comment.isLiked) {
         ok = await cancelDiggComment(payload)
         if (ok) {
@@ -968,13 +1175,14 @@ export default {
       if (!ok) {
         uni.showToast({ title: '操作失败', icon: 'none' })
       }
+
       comment._loading = false
     },
 
     replyToComment(targetComment, parentComment) {
       if (!targetComment) return
-      const parent = parentComment || targetComment
 
+      const parent = parentComment || targetComment
       const isReplyToReply = parent.id !== targetComment.id
 
       this.replyingTo = {
@@ -988,30 +1196,112 @@ export default {
       this.commentPlaceholder = this.replyingTo.displayName
         ? `回复 @${this.replyingTo.displayName}`
         : '回复'
+
       this.focusCommentInput()
     },
 
     startNewComment() {
-      this.replyingTo = null
-      this.commentPlaceholder = '说点什么...'
+      if (!this.showCommentInput && !this.commentText.trim()) {
+        this.replyingTo = null
+        this.commentPlaceholder = '说点什么...'
+      }
+
       this.focusCommentInput()
     },
 
     focusCommentInput() {
       this.showSharePanel = false
       this.forwardPicker.visible = false
-      this.imagePreview.visible = false
+      this.hideImageSaveAction()
+
+      this.showCommentInput = true
+
+      this.$nextTick(() => {
+        this.commentInputFocus = true
+      })
+    },
+
+    clearInputFocus() {
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+        this.inputBlurTimer = null
+      }
+
+      try {
+        uni.hideKeyboard()
+      } catch (err) {}
+
+      this.commentInputFocus = false
+
+      if (!this.keyboardVisible && !this.commentText.trim()) {
+        this.showCommentInput = false
+        this.replyingTo = null
+        this.commentPlaceholder = '说点什么...'
+      }
+    },
+
+    handleInputFocus() {
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+        this.inputBlurTimer = null
+      }
+
+      this.showSharePanel = false
+      this.forwardPicker.visible = false
+      this.hideImageSaveAction()
+
       this.showCommentInput = true
       this.commentInputFocus = true
     },
 
     handleInputBlur() {
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+      }
+
+      this.inputBlurTimer = setTimeout(() => {
+        if (!this.keyboardVisible) {
+          this.commentInputFocus = false
+
+          if (!this.commentText.trim()) {
+            this.showCommentInput = false
+            this.replyingTo = null
+            this.commentPlaceholder = '说点什么...'
+          }
+        }
+
+        this.inputBlurTimer = null
+      }, 180)
+    },
+
+    handleKeyboardHeightChange(e) {
+      const height = Number(e?.detail?.height || 0)
+
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+        this.inputBlurTimer = null
+      }
+
+      this.keyboardHeight = height
+
+      if (height > 0) {
+        this.keyboardVisible = true
+        this.commentInputFocus = true
+        this.showCommentInput = true
+        return
+      }
+
       setTimeout(() => {
+        this.keyboardVisible = false
+        this.keyboardHeight = 0
+        this.commentInputFocus = false
+
         if (!this.commentText.trim()) {
           this.showCommentInput = false
+          this.replyingTo = null
+          this.commentPlaceholder = '说点什么...'
         }
-        this.commentInputFocus = false
-      }, 200)
+      }, 80)
     },
 
     async sendComment() {
@@ -1043,6 +1333,7 @@ export default {
           sibId: BigInt(this.replyingTo.sibId || 0),
           sibUserId: BigInt(this.replyingTo.sibUserId || 0)
         }
+
         res = await createReply(payload)
       } else {
         const payload = {
@@ -1051,6 +1342,7 @@ export default {
           contentType: 1,
           content: text
         }
+
         res = await createComment(payload)
       }
 
@@ -1065,6 +1357,7 @@ export default {
         const parentIndex = this.commentList.findIndex(
           (c) => String(c.id) === String(this.replyingTo.parentId)
         )
+
         if (parentIndex !== -1) {
           const parent = this.commentList[parentIndex]
           const isReplyToReply = !!this.replyingTo.isReplyToReply
@@ -1094,6 +1387,7 @@ export default {
           if (!Array.isArray(parent.replies)) {
             parent.replies = []
           }
+
           parent.replies.push(replyComment)
           parent.replyCount += 1
           parent.showReplies = true
@@ -1120,17 +1414,21 @@ export default {
           replyLoading: false,
           _loading: false
         }
+
         this.commentList.unshift(newComment)
       }
 
       this.creation.comments += 1
 
       uni.showToast({ title: '发送成功', icon: 'success' })
+
       this.commentText = ''
       this.commentPlaceholder = '说点什么...'
       this.replyingTo = null
       this.showCommentInput = false
       this.commentInputFocus = false
+      this.keyboardVisible = false
+      this.keyboardHeight = 0
     },
 
     isSelfUser(userId) {
@@ -1140,6 +1438,7 @@ export default {
 
     onCommentTouchStart(e) {
       const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+
       this.commentTouch = {
         startX: touch.clientX ?? touch.pageX ?? 0,
         startY: touch.clientY ?? touch.pageY ?? 0,
@@ -1149,6 +1448,7 @@ export default {
 
     onCommentTouchMove(e) {
       const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+
       const x = touch.clientX ?? touch.pageX ?? 0
       const y = touch.clientY ?? touch.pageY ?? 0
       const dx = Math.abs(x - this.commentTouch.startX)
@@ -1172,10 +1472,12 @@ export default {
     showCommentAction(target, parent, type) {
       if (this.commentTouch.moved) return
       if (!target || !target.user || !this.isSelfUser(target.user.user_id)) return
+
       this.showSharePanel = false
-      this.showCommentInput = false
       this.forwardPicker.visible = false
-      this.imagePreview.visible = false
+      this.hideImageSaveAction()
+      this.clearInputFocus()
+
       this.commentAction = {
         visible: true,
         type,
@@ -1223,6 +1525,7 @@ export default {
 
       try {
         let ok = false
+
         if (type === 'reply') {
           ok = await deleteReply({
             replyId: target.id
@@ -1251,6 +1554,7 @@ export default {
 
     removeReplyFromList(parent, reply) {
       if (!parent || !Array.isArray(parent.replies)) return
+
       const oldLength = parent.replies.length
       parent.replies = parent.replies.filter(item => String(item.id) !== String(reply.id))
 
@@ -1269,6 +1573,7 @@ export default {
     removeCommentFromList(comment) {
       const oldLength = this.commentList.length
       const removedCount = 1 + Number(comment.replyCount || 0)
+
       this.commentList = this.commentList.filter(item => String(item.id) !== String(comment.id))
 
       if (this.commentList.length !== oldLength) {
@@ -1279,8 +1584,8 @@ export default {
     openSharePanel() {
       this.shareLoading = false
       this.forwardPicker.visible = false
-      this.showCommentInput = false
-      this.imagePreview.visible = false
+      this.hideImageSaveAction()
+      this.clearInputFocus()
       this.showSharePanel = true
     },
 
@@ -1349,13 +1654,16 @@ export default {
 
     shareByUni({ provider, scene }) {
       const info = this.getShareInfo()
+
       let released = false
       let releaseTimer = null
 
       const releaseShareLock = () => {
         if (released) return
+
         released = true
         this.shareLoading = false
+
         if (releaseTimer) {
           clearTimeout(releaseTimer)
           releaseTimer = null
@@ -1381,6 +1689,7 @@ export default {
 
       if (provider === 'weixin') {
         params.scene = scene
+
         if (info.href && info.imageUrl) {
           params.type = 0
           params.href = info.href
@@ -1415,53 +1724,36 @@ export default {
 
     formatRelativeTime(msTimestamp) {
       if (!msTimestamp) return ''
+
       if (msTimestamp < 1e12) {
         msTimestamp = msTimestamp * 1000
       }
 
       const now = new Date()
       const target = new Date(msTimestamp)
-      const nowMs = now.getTime()
-      const diffMs = nowMs - msTimestamp
+      const diffMs = now.getTime() - msTimestamp
       const diffSec = Math.floor(diffMs / 1000)
 
-      if (diffSec < 60) {
-        return '刚刚'
-      }
-      if (diffSec < 3600) {
-        const m = Math.floor(diffSec / 60)
-        return `${m}分钟前`
-      }
+      if (diffSec < 60) return '刚刚'
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分钟前`
 
       const oneDayMs = 24 * 60 * 60 * 1000
-      const todayStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      ).getTime()
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
 
       const pad2 = (n) => (n < 10 ? '0' + n : '' + n)
       const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`
 
-      if (msTimestamp >= todayStart) {
-        return `今天 ${hhmm}`
-      }
-      if (msTimestamp >= todayStart - oneDayMs) {
-        return `昨天 ${hhmm}`
-      }
+      if (msTimestamp >= todayStart) return `今天 ${hhmm}`
+      if (msTimestamp >= todayStart - oneDayMs) return `昨天 ${hhmm}`
 
       const diffDay = Math.floor(diffMs / oneDayMs)
-      if (diffDay < 7) {
-        return `${diffDay}天前`
-      }
+      if (diffDay < 7) return `${diffDay}天前`
 
       const year = target.getFullYear()
       const month = target.getMonth() + 1
       const day = target.getDate()
 
-      if (year !== now.getFullYear()) {
-        return `${year}年${month}月${day}日`
-      }
+      if (year !== now.getFullYear()) return `${year}年${month}月${day}日`
       return `${month}月${day}日`
     }
   }
@@ -1474,15 +1766,17 @@ export default {
 
 <style scoped>
 .container {
-  min-height: 100vh;
+  height: 100vh;
   background: #fff;
-  padding-bottom: calc(50px + env(safe-area-inset-bottom));
+  overflow: hidden;
   box-sizing: border-box;
   font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .top-bar {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   top: 0;
   z-index: 100;
   background: #fff;
@@ -1495,6 +1789,17 @@ export default {
   box-sizing: border-box;
   gap: 8px;
 }
+
+.page-scroll {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(42px + var(--status-bar-height));
+  bottom: calc(54px + env(safe-area-inset-bottom));
+  background: #fff;
+  box-sizing: border-box;
+}
+
 
 .back-btn {
   width: 30px;
@@ -1574,7 +1879,6 @@ export default {
 
 .following-btn {
   background: #f0f0f0;
-  box-shadow: none;
 }
 
 .follow-btn .btn-text,
@@ -1642,46 +1946,57 @@ export default {
   line-height: 1;
 }
 
-.image-preview-mask {
+.image-save-mask,
+.comment-action-mask {
   position: fixed;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.96);
-  z-index: 3000;
+  z-index: 2600;
+  background: rgba(0, 0, 0, 0.28);
   display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.image-preview-img {
-  width: 100%;
-  height: 100%;
-}
-
-.image-preview-download {
-  position: fixed;
-  right: 18px;
-  bottom: calc(28px + env(safe-area-inset-bottom));
-  width: 38px;
-  height: 38px;
-  border-radius: 19px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+  padding: 0 12px calc(18px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
-.image-preview-download.disabled {
-  opacity: 0.52;
+.image-save-sheet,
+.comment-action-sheet {
+  width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.download-icon {
-  font-size: 19px;
-  color: #fff;
+.image-save-item,
+.comment-action-delete {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-save-item:active,
+.comment-action-delete:active {
+  background: #f7f7f7;
+}
+
+.image-save-item.disabled {
+  opacity: 0.58;
+}
+
+.image-save-text {
+  font-size: 15px;
+  color: #1f2329;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.comment-action-delete-text {
+  font-size: 15px;
+  color: #ff4d4f;
   font-weight: 400;
   line-height: 1;
 }
@@ -2039,54 +2354,68 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 100;
-  min-height: 50px;
-  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  z-index: 120;
+  min-height: 54px;
+  padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
   background: #fff;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   box-sizing: border-box;
   box-shadow: none;
+  transition: none;
 }
 
 .comment-input-wrapper {
   flex: 1;
+  min-width: 0;
   height: 36px;
   border-radius: 18px;
   background: #fff;
   border: 1px solid #f0f0f0;
   display: flex;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 12px;
   box-sizing: border-box;
 }
 
-.comment-placeholder {
+.bottom-comment-input {
+  width: 100%;
+  height: 36px;
   font-size: 14px;
-  color: #999;
+  color: #333;
   font-weight: 400;
-  line-height: 1;
+  line-height: 36px;
+  box-sizing: border-box;
+}
+
+.bottom-right-slot {
+  flex-shrink: 0;
+  min-width: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .action-group {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .action-item {
-  min-width: 28px;
-  height: 36px;
+  min-width: 44px;
+  height: 38px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
 }
 
 .action-icon {
-  font-size: 20px;
+  font-size: 24px;
   color: #666;
   font-weight: 400;
   line-height: 1;
@@ -2097,51 +2426,17 @@ export default {
 }
 
 .action-count {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-left: 3px;
+  font-size: 11px;
   color: #999;
   font-weight: 400;
   line-height: 1;
 }
 
-.comment-input-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: -110px;
-  z-index: 100;
-  min-height: 50px;
-  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
-  background: #fff;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-sizing: border-box;
-  transition: bottom 0.25s;
-  box-shadow: none;
-}
-
-.comment-input-bar.show {
-  bottom: 0;
-}
-
-.comment-input {
-  flex: 1;
-  height: 36px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 18px;
-  padding: 0 14px;
-  font-size: 14px;
-  color: #333;
-  font-weight: 400;
-  box-sizing: border-box;
-}
-
 .send-btn {
   width: 56px;
-  height: 36px;
-  border-radius: 18px;
+  height: 38px;
+  border-radius: 19px;
   background: #eee;
   display: flex;
   align-items: center;
@@ -2155,49 +2450,13 @@ export default {
 
 .send-btn text {
   font-size: 14px;
+  color: #999999;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.send-btn.active text {
   color: #8a5a2b;
-  font-weight: 400;
-  line-height: 1;
-}
-
-.comment-action-mask {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 2600;
-  background: rgba(0, 0, 0, 0.28);
-  display: flex;
-  align-items: flex-end;
-  padding: 0 12px calc(18px + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-}
-
-.comment-action-sheet {
-  width: 100%;
-  background: #fff;
-  border-radius: 16px;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.comment-action-delete {
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.comment-action-delete:active {
-  background: #f7f7f7;
-}
-
-.comment-action-delete-text {
-  font-size: 15px;
-  color: #ff4d4f;
-  font-weight: 400;
-  line-height: 1;
 }
 
 .share-mask {
@@ -2216,21 +2475,21 @@ export default {
   width: 100%;
   background: #fff;
   border-radius: 0;
-  padding: 16px 8px calc(18px + env(safe-area-inset-bottom));
+  padding: 18px 8px calc(22px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
 .share-panel-title {
   display: block;
   text-align: center;
-  font-size: 14px;
+  font-size: 15px;
   color: #1f2329;
   font-weight: 400;
   line-height: 1;
 }
 
 .share-options-row {
-  margin-top: 18px;
+  margin-top: 22px;
   display: flex;
   align-items: flex-start;
   justify-content: space-around;
@@ -2250,29 +2509,29 @@ export default {
 }
 
 .share-option-icon {
-  width: 28px;
-  height: 28px;
-  font-size: 22px;
+  width: 38px;
+  height: 38px;
+  font-size: 31px;
   color: #333;
   font-weight: 400;
-  line-height: 28px;
+  line-height: 38px;
   text-align: center;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
-  margin-bottom: 7px;
+  margin-bottom: 10px;
 }
 
 .share-option-icon-small {
-  font-size: 18px;
-  transform: scale(0.88);
+  font-size: 28px;
+  transform: scale(0.94);
   transform-origin: center;
 }
 
 .share-option-text {
   width: 100%;
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   color: #4e5969;
   font-weight: 400;
   line-height: 1;

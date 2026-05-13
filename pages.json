@@ -1,6 +1,12 @@
 {
 	"pages": [
 		{
+			"path": "pages/user/start",
+			"style": {
+				"navigationBarTitleText": "启动页"
+			}
+		},
+		{
 			"path": "pages/creation/home",
 			"style": {
 				"navigationBarTitleText":"首页"
@@ -17,16 +23,14 @@
 			"path" : "pages/creation/creation_image",
 			"style" : 
 			{
-				"navigationBarTitleText" : "创作",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText" : "创作"
 			}
 		},
 		{
 			"path" : "pages/creation/creation_video",
 			"style" : 
 			{
-				"navigationBarTitleText" : "创作",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText" : "创作"
 			}
 		},
 		{
@@ -46,23 +50,20 @@
 		{
 			"path": "pages/workspace/material_detail",
 			"style": {
-				"navigationBarTitleText": "素材预览",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText": "素材预览"
 			}
 		},
 		{
 			"path" : "pages/workspace/publish",
 			"style" : 
 			{
-				"navigationBarTitleText" : "发布",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText" : "发布"
 			}
 		},
 		{
 			"path": "pages/workspace/edit_creation",
 			"style": {
-				"navigationBarTitleText": "编辑创作",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText": "编辑创作"
 			}
 		},
 		{
@@ -74,15 +75,13 @@
 		{
 			"path": "pages/im/conversation",
 			"style": {
-				"navigationBarTitleText":"聊天窗口",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText":"聊天窗口"
 			}
 		},
 		{
 			"path": "pages/im/setting",
 			"style": {
-				"navigationBarTitleText":"设置",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText":"设置"
 			}
 		},
 		{
@@ -143,15 +142,13 @@
 		{
 			"path": "pages/agent/agent_create",
 			"style": {
-				"navigationBarTitleText": "创建智能体",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText": "创建智能体"
 			}
 		},
 		{
 			"path": "pages/agent/edit_agent",
 			"style": {
-				"navigationBarTitleText": "编辑智能体",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText": "编辑智能体"
 			}
 		},
 		{
@@ -175,8 +172,7 @@
 		{
 			"path": "pages/user/edit_profile",
 			"style": {
-				"navigationBarTitleText": "编辑资料",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText": "编辑资料"
 			}
 		},
 		{
@@ -188,15 +184,13 @@
 		{
 			"path": "pages/user/login",
 			"style": {
-				"navigationBarTitleText":"登录",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText":"登录"
 			}
 		},
 		{
 			"path": "pages/user/register",
 			"style": {
-				"navigationBarTitleText":"注册",
-				"enablePullDownRefresh": false
+				"navigationBarTitleText":"注册"
 			}
 		}
 	],
@@ -206,7 +200,7 @@
 		"navigationBarTitleText": "Violet",
 		"navigationBarBackgroundColor": "#F8F8F8",
 		"backgroundColor": "#F8F8F8",
-		"enablePullDownRefresh": true
+		"enablePullDownRefresh": false
 	},
 	"tabBar": {
 		"color": "#585858",
@@ -223,10 +217,8 @@
 				"pagePath": "pages/creation/friend"
 			},
 			{
-				"text": "",
-				"pagePath": "pages/workspace/workspace",
-				"iconPath": "static/workspace1.png",
-				"selectedIconPath": "static/workspace2.png"
+				"text": "+",
+				"pagePath": "pages/workspace/workspace"
 			},
 			{
 				"text": "消息",

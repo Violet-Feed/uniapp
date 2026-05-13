@@ -54,8 +54,8 @@ const TAB_ROUTES = [
 	{
 		text: '朋友',
 		pagePath: 'pages/creation/friend',
-		icon: 'icon-dongtai',
-		iconScale: 1.5
+		icon: 'icon-dongtai1',
+		iconScale: 1
 	},
 	{
 		text: '',
@@ -108,16 +108,16 @@ export default {
 			windowWidth: 375,
 			safeBottom: 0,
 
-			tabbarBaseHeight: 50,
-			tabbarTotalHeight: 50,
-
-			tabIconSize: 17,
-			tabIconSlotHeight: 24,
-			tabTextSlotHeight: 12,
-			tabFontSize: 9,
-
-			centerButtonSize: 32,
-			centerIconSize: 18
+			tabbarBaseHeight: 58,
+			tabbarTotalHeight: 58,
+			
+			tabIconSize: 20,
+			tabIconSlotHeight: 29,
+			tabTextSlotHeight: 15,
+			tabFontSize: 11,
+			
+			centerButtonSize: 39,
+			centerIconSize: 23
 		}
 	},
 
@@ -191,46 +191,39 @@ export default {
 			this.windowWidth = windowWidth
 			this.safeBottom = Number(safeInsets.bottom || 0)
 
-			const baseHeight = Math.floor(windowWidth * 0.132)
-
-			this.tabbarBaseHeight = clamp(baseHeight, 46, 52)
+			const compact = windowWidth <= 360 || windowHeight <= 640
+			const baseHeight = Math.floor(windowWidth * 0.148)
+			
+			this.tabbarBaseHeight = compact
+				? clamp(baseHeight, 52, 56)
+				: clamp(baseHeight, 56, 62)
+			
 			this.tabbarTotalHeight = this.tabbarBaseHeight + this.safeBottom
-
-			this.tabIconSize = clamp(
-				Math.floor(this.tabbarBaseHeight * 0.34),
-				16,
-				18
-			)
-
-			this.tabFontSize = clamp(
-				Math.floor(this.tabbarBaseHeight * 0.19),
-				9,
-				10
-			)
-
-			// 关键：固定 icon 槽位和文字槽位，避免不同 iconScale 把文字顶歪
-			this.tabIconSlotHeight = clamp(
-				Math.floor(this.tabbarBaseHeight * 0.46),
-				22,
-				25
-			)
-
-			this.tabTextSlotHeight = clamp(
-				Math.floor(this.tabbarBaseHeight * 0.22),
-				11,
-				13
-			)
-
-			this.centerButtonSize = clamp(
-				Math.floor(this.tabbarBaseHeight * 0.66),
-				30,
-				34
-			)
-
+			
+			this.tabIconSize = compact
+				? clamp(Math.floor(this.tabbarBaseHeight * 0.36), 18, 20)
+				: clamp(Math.floor(this.tabbarBaseHeight * 0.37), 20, 23)
+			
+			this.tabFontSize = compact
+				? clamp(Math.floor(this.tabbarBaseHeight * 0.205), 10, 11)
+				: clamp(Math.floor(this.tabbarBaseHeight * 0.205), 11, 12)
+			
+			this.tabIconSlotHeight = compact
+				? clamp(Math.floor(this.tabbarBaseHeight * 0.48), 25, 27)
+				: clamp(Math.floor(this.tabbarBaseHeight * 0.48), 27, 30)
+			
+			this.tabTextSlotHeight = compact
+				? clamp(Math.floor(this.tabbarBaseHeight * 0.25), 13, 15)
+				: clamp(Math.floor(this.tabbarBaseHeight * 0.25), 15, 17)
+			
+			this.centerButtonSize = compact
+				? clamp(Math.floor(this.tabbarBaseHeight * 0.7), 36, 39)
+				: clamp(Math.floor(this.tabbarBaseHeight * 0.7), 39, 44)
+			
 			this.centerIconSize = clamp(
 				Math.floor(this.centerButtonSize * 0.58),
-				17,
-				20
+				21,
+				25
 			)
 		},
 

@@ -3,7 +3,7 @@
     <video
       id="creationVideo"
       class="video"
-      :style="pageStyle"
+      :style="videoStyle"
       :src="creation.videoUrl"
       :poster="creation.coverImage"
       :autoplay="true"
@@ -153,6 +153,10 @@
       class="comments-mask"
       :style="pageStyle"
       @click="closeCommentsPanelByMask"
+      @touchstart="onCommentsPanelTouchStart"
+      @touchmove="onCommentsPanelTouchMove"
+      @touchend="onCommentsPanelTouchEnd"
+      @touchcancel="onCommentsPanelTouchCancel"
     >
       <view
         class="comments-panel"
@@ -170,6 +174,7 @@
                 {{ commentSortType === 'time' ? '按时间' : '按热度' }}
               </text>
             </view>
+
             <text class="comments-close" :style="commentsCloseStyle" @click.stop="closeCommentsPanel">
               ×
             </text>
@@ -182,7 +187,6 @@
           :style="commentsScrollStyle"
           @scrolltolower="onCommentsScrollToLower"
           lower-threshold="80"
-          @touchend="handleCommentsBlankTouchEnd"
         >
           <view
             class="comment-item"
@@ -238,6 +242,7 @@
                     >
                       {{ comment.isLiked ? icons.xihuan : icons.xihuan1 }}
                     </text>
+
                     <text
                       class="comment-like-count"
                       :style="commentMetaStyle"
@@ -257,6 +262,7 @@
                   <text class="comment-time" :style="commentMetaStyle">
                     {{ formatRelativeTime(comment.time) }}
                   </text>
+
                   <text
                     class="comment-reply"
                     :style="commentMetaStyle"
@@ -337,6 +343,7 @@
                         >
                           {{ reply.isLiked ? icons.xihuan : icons.xihuan1 }}
                         </text>
+
                         <text
                           class="reply-like-count"
                           :style="commentMetaStyle"
@@ -354,6 +361,7 @@
                       <text class="reply-time" :style="commentMetaStyle">
                         {{ formatRelativeTime(reply.time) }}
                       </text>
+
                       <text
                         class="reply-reply"
                         :style="commentMetaStyle"
@@ -374,6 +382,7 @@
                   >
                     展开更多回复
                   </text>
+
                   <text
                     v-if="comment.replyLoading"
                     class="reply-footer-loading"
@@ -381,6 +390,7 @@
                   >
                     回复加载中...
                   </text>
+
                   <text
                     class="reply-footer-collapse"
                     :style="commentMetaStyle"
@@ -424,6 +434,14 @@
         </scroll-view>
 
         <view
+          v-if="commentBlurLayerVisible"
+          class="comment-blur-layer"
+          :style="commentBlurLayerStyle"
+          @click="hideCommentKeyboard"
+          @touchend="hideCommentKeyboard"
+        ></view>
+        
+        <view
           class="comment-input-bar"
           :style="commentInputBarStyle"
           @click.stop
@@ -433,18 +451,17 @@
             :style="commentInputBoxStyle"
             v-model="commentText"
             :placeholder="commentPlaceholder"
-            :focus="commentInputFocus"
             confirm-type="send"
-            @focus="handleInputFocus"
-            @blur="handleInputBlurInPanel"
+            @focus="handleCommentInputFocus"
+            @blur="handleCommentInputBlur"
             @confirm="sendComment"
           />
-
+        
           <view
             class="send-btn"
             :class="{ active: commentText.trim() }"
             :style="sendBtnStyle"
-            @click="sendComment"
+            @click.stop="sendComment"
           >
             <text
               :class="[
@@ -551,6 +568,10 @@ import {
   deleteReply
 } from '@/request/action.js'
 
+const COMMENT_INPUT_BOTTOM_GAP = 6
+const COMMENT_BLUR_LAYER_DELAY = 320
+const VIDEO_TOP_OFFSET = 30
+
 const clamp = (value, min, max) => {
   return Math.max(min, Math.min(max, value))
 }
@@ -654,10 +675,16 @@ export default {
 
       commentText: '',
       commentPlaceholder: '说点什么...',
-      commentInputFocus: false,
+      commentBlurLayerVisible: false,
+      commentBlurLayerTimer: null,
       replyingTo: null,
-      suppressInputBlurClose: false,
-      preventCancelReplyOnce: false,
+
+      commentsPanelTouch: {
+        startX: 0,
+        startY: 0,
+        movedX: 0,
+        movedY: 0
+      },
 
       commentAction: {
         visible: false,
@@ -692,26 +719,26 @@ export default {
       statusBarHeight: 0,
       safeBottom: 0,
 
-      rightActionsTop: 320,
-      rightActionsWidth: 62,
-      actionItemSize: 62,
-      actionIconSize: 34,
+      rightActionsTop: 300,
+      rightActionsWidth: 66,
+      actionItemSize: 66,
+      actionIconSize: 36,
       actionCountFontSize: 11,
-      avatarSize: 48,
-      avatarInnerSize: 42,
+      avatarSize: 50,
+      avatarInnerSize: 44,
 
       bottomInfoBottom: 8,
       bottomInfoWidth: 280,
 
-      authorNameFontSize: 16,
+      authorNameFontSize: 18,
       titleFontSize: 15,
       detailFontSize: 13,
       metaFontSize: 12,
 
       commentsPanelHeight: 470,
       commentsHeaderHeight: 44,
-      commentsInputBarHeight: 54,
-      commentsScrollHeight: 372,
+      commentsInputBarHeight: 58,
+      commentsScrollHeight: 362,
 
       commentAvatarSize: 36,
       replyAvatarSize: 26,
@@ -746,9 +773,7 @@ export default {
 
       if (Array.isArray(this.creation.tags)) {
         for (const tag of this.creation.tags) {
-          if (tag) {
-            arr.push(`# ${tag}`)
-          }
+          if (tag) arr.push(`# ${tag}`)
         }
       }
 
@@ -780,7 +805,6 @@ export default {
 
     collapsedDetailInlineText() {
       if (!this.showDetailExpand) return this.detailDisplayText
-
       const content = this.sliceTextByUnits(this.detailDisplayText, this.detailCollapsedUnits)
       return `${content}...展开`
     },
@@ -799,6 +823,14 @@ export default {
       return (
         'width:' + this.windowWidth + 'px;' +
         'height:' + this.windowHeight + 'px;'
+      )
+    },
+
+    videoStyle() {
+      return (
+        'width:' + this.windowWidth + 'px;' +
+        'height:' + (this.windowHeight + VIDEO_TOP_OFFSET) + 'px;' +
+        'top:-' + VIDEO_TOP_OFFSET + 'px;'
       )
     },
 
@@ -860,7 +892,7 @@ export default {
     },
 
     followPlusStyle() {
-      const size = clamp(Math.floor(this.avatarSize * 0.43), 18, 21)
+      const size = clamp(Math.floor(this.avatarSize * 0.43), 19, 22)
       const left = Math.floor((this.rightActionsWidth - size) / 2)
       const radius = Math.floor(size / 2)
 
@@ -892,7 +924,11 @@ export default {
     },
 
     authorNameStyle() {
-      return 'font-size:' + this.authorNameFontSize + 'px;'
+      const lineHeight = this.authorNameFontSize + 6
+      return (
+        'font-size:' + this.authorNameFontSize + 'px;' +
+        'line-height:' + lineHeight + 'px;'
+      )
     },
 
     titleStyle() {
@@ -927,10 +963,18 @@ export default {
       return 'height:' + this.commentsScrollHeight + 'px;'
     },
 
+    commentBlurLayerStyle() {
+      return (
+        'top:' + this.commentsHeaderHeight + 'px;' +
+        'height:' + this.commentsScrollHeight + 'px;' +
+        'width:' + this.windowWidth + 'px;'
+      )
+    },
+
     commentInputBarStyle() {
       return (
-        'height:' + (this.commentsInputBarHeight + this.safeBottom) + 'px;' +
-        'padding-bottom:' + this.safeBottom + 'px;'
+        'height:' + (this.commentsInputBarHeight + this.safeBottom + COMMENT_INPUT_BOTTOM_GAP) + 'px;' +
+        'padding-bottom:' + (this.safeBottom + COMMENT_INPUT_BOTTOM_GAP) + 'px;'
       )
     },
 
@@ -1023,7 +1067,7 @@ export default {
     },
 
     sharePanelStyle() {
-      return 'padding-bottom:' + (18 + this.safeBottom) + 'px;'
+      return 'padding-bottom:' + (22 + this.safeBottom) + 'px;'
     }
   },
 
@@ -1065,6 +1109,27 @@ export default {
       clearTimeout(this.videoTouchTimer)
       this.videoTouchTimer = null
     }
+
+    this.clearCommentTimers()
+  },
+
+  onBackPress() {
+    if (this.showCommentsPanel) {
+      this.closeCommentsPanel()
+      return true
+    }
+
+    if (this.showSharePanel) {
+      this.closeSharePanel()
+      return true
+    }
+
+    if (this.videoActionSheet.visible) {
+      this.closeVideoActionSheet()
+      return true
+    }
+
+    return false
   },
 
   methods: {
@@ -1149,24 +1214,24 @@ export default {
         this.statusBarHeight = statusBarHeight
         this.safeBottom = safeBottom
 
-        this.rightActionsWidth = clamp(Math.floor(windowWidth * 0.165), 60, 66)
-        this.actionItemSize = clamp(Math.floor(windowHeight * 0.082), 58, 68)
-        this.avatarSize = clamp(Math.floor(windowWidth * 0.128), 46, 52)
-        this.avatarInnerSize = Math.max(40, this.avatarSize - 6)
+        this.rightActionsWidth = clamp(Math.floor(windowWidth * 0.175), 64, 72)
+        this.actionItemSize = clamp(Math.floor(windowHeight * 0.088), 64, 74)
+        this.avatarSize = clamp(Math.floor(windowWidth * 0.136), 50, 56)
+        this.avatarInnerSize = Math.max(44, this.avatarSize - 6)
 
-        this.actionIconSize = clamp(Math.floor(windowWidth * 0.086), 32, 38)
-        this.actionCountFontSize = smallScreen ? 10 : 11
+        this.actionIconSize = clamp(Math.floor(windowWidth * 0.09), 34, 40)
+        this.actionCountFontSize = smallScreen ? 11 : 12
 
         const rightGroupHeight = Math.floor(this.actionItemSize * 4.08)
-        const idealTop = Math.floor(windowHeight * 0.56)
-        const minTop = statusBarHeight + 128
-        const maxTop = windowHeight - safeBottom - rightGroupHeight - 46
+        const idealTop = Math.floor(windowHeight * 0.515)
+        const minTop = statusBarHeight + 112
+        const maxTop = windowHeight - safeBottom - rightGroupHeight - 56
         this.rightActionsTop = clamp(idealTop, minTop, Math.max(minTop, maxTop))
 
         this.bottomInfoBottom = clamp(6 + Math.floor(safeBottom * 0.18), 6, 14)
         this.bottomInfoWidth = Math.max(230, windowWidth - this.rightActionsWidth - 54)
 
-        this.authorNameFontSize = clamp(Math.floor(windowWidth * 0.043), 15, 17)
+        this.authorNameFontSize = clamp(Math.floor(windowWidth * 0.049), 17, 19)
         this.titleFontSize = clamp(Math.floor(windowWidth * 0.04), 14, 16)
         this.detailFontSize = clamp(Math.floor(windowWidth * 0.036), 13, 15)
         this.metaFontSize = clamp(Math.floor(windowWidth * 0.031), 11, 13)
@@ -1179,10 +1244,14 @@ export default {
 
         this.commentsHeaderHeight = clamp(Math.floor(windowWidth * 0.112), 40, 46)
         this.inputHeight = clamp(Math.floor(windowWidth * 0.098), 34, 38)
-        this.commentsInputBarHeight = clamp(Math.floor(windowWidth * 0.136), 50, 56)
+        this.commentsInputBarHeight = clamp(Math.floor(windowWidth * 0.14), 52, 58)
         this.commentsScrollHeight = Math.max(
           240,
-          this.commentsPanelHeight - this.commentsHeaderHeight - this.commentsInputBarHeight - safeBottom
+          this.commentsPanelHeight -
+            this.commentsHeaderHeight -
+            this.commentsInputBarHeight -
+            safeBottom -
+            COMMENT_INPUT_BOTTOM_GAP
         )
 
         this.commentAvatarSize = clamp(Math.floor(windowWidth * 0.096), 34, 39)
@@ -1203,6 +1272,7 @@ export default {
 
     async initPage() {
       uni.showLoading({ title: '加载中...' })
+
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
       const ok3 = await this.fetchActionInfo()
@@ -1219,8 +1289,7 @@ export default {
       if (!res || !res.creation) return false
 
       const c = res.creation
-      const materialType = c.material_type
-      const isVideo = Number(materialType) === 2
+      const isVideo = Number(c.material_type) === 2
 
       this.creation.creationId = c.creation_id || this.creationId
       this.creation.userId = c.user_id || this.authorId
@@ -1231,14 +1300,10 @@ export default {
       this.creation.time = c.create_time || ''
       this.creation.location = c.location || ''
       this.creation.shareUrl = c.share_url || c.shareUrl || ''
-
-      const cover = c.cover_url || c.material_url || ''
-      this.creation.coverImage = cover
+      this.creation.coverImage = c.cover_url || c.material_url || ''
       this.creation.videoUrl = isVideo ? (c.material_url || '') : ''
 
-      if (c.user_id) {
-        this.authorId = c.user_id
-      }
+      if (c.user_id) this.authorId = c.user_id
 
       return true
     },
@@ -1251,6 +1316,7 @@ export default {
       if (!res || !res.user_info) return false
 
       const info = res.user_info || {}
+
       this.creation.author = {
         user_id: info.user_id || targetUserId,
         username: info.username || info.nickname || '',
@@ -1265,29 +1331,98 @@ export default {
     async fetchActionInfo() {
       if (!this.creationId) return false
 
-      const payload = {
+      const res = await getActionInfo({
         entityType: 'creation',
         entityId: BigInt(this.creationId)
-      }
+      })
 
-      const res = await getActionInfo(payload)
       if (!res) return false
 
       this.creation.likes = res.digg_count
-      this.isLiked = res.is_digg
       this.creation.comments = res.comment_count
       this.creation.shares = res.forward_count
+      this.isLiked = res.is_digg
+
       return true
     },
 
     goBack() {
+      if (this.showCommentsPanel) {
+        this.closeCommentsPanel()
+        return
+      }
+
+      if (this.showSharePanel) {
+        this.closeSharePanel()
+        return
+      }
+
+      if (this.videoActionSheet.visible) {
+        this.closeVideoActionSheet()
+        return
+      }
+
       uni.navigateBack()
     },
 
-    handleInputFocus() {
-      this.commentInputFocus = true
+    clearCommentTimers() {
+      if (this.commentBlurLayerTimer) {
+        clearTimeout(this.commentBlurLayerTimer)
+        this.commentBlurLayerTimer = null
+      }
     },
-
+    
+    handleCommentInputFocus() {
+      this.showSharePanel = false
+      this.videoActionSheet.visible = false
+      this.forwardPicker.visible = false
+    
+      this.commentBlurLayerVisible = false
+      this.clearCommentTimers()
+    
+      this.commentBlurLayerTimer = setTimeout(() => {
+        this.commentBlurLayerVisible = true
+      }, COMMENT_BLUR_LAYER_DELAY)
+    },
+    
+    handleCommentInputBlur() {
+      this.clearCommentTimers()
+      this.commentBlurLayerVisible = false
+    
+      if (!this.commentText.trim()) {
+        this.replyingTo = null
+        this.commentPlaceholder = '说点什么...'
+      }
+    },
+    
+    hideCommentKeyboard() {
+      this.clearCommentTimers()
+      this.commentBlurLayerVisible = false
+    
+      try {
+        uni.hideKeyboard()
+      } catch (err) {}
+    
+      if (!this.commentText.trim()) {
+        this.replyingTo = null
+        this.commentPlaceholder = '说点什么...'
+      }
+    },
+    
+    closeCommentEditor(resetReply = true) {
+      this.clearCommentTimers()
+      this.commentBlurLayerVisible = false
+    
+      try {
+        uni.hideKeyboard()
+      } catch (err) {}
+    
+      if (resetReply && !this.commentText.trim()) {
+        this.replyingTo = null
+        this.commentPlaceholder = '说点什么...'
+      }
+    },
+	
     handleVideoTap() {
       if (this.videoActionSheet.visible) return
       if (!this.videoContext) return
@@ -1312,6 +1447,7 @@ export default {
       if (this.videoActionSheet.visible || this.videoActionSheet.saving) return
 
       const touch = e && e.touches && e.touches[0] ? e.touches[0] : {}
+
       this.videoTouchStartX = touch.clientX || touch.pageX || 0
       this.videoTouchStartY = touch.clientY || touch.pageY || 0
       this.videoTouchMoved = false
@@ -1338,6 +1474,7 @@ export default {
 
       if (dx > 10 || dy > 10) {
         this.videoTouchMoved = true
+
         if (this.videoTouchTimer) {
           clearTimeout(this.videoTouchTimer)
           this.videoTouchTimer = null
@@ -1473,9 +1610,11 @@ export default {
 
     async toggleLike() {
       if (this.likeLoading || !this.creation.creationId) return
+
       this.likeLoading = true
 
       let ok = false
+
       if (this.isLiked) {
         ok = await cancelDigg('creation', this.creation.creationId)
         if (ok) {
@@ -1522,11 +1661,15 @@ export default {
       this.videoActionSheet.visible = false
       this.forwardPicker.visible = false
       this.showCommentsPanel = true
-      this.commentInputFocus = false
+      this.commentEditorVisible = false
+      this.commentEditorFocus = false
+      this.commentBlurLayerVisible = false
+      this.clearCommentTimers()
 
       if (!this.commentsInitialized) {
         const ok = await this.fetchComments(true)
         this.commentsInitialized = true
+
         if (!ok) {
           uni.showToast({ title: '评论加载失败', icon: 'none' })
         }
@@ -1534,76 +1677,76 @@ export default {
     },
 
     closeCommentsPanel() {
+      this.closeCommentEditor(false)
+    
       this.showCommentsPanel = false
       this.commentText = ''
       this.replyingTo = null
       this.commentPlaceholder = '说点什么...'
-      this.commentInputFocus = false
-      this.suppressInputBlurClose = false
-      this.preventCancelReplyOnce = false
       this.resetCommentAction()
     },
 
     closeCommentsPanelByMask() {
-      if (this.replyingTo) {
-        this.cancelReplyToRoot()
+      if (this.commentBlurLayerVisible) {
+        this.hideCommentKeyboard()
         return
       }
-
+    
       if (!this.commentText.trim()) {
-        this.commentInputFocus = false
         return
       }
-
+    
       this.closeCommentsPanel()
     },
 
-    handleCommentsBlankTouchEnd() {
-      if (this.preventCancelReplyOnce) {
-        this.preventCancelReplyOnce = false
-        return
+    onCommentsPanelTouchStart(e) {
+      const touch = e && e.touches && e.touches[0] ? e.touches[0] : {}
+
+      this.commentsPanelTouch = {
+        startX: touch.clientX || touch.pageX || 0,
+        startY: touch.clientY || touch.pageY || 0,
+        movedX: 0,
+        movedY: 0
+      }
+    },
+
+    onCommentsPanelTouchMove(e) {
+      const touch = e && e.touches && e.touches[0] ? e.touches[0] : {}
+
+      const x = touch.clientX || touch.pageX || 0
+      const y = touch.clientY || touch.pageY || 0
+
+      this.commentsPanelTouch.movedX = x - this.commentsPanelTouch.startX
+      this.commentsPanelTouch.movedY = y - this.commentsPanelTouch.startY
+    },
+
+    onCommentsPanelTouchEnd() {
+      const dx = this.commentsPanelTouch.movedX
+      const dy = this.commentsPanelTouch.movedY
+
+      const isBackSwipe =
+        dx > 70 &&
+        Math.abs(dx) > Math.abs(dy) * 1.35
+
+      if (isBackSwipe && this.showCommentsPanel) {
+        this.closeCommentsPanel()
       }
 
-      if (this.replyingTo) {
-        this.cancelReplyToRoot()
+      this.commentsPanelTouch = {
+        startX: 0,
+        startY: 0,
+        movedX: 0,
+        movedY: 0
       }
     },
 
-    markInteractiveTap() {
-      this.preventCancelReplyOnce = true
-      setTimeout(() => {
-        this.preventCancelReplyOnce = false
-      }, 120)
-    },
-
-    startNewComment() {
-      this.replyingTo = null
-      this.commentPlaceholder = '说点什么...'
-      this.focusCommentInput()
-    },
-
-    focusCommentInput() {
-      this.showSharePanel = false
-      this.commentInputFocus = false
-
-      this.$nextTick(() => {
-        this.commentInputFocus = true
-      })
-    },
-
-    cancelReplyToRoot() {
-      this.suppressInputBlurClose = true
-      this.replyingTo = null
-      this.commentPlaceholder = '说点什么...'
-      this.commentInputFocus = false
-
-      this.$nextTick(() => {
-        this.commentInputFocus = true
-      })
-
-      setTimeout(() => {
-        this.suppressInputBlurClose = false
-      }, 500)
+    onCommentsPanelTouchCancel() {
+      this.commentsPanelTouch = {
+        startX: 0,
+        startY: 0,
+        movedX: 0,
+        movedY: 0
+      }
     },
 
     async fetchComments(reset = false) {
@@ -1612,16 +1755,16 @@ export default {
       if (!this.creationId) return false
 
       this.commentLoading = true
+
       const pageToLoad = reset ? 1 : this.commentPage + 1
 
-      const payload = {
+      const res = await getCommentList({
         entityType: 'creation',
         entityId: BigInt(this.creationId),
         page: pageToLoad,
         sortType: this.commentSortType
-      }
+      })
 
-      const res = await getCommentList(payload)
       if (!res) {
         this.commentLoading = false
         return false
@@ -1660,6 +1803,7 @@ export default {
 
       this.commentHasMore = list.length >= 10
       this.commentLoading = false
+
       return true
     },
 
@@ -1668,7 +1812,7 @@ export default {
     },
 
     toggleCommentSort() {
-      this.markInteractiveTap()
+      this.closeCommentEditor()
       this.commentSortType = this.commentSortType === 'time' ? 'digg' : 'time'
       this.commentPage = 1
       this.commentHasMore = true
@@ -1676,11 +1820,13 @@ export default {
     },
 
     async toggleReplies(comment) {
-      this.markInteractiveTap()
+      this.closeCommentEditor()
+
       if (!comment) return
 
       if (!comment.showReplies) {
         comment.showReplies = true
+
         if (!comment.replies.length && comment.replyCount) {
           await this.loadReplies(comment, true)
         }
@@ -1696,16 +1842,16 @@ export default {
       if (!this.creationId) return
 
       comment.replyLoading = true
+
       const pageToLoad = reset ? 1 : (comment.replyPage || 0) + 1
 
-      const payload = {
+      const res = await getReplyList({
         entityType: 'creation',
         entityId: BigInt(this.creationId),
         commentId: BigInt(comment.id),
         page: pageToLoad
-      }
+      })
 
-      const res = await getReplyList(payload)
       if (!res) {
         comment.replyLoading = false
         return
@@ -1747,7 +1893,6 @@ export default {
     },
 
     loadMoreReplies(comment) {
-      this.markInteractiveTap()
       this.loadReplies(comment, false)
     },
 
@@ -1756,6 +1901,7 @@ export default {
       if (!targetId) return
 
       const currentUserId = getApp().globalData.userId
+
       if (String(targetId) === String(currentUserId)) {
         uni.navigateTo({
           url: '/pages/user/my_profile_copy'
@@ -1774,23 +1920,28 @@ export default {
     },
 
     async toggleCommentLike(comment) {
-      this.markInteractiveTap()
+      this.closeCommentEditor()
+
       if (!comment || comment._loading) return
 
       comment._loading = true
-      const payload = {
-        commentId: BigInt(comment.id)
-      }
 
       let ok = false
+
       if (comment.isLiked) {
-        ok = await cancelDiggComment(payload)
+        ok = await cancelDiggComment({
+          commentId: BigInt(comment.id)
+        })
+
         if (ok) {
           comment.isLiked = false
           comment.likes = Math.max(0, Number(comment.likes || 0) - 1)
         }
       } else {
-        ok = await diggComment(payload)
+        ok = await diggComment({
+          commentId: BigInt(comment.id)
+        })
+
         if (ok) {
           comment.isLiked = true
           comment.likes = Number(comment.likes || 0) + 1
@@ -1805,12 +1956,11 @@ export default {
     },
 
     replyToComment(targetComment, parentComment) {
-      this.markInteractiveTap()
       if (!targetComment) return
-
+    
       const parent = parentComment || targetComment
       const isReplyToReply = parent.id !== targetComment.id
-
+    
       this.replyingTo = {
         parentId: parent.id,
         displayName: targetComment.user.name || '',
@@ -1818,28 +1968,18 @@ export default {
         sibId: isReplyToReply ? targetComment.id : 0,
         sibUserId: isReplyToReply ? (targetComment.user.user_id || 0) : 0
       }
-
+    
       this.commentPlaceholder = this.replyingTo.displayName
         ? `回复 @${this.replyingTo.displayName}`
         : '回复'
-
-      this.focusCommentInput()
     },
 
-    handleInputBlurInPanel() {
-      setTimeout(() => {
-        if (this.suppressInputBlurClose) {
-          this.commentInputFocus = true
-          return
-        }
-
-        this.commentInputFocus = false
-      }, 200)
+    startNewComment() {
+      this.replyingTo = null
+      this.commentPlaceholder = '说点什么...'
     },
 
     async sendComment() {
-      this.markInteractiveTap()
-
       const text = this.commentText.trim()
       if (!text) return
 
@@ -1850,7 +1990,7 @@ export default {
       let res
 
       if (this.replyingTo) {
-        const payload = {
+        res = await createReply({
           parentId: BigInt(this.replyingTo.parentId),
           entityType: 'creation',
           entityId: BigInt(this.creationId),
@@ -1858,16 +1998,14 @@ export default {
           content: text,
           sibId: BigInt(this.replyingTo.sibId || 0),
           sibUserId: BigInt(this.replyingTo.sibUserId || 0)
-        }
-        res = await createReply(payload)
+        })
       } else {
-        const payload = {
+        res = await createComment({
           entityType: 'creation',
           entityId: BigInt(this.creationId),
           contentType: 1,
           content: text
-        }
-        res = await createComment(payload)
+        })
       }
 
       if (!res || !res.comment_id) {
@@ -1945,11 +2083,11 @@ export default {
       this.creation.comments = Number(this.creation.comments || 0) + 1
 
       uni.showToast({ title: '发送成功', icon: 'success' })
+      
       this.commentText = ''
       this.commentPlaceholder = '说点什么...'
       this.replyingTo = null
-      this.commentInputFocus = false
-      this.suppressInputBlurClose = false
+      this.closeCommentEditor(false)
     },
 
     isSelfUser(userId) {
@@ -1995,15 +2133,13 @@ export default {
     },
 
     showCommentAction(target, parent, type) {
-      this.markInteractiveTap()
-
       if (this.commentTouch.moved) return
       if (!target || !target.user || !this.isSelfUser(target.user.user_id)) return
 
       this.showSharePanel = false
       this.videoActionSheet.visible = false
       this.forwardPicker.visible = false
-      this.commentInputFocus = false
+      this.closeCommentEditor(false)
 
       this.commentAction = {
         visible: true,
@@ -2113,6 +2249,7 @@ export default {
       this.showCommentsPanel = false
       this.videoActionSheet.visible = false
       this.forwardPicker.visible = false
+      this.closeCommentEditor(false)
       this.showSharePanel = true
     },
 
@@ -2188,6 +2325,7 @@ export default {
         if (released) return
         released = true
         this.shareLoading = false
+
         if (releaseTimer) {
           clearTimeout(releaseTimer)
           releaseTimer = null
@@ -2213,6 +2351,7 @@ export default {
 
       if (provider === 'weixin') {
         params.scene = scene
+
         if (info.href && info.imageUrl) {
           params.type = 0
           params.href = info.href
@@ -2247,6 +2386,7 @@ export default {
 
     formatRelativeTime(msTimestamp) {
       if (!msTimestamp) return ''
+
       if (msTimestamp < 1e12) {
         msTimestamp = msTimestamp * 1000
       }
@@ -2291,12 +2431,7 @@ export default {
 
       for (let i = 0; i < str.length; i++) {
         const ch = str[i]
-
-        if (/[\x00-\xff]/.test(ch)) {
-          units += 0.55
-        } else {
-          units += 1
-        }
+        units += /[\x00-\xff]/.test(ch) ? 0.55 : 1
       }
 
       return units
@@ -2368,6 +2503,7 @@ export default {
 .empty-comments-text,
 .comments-footer-text,
 .comment-input,
+.comment-input-placeholder,
 .send-btn-text,
 .comment-action-delete-text,
 .video-action-text,
@@ -2485,7 +2621,7 @@ export default {
   color: #ffffff;
   text-align: center;
   font-weight: 400;
-  line-height: 40px;
+  line-height: 42px;
 }
 
 .action-icon.liked {
@@ -2531,7 +2667,6 @@ export default {
 .author-name {
   color: #ffffff;
   font-weight: 400;
-  line-height: 20px;
 }
 
 .title-row {
@@ -2630,6 +2765,13 @@ export default {
 
 .comments-scroll {
   background-color: #ffffff;
+}
+
+.comment-blur-layer {
+  position: absolute;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0);
+  z-index: 2;
 }
 
 .comment-item {
@@ -2893,6 +3035,7 @@ export default {
   border-top-width: 0;
   flex-direction: row;
   align-items: center;
+  z-index: 3;
 }
 
 .comment-input {
@@ -2992,7 +3135,7 @@ export default {
   width: 750rpx;
   background-color: #ffffff;
   border-radius: 0;
-  padding-top: 16px;
+  padding-top: 18px;
 }
 
 .share-panel-title-wrap {
@@ -3002,14 +3145,14 @@ export default {
 }
 
 .share-panel-title {
-  font-size: 14px;
+  font-size: 15px;
   color: #1f2329;
   font-weight: 400;
   text-align: center;
 }
 
 .share-options-row {
-  margin-top: 18px;
+  margin-top: 22px;
   flex-direction: row;
   align-items: flex-start;
   justify-content: space-around;
@@ -3022,28 +3165,28 @@ export default {
 }
 
 .share-option-icon {
-  width: 30px;
-  height: 30px;
-  font-size: 22px;
+  width: 38px;
+  height: 38px;
+  font-size: 31px;
   color: #333333;
   font-weight: 400;
-  line-height: 30px;
+  line-height: 38px;
   text-align: center;
   background-color: transparent;
   border-radius: 0;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .share-option-icon-small {
-  font-size: 18px;
+  font-size: 28px;
 }
 
 .share-option-text {
   width: 150rpx;
-  font-size: 12px;
+  font-size: 14px;
   color: #4e5969;
   font-weight: 400;
-  line-height: 14px;
+  line-height: 16px;
   text-align: center;
   lines: 1;
 }

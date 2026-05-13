@@ -1,5 +1,14 @@
 <template>
 	<view class="user-profile-container">
+		<page-meta page-style="overflow: hidden;" />
+
+		<!-- 下拉时露出的顶部背景：沿用头部渐变，并延迟隐藏，避免回弹时闪白 -->
+		<view
+			v-if="refreshBackdropVisible"
+			class="refresh-gradient-backdrop"
+			:style="refreshGradientBackdropStyle"
+		></view>
+
 		<!-- 下滑后出现的用户信息栏：头像 + 用户名；原始作品/点赞栏滚动到这里后与它合并 -->
 		<view
 			v-if="stickyHeaderVisible"
@@ -12,166 +21,212 @@
 			</view>
 		</view>
 
-		<!-- 顶部用户信息区域：高度按屏幕宽度决定，内部比例相对固定 -->
-		<view class="profile-header" :style="profileHeaderStyle">
-			<view class="setting-btn" :style="topActionBtnStyle" @click="showSettingMenu">
-				<text class="iconfont icon-shezhi setting-icon"></text>
-			</view>
-
-			<view class="profile-header-content" :style="profileHeaderContentStyle">
-				<view class="avatar-section">
-					<image
-						class="avatar"
-						:style="avatarStyle"
-						:src="avatar || defaultAvatar"
-						mode="aspectFill"
-					></image>
-				</view>
-
-				<view class="user-info">
-					<text class="username">{{ username }}</text>
-				</view>
-
-				<view class="stats-section">
-					<view class="stat-item" @click="goToFriendList">
-						<text class="stat-number">{{ formatNumber(friendCount) }}</text>
-						<text class="stat-label">互关</text>
-					</view>
-					<view class="stat-item" @click="goToFollowingList">
-						<text class="stat-number">{{ formatNumber(followingCount) }}</text>
-						<text class="stat-label">关注</text>
-					</view>
-					<view class="stat-item" @click="goToFollowerList">
-						<text class="stat-number">{{ formatNumber(followerCount) }}</text>
-						<text class="stat-label">粉丝</text>
-					</view>
-				</view>
-			</view>
+		<view
+			v-if="pullDistance > 0 || isRefreshing"
+			class="refresh-overlay"
+			:style="refreshOverlayStyle"
+		>
+			<view class="loading-spinner tiny" v-if="isRefreshing"></view>
+			<text class="refresh-overlay-text">{{ refresherText }}</text>
 		</view>
 
-		<!-- 作品 / 点赞选项：滚动到顶部时与上方信息栏合并为共同顶栏 -->
-		<view class="tab-bar" :style="tabBarStyle">
-			<view
-				class="tab-item"
-				:class="{ active: activeTab === 'works' }"
-				@click="switchTab('works')"
-			>
-				<text class="iconfont icon-neirongchuangzuo tab-icon"></text>
-				<text class="tab-text">作品</text>
-				<view class="tab-indicator" v-if="activeTab === 'works'"></view>
-			</view>
-			<view
-				class="tab-item like-tab"
-				:class="{ active: activeTab === 'likes' }"
-				@click="switchTab('likes')"
-			>
-				<text class="iconfont icon-xihuan tab-icon"></text>
-				<text class="tab-text">点赞</text>
-				<view class="tab-indicator like-indicator" v-if="activeTab === 'likes'"></view>
-			</view>
-		</view>
+		<scroll-view
+			class="profile-scroll"
+			scroll-y
+			:show-scrollbar="false"
+			:lower-threshold="120"
+			@scroll="onProfileScroll"
+			@scrolltolower="handleScrollToLower"
+			@touchstart="onScrollTouchStart"
+			@touchmove="onScrollTouchMove"
+			@touchend="onScrollTouchEnd"
+			@touchcancel="onScrollTouchEnd"
+		>
+			<view class="scroll-content" :style="scrollContentStyle">
+				<!-- 顶部用户信息区域：高度按屏幕宽度决定，内部比例相对固定 -->
+				<view class="profile-header" :style="profileHeaderStyle">
+					<view class="setting-btn" :style="topActionBtnStyle" @click="showSettingMenu">
+						<text class="iconfont icon-shezhi setting-icon"></text>
+					</view>
 
-		<view class="content-container" :style="contentContainerStyle">
-			<view v-if="activeTab === 'works'">
-				<view class="creation-grid">
-					<view
-						class="creation-card"
-						:style="creationCardStyle"
-						v-for="(work, index) in worksList"
-						:key="work.creation_id || index"
-						@click="goToWorkDetail(work)"
-						@longpress="showWorkOptions(work)"
-					>
-						<view class="image-wrapper" :style="imageWrapperStyle">
+					<view class="profile-header-content" :style="profileHeaderContentStyle">
+						<view class="avatar-section">
 							<image
-								class="card-image"
-								:style="cardImageStyle"
-								:src="work.cover"
+								class="avatar"
+								:style="avatarStyle"
+								:src="avatar || defaultAvatar"
 								mode="aspectFill"
-								@error="onCoverError(work)"
-							/>
+							></image>
 						</view>
 
-						<view class="card-content" :style="cardContentStyle">
-							<view class="card-title-container">
-								<text class="card-title">{{ work.title }}</text>
+						<view class="user-info">
+							<text class="username">{{ username }}</text>
+						</view>
+
+						<view class="stats-section">
+							<view class="stat-item" @click="goToFriendList">
+								<text class="stat-number">{{ formatNumber(friendCount) }}</text>
+								<text class="stat-label">互关</text>
 							</view>
-							<view class="card-footer">
-								<view class="card-author">
-									<image class="author-avatar" :src="work.avatar || defaultAvatar" mode="aspectFill" />
-									<text class="author-name">{{ work.username }}</text>
-								</view>
-								<view class="card-likes" @click.stop="toggleDigg('works', index)">
-									<text
-										class="iconfont like-icon"
-										:class="work.is_digg ? 'icon-xihuan active' : 'icon-xihuan1'"
-									></text>
-									<text class="like-count">{{ formatNumber(work.digg_count) }}</text>
-								</view>
+							<view class="stat-item" @click="goToFollowingList">
+								<text class="stat-number">{{ formatNumber(followingCount) }}</text>
+								<text class="stat-label">关注</text>
+							</view>
+							<view class="stat-item" @click="goToFollowerList">
+								<text class="stat-number">{{ formatNumber(followerCount) }}</text>
+								<text class="stat-label">粉丝</text>
 							</view>
 						</view>
 					</view>
 				</view>
 
-				<view v-if="worksList.length === 0 && !loading" class="empty-state">
-					<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
-					<text class="empty-text">还没有发布作品</text>
-					<text class="empty-hint">快去创作第一个作品吧！</text>
-				</view>
-			</view>
-
-			<view v-if="activeTab === 'likes'">
-				<view class="creation-grid">
+				<!-- 作品 / 点赞选项：滚动到顶部时与上方信息栏合并为共同顶栏 -->
+				<view class="tab-bar" :style="tabBarStyle">
 					<view
-						class="creation-card"
-						:style="creationCardStyle"
-						v-for="(item, index) in likesList"
-						:key="item.creation_id || index"
-						@click="goToWorkDetail(item)"
+						class="tab-item works-tab"
+						:class="{ active: activeTab === 'works' }"
+						@click="switchTab('works')"
 					>
-						<view class="image-wrapper" :style="imageWrapperStyle">
-							<image
-								class="card-image"
-								:style="cardImageStyle"
-								:src="item.cover"
-								mode="aspectFill"
-								@error="onCoverError(item)"
-							/>
-						</view>
-
-						<view class="card-content" :style="cardContentStyle">
-							<view class="card-title-container">
-								<text class="card-title">{{ item.title }}</text>
-							</view>
-							<view class="card-footer">
-								<view class="card-author">
-									<image class="author-avatar" :src="item.avatar || defaultAvatar" mode="aspectFill" />
-									<text class="author-name">{{ item.username }}</text>
-								</view>
-								<view class="card-likes" @click.stop="toggleDigg('likes', index)">
-									<text
-										class="iconfont like-icon"
-										:class="item.is_digg ? 'icon-xihuan active' : 'icon-xihuan1'"
-									></text>
-									<text class="like-count">{{ formatNumber(item.digg_count) }}</text>
-								</view>
-							</view>
-						</view>
+						<text class="iconfont icon-neirongchuangzuo tab-icon"></text>
+						<text class="tab-text">作品</text>
+						<view class="tab-indicator" v-if="activeTab === 'works'"></view>
+					</view>
+					<view
+						class="tab-item like-tab"
+						:class="{ active: activeTab === 'likes' }"
+						@click="switchTab('likes')"
+					>
+						<text class="iconfont icon-xihuan tab-icon"></text>
+						<text class="tab-text">点赞</text>
+						<view class="tab-indicator like-indicator" v-if="activeTab === 'likes'"></view>
 					</view>
 				</view>
 
-				<view v-if="likesList.length === 0 && !loading" class="empty-state">
-					<text class="iconfont icon-xihuan empty-icon like-empty-icon"></text>
-					<text class="empty-text">还没有点赞内容</text>
-					<text class="empty-hint">去发现更多精彩作品吧！</text>
-				</view>
-			</view>
+				<view class="content-container" :style="contentContainerStyle">
+					<view v-if="activeTab === 'works'">
+						<view class="creation-grid" v-if="worksList.length > 0">
+							<view
+								class="creation-card"
+								:style="creationCardStyle"
+								v-for="(work, index) in worksList"
+								:key="work.creation_id || index"
+								@click="goToWorkDetail(work)"
+								@touchstart="onWorkTouchStart"
+								@touchmove="onWorkTouchMove"
+								@touchend="onWorkTouchEnd"
+								@touchcancel="onWorkTouchEnd"
+								@longpress="showWorkOptions(work)"
+							>
+								<view class="image-wrapper" :style="imageWrapperStyle">
+									<image
+										class="card-image"
+										:style="cardImageStyle"
+										:src="work.cover"
+										mode="aspectFill"
+										@error="onCoverError(work)"
+									/>
+								</view>
 
-			<view v-if="loading" class="loading-more">
-				<view class="loading-spinner"></view>
-				<text class="loading-text">加载中...</text>
+								<view class="card-content" :style="cardContentStyle">
+									<view class="card-title-container">
+										<text class="card-title">{{ work.title }}</text>
+									</view>
+									<view class="card-footer">
+										<view class="card-author">
+											<image class="author-avatar" :src="work.avatar || defaultAvatar" mode="aspectFill" />
+											<text class="author-name">{{ work.username }}</text>
+										</view>
+										<view class="card-likes" @click.stop="toggleDigg('works', index)">
+											<text
+												class="iconfont like-icon"
+												:class="work.is_digg ? 'icon-xihuan active' : 'icon-xihuan1'"
+											></text>
+											<text class="like-count">{{ formatNumber(work.digg_count) }}</text>
+										</view>
+									</view>
+								</view>
+							</view>
+						</view>
+
+						<view v-else-if="!loading" class="empty-state">
+							<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
+							<text class="empty-text">还没有发布作品</text>
+							<text class="empty-hint">快去创作第一个作品吧！</text>
+						</view>
+
+						<view v-if="loading && worksList.length > 0 && !isRefreshing" class="load-more-state loading-more-inline">
+							<view class="loading-spinner small"></view>
+							<text>加载中...</text>
+						</view>
+						<view v-else-if="!worksHasMore && worksList.length > 0" class="load-more-state">
+							<text>没有更多了</text>
+						</view>
+					</view>
+
+					<view v-if="activeTab === 'likes'">
+						<view class="creation-grid" v-if="likesList.length > 0">
+							<view
+								class="creation-card"
+								:style="creationCardStyle"
+								v-for="(item, index) in likesList"
+								:key="item.creation_id || index"
+								@click="goToWorkDetail(item)"
+							>
+								<view class="image-wrapper" :style="imageWrapperStyle">
+									<image
+										class="card-image"
+										:style="cardImageStyle"
+										:src="item.cover"
+										mode="aspectFill"
+										@error="onCoverError(item)"
+									/>
+								</view>
+
+								<view class="card-content" :style="cardContentStyle">
+									<view class="card-title-container">
+										<text class="card-title">{{ item.title }}</text>
+									</view>
+									<view class="card-footer">
+										<view class="card-author">
+											<image class="author-avatar" :src="item.avatar || defaultAvatar" mode="aspectFill" />
+											<text class="author-name">{{ item.username }}</text>
+										</view>
+										<view class="card-likes" @click.stop="toggleDigg('likes', index)">
+											<text
+												class="iconfont like-icon"
+												:class="item.is_digg ? 'icon-xihuan active' : 'icon-xihuan1'"
+											></text>
+											<text class="like-count">{{ formatNumber(item.digg_count) }}</text>
+										</view>
+									</view>
+								</view>
+							</view>
+						</view>
+
+						<view v-else-if="!loading" class="empty-state">
+							<text class="iconfont icon-xihuan empty-icon like-empty-icon"></text>
+							<text class="empty-text">还没有点赞内容</text>
+							<text class="empty-hint">去发现更多精彩作品吧！</text>
+						</view>
+
+						<view v-if="loading && likesList.length > 0 && !isRefreshing" class="load-more-state loading-more-inline">
+							<view class="loading-spinner small"></view>
+							<text>加载中...</text>
+						</view>
+						<view v-else-if="!likesHasMore && likesList.length > 0" class="load-more-state">
+							<text>没有更多了</text>
+						</view>
+					</view>
+
+					<view v-if="loading && currentListLength === 0 && !isRefreshing" class="loading-more">
+						<view class="loading-spinner"></view>
+						<text class="loading-text">加载中...</text>
+					</view>
+				</view>
+
+				<view v-if="currentListLength > 0" class="bottom-spacer" :style="bottomSpacerStyle"></view>
 			</view>
-		</view>
+		</scroll-view>
 
 		<!-- 长按作品操作菜单：不显示取消 -->
 		<view class="work-action-overlay" v-if="showWorkAction" @click="hideWorkActionMenu">
@@ -223,20 +278,29 @@ import { getUserProfile } from '@/request/user.js'
 
 const GRID_GAP = 6
 const CONTENT_PADDING_TOP = 6
-const CONTENT_PADDING_X = 8
-const CONTENT_PADDING_BOTTOM = 10
+const CONTENT_PADDING_X = 6
+const CONTENT_PADDING_BOTTOM = 2
 
-const MIN_PROFILE_BODY_HEIGHT = 190
-const MAX_PROFILE_BODY_HEIGHT = 238
+const MIN_TABBAR_BASE_HEIGHT = 46
+const MAX_TABBAR_BASE_HEIGHT = 52
+const LOAD_MORE_BOTTOM_GAP = 14
 
-const MIN_TAB_BAR_HEIGHT = 34
-const MAX_TAB_BAR_HEIGHT = 40
+const PULL_TRIGGER_DISTANCE = 64
+const PULL_MAX_DISTANCE = 96
+const PULL_MOVE_RATIO = 0.62
+const REFRESH_HOLD_OFFSET = 44
 
-const MIN_COMPACT_HEIGHT = 34
-const MAX_COMPACT_HEIGHT = 40
+const MIN_PROFILE_BODY_HEIGHT = 220
+const MAX_PROFILE_BODY_HEIGHT = 286
 
-const MIN_CARD_CONTENT_HEIGHT = 36
-const MAX_CARD_CONTENT_HEIGHT = 44
+const MIN_TAB_BAR_HEIGHT = 38
+const MAX_TAB_BAR_HEIGHT = 46
+
+const MIN_COMPACT_HEIGHT = 40
+const MAX_COMPACT_HEIGHT = 48
+
+const CARD_ASPECT_WIDTH = 5
+const CARD_ASPECT_HEIGHT = 7
 
 const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value))
@@ -263,6 +327,15 @@ export default {
 			likesHasMore: true,
 			likesLoaded: false,
 
+			isRefreshing: false,
+			scrollTop: 0,
+			pullCandidate: false,
+			pulling: false,
+			pullStartY: 0,
+			pullDistance: 0,
+			refreshBackdropVisible: false,
+			refreshBackdropHideTimer: null,
+
 			defaultImage: '/static/images/default.png',
 			defaultAvatar: '/static/user_avatar.png',
 			showSetting: false,
@@ -275,18 +348,26 @@ export default {
 			statusBarHeight: 0,
 			safeBottom: 0,
 
-			profileHeaderHeight: 230,
-			profileBodyHeight: 206,
-			compactProfileHeight: 36,
-			tabBarHeight: 36,
-			avatarSize: 72,
+			profileHeaderHeight: 270,
+			profileBodyHeight: 246,
+			compactProfileHeight: 44,
+			tabBarHeight: 42,
+			tabbarBaseHeight: 50,
+			tabbarTotalHeight: 50,
+			avatarSize: 92,
 
-			creationCardHeight: 148,
-			imageHeight: 110,
-			cardContentHeight: 38,
+			creationCardHeight: 249,
+			imageHeight: 178,
+			cardContentHeight: 71,
 
 			stickyHeaderVisible: false,
-			stickyHeaderProgress: 0
+			stickyHeaderProgress: 0,
+
+			workTouch: {
+				startX: 0,
+				startY: 0,
+				moved: false
+			}
 		}
 	},
 
@@ -346,7 +427,7 @@ export default {
 			return (
 				'padding:' + CONTENT_PADDING_TOP + 'px ' +
 				CONTENT_PADDING_X + 'px ' +
-				(CONTENT_PADDING_BOTTOM + this.safeBottom) + 'px;'
+				CONTENT_PADDING_BOTTOM + 'px;'
 			)
 		},
 
@@ -368,6 +449,63 @@ export default {
 
 		settingMenuStyle() {
 			return 'padding-bottom:' + (20 + this.safeBottom + 16) + 'px;'
+		},
+
+		currentListLength() {
+			return this.activeTab === 'works' ? this.worksList.length : this.likesList.length
+		},
+
+		pullVisualOffset() {
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+
+			return Math.min(
+				REFRESH_HOLD_OFFSET,
+				Math.round(this.pullDistance * PULL_MOVE_RATIO)
+			)
+		},
+
+		scrollContentStyle() {
+			const transition = this.pulling
+				? 'none'
+				: 'transform 0.16s ease'
+
+			return [
+				'transform: translateY(' + this.pullVisualOffset + 'px)',
+				'transition:' + transition
+			].join(';')
+		},
+
+		refreshGradientBackdropStyle() {
+			const height = this.profileHeaderHeight + Math.max(64, this.pullVisualOffset + 42)
+
+			return (
+				'height:' + height + 'px;' +
+				'opacity:1;'
+			)
+		},
+
+		refreshOverlayStyle() {
+			const top = this.statusBarHeight + Math.min(26, Math.max(10, Math.round(this.pullDistance * 0.24)))
+			const opacity = this.isRefreshing
+				? 1
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+
+			return [
+				'top:' + top + 'px',
+				'opacity:' + opacity
+			].join(';')
+		},
+
+		refresherText() {
+			if (this.isRefreshing) return '正在刷新...'
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
+			if (this.pullDistance > 0) return '下拉刷新'
+			return ''
+		},
+
+		bottomSpacerStyle() {
+			const height = this.tabbarTotalHeight + LOAD_MORE_BOTTOM_GAP
+			return 'height:' + height + 'px;'
 		}
 	},
 
@@ -379,36 +517,150 @@ export default {
 
 	onShow() {
 		this.initResponsiveLayout()
-		if (this.pageReady) {
-			this.refreshCurrentTab()
+	},
+
+	onUnload() {
+		if (this.refreshBackdropHideTimer) {
+			clearTimeout(this.refreshBackdropHideTimer)
+			this.refreshBackdropHideTimer = null
 		}
 	},
 
-	onPageScroll(e) {
-		const scrollTop = Number(e && e.scrollTop ? e.scrollTop : 0)
-		const infoBarHeight = this.statusBarHeight + this.compactProfileHeight
-		const start = Math.max(0, this.profileHeaderHeight - infoBarHeight - 150)
-		const end = Math.max(start + 1, this.profileHeaderHeight - infoBarHeight)
-		const progress = clamp((scrollTop - start) / (end - start), 0, 1)
-
-		this.stickyHeaderProgress = progress
-		this.stickyHeaderVisible = progress > 0.01
-	},
-
-	onReachBottom() {
-		if (this.activeTab === 'works') this.loadUserWorks(false)
-		else if (this.activeTab === 'likes') this.loadUserLikes(false)
-	},
-
-	onPullDownRefresh() {
-		const tasks = [this.loadUserProfile()]
-		if (this.activeTab === 'works') tasks.push(this.loadUserWorks(true))
-		else if (this.activeTab === 'likes') tasks.push(this.loadUserLikes(true))
-
-		Promise.all(tasks).finally(() => uni.stopPullDownRefresh())
-	},
-
 	methods: {
+
+		hideRefreshBackdropLater() {
+			if (this.refreshBackdropHideTimer) {
+				clearTimeout(this.refreshBackdropHideTimer)
+			}
+
+			this.refreshBackdropHideTimer = setTimeout(() => {
+				if (!this.isRefreshing && this.pullDistance <= 0) {
+					this.refreshBackdropVisible = false
+				}
+
+				this.refreshBackdropHideTimer = null
+			}, 220)
+		},
+		noop() {},
+
+		onProfileScroll(e) {
+			const scrollTop = Number(e?.detail?.scrollTop || 0)
+			this.scrollTop = scrollTop
+			this.updateStickyHeaderByScroll(scrollTop)
+		},
+
+		updateStickyHeaderByScroll(scrollTop) {
+			const infoBarHeight = this.statusBarHeight + this.compactProfileHeight
+			const start = Math.max(0, this.profileHeaderHeight - infoBarHeight - 150)
+			const end = Math.max(start + 1, this.profileHeaderHeight - infoBarHeight)
+			const progress = clamp((scrollTop - start) / (end - start), 0, 1)
+
+			this.stickyHeaderProgress = progress
+			this.stickyHeaderVisible = progress > 0.01
+		},
+
+		getTouchY(e) {
+			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
+			return Number(touch.clientY ?? touch.pageY ?? 0)
+		},
+
+		onScrollTouchStart(e) {
+			if (this.loading || this.isRefreshing) return
+
+			if (this.refreshBackdropHideTimer) {
+				clearTimeout(this.refreshBackdropHideTimer)
+				this.refreshBackdropHideTimer = null
+			}
+
+			this.pullStartY = this.getTouchY(e)
+			this.pullCandidate = this.scrollTop <= 2
+			this.pulling = false
+			this.pullDistance = 0
+
+			if (this.scrollTop <= 2) {
+				this.refreshBackdropVisible = true
+			}
+		},
+
+		onScrollTouchMove(e) {
+			if (!this.pullCandidate || this.loading || this.isRefreshing) return
+
+			if (this.scrollTop > 2) {
+				this.pullCandidate = false
+				this.pulling = false
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+				return
+			}
+
+			const currentY = this.getTouchY(e)
+			const deltaY = currentY - this.pullStartY
+
+			if (deltaY <= 0) {
+				this.pulling = false
+				this.pullDistance = 0
+				return
+			}
+
+			if (deltaY < 8) {
+				this.pulling = false
+				this.pullDistance = 0
+				return
+			}
+
+			this.pulling = true
+			this.pullDistance = Math.min(
+				PULL_MAX_DISTANCE,
+				Math.floor((deltaY - 8) * 0.38)
+			)
+		},
+
+		async onScrollTouchEnd() {
+			if (!this.pullCandidate && !this.pulling) return
+
+			const shouldRefresh = this.pulling && this.pullDistance >= PULL_TRIGGER_DISTANCE
+
+			this.pullCandidate = false
+			this.pulling = false
+
+			if (!shouldRefresh) {
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+				return
+			}
+
+			await this.refreshList()
+		},
+
+		async refreshList() {
+			if (this.loading || this.isRefreshing) {
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+				return
+			}
+
+			this.refreshBackdropVisible = true
+			this.isRefreshing = true
+			this.pullDistance = PULL_TRIGGER_DISTANCE
+
+			const tasks = [this.loadUserProfile()]
+			if (this.activeTab === 'works') tasks.push(this.loadUserWorks(true))
+			else if (this.activeTab === 'likes') tasks.push(this.loadUserLikes(true))
+
+			try {
+				await Promise.all(tasks)
+			} finally {
+				this.isRefreshing = false
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+			}
+		},
+
+		handleScrollToLower() {
+			if (this.activeTab === 'works') this.loadUserWorks(false)
+			else if (this.activeTab === 'likes') this.loadUserLikes(false)
+		},
+
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync()
@@ -423,7 +675,7 @@ export default {
 				this.safeBottom = Number(safeAreaInsets.bottom || 0)
 
 				this.profileBodyHeight = clamp(
-					Math.floor(windowWidth * 0.55),
+					Math.floor(windowWidth * 0.66),
 					MIN_PROFILE_BODY_HEIGHT,
 					MAX_PROFILE_BODY_HEIGHT
 				)
@@ -431,52 +683,53 @@ export default {
 				this.profileHeaderHeight = this.statusBarHeight + this.profileBodyHeight
 
 				this.compactProfileHeight = clamp(
-					Math.floor(windowWidth * 0.098),
+					Math.floor(windowWidth * 0.118),
 					MIN_COMPACT_HEIGHT,
 					MAX_COMPACT_HEIGHT
 				)
 
 				this.tabBarHeight = clamp(
-					Math.floor(windowWidth * 0.096),
+					Math.floor(windowWidth * 0.112),
 					MIN_TAB_BAR_HEIGHT,
 					MAX_TAB_BAR_HEIGHT
 				)
 
+				this.tabbarBaseHeight = clamp(
+					Math.floor(windowWidth * 0.132),
+					MIN_TABBAR_BASE_HEIGHT,
+					MAX_TABBAR_BASE_HEIGHT
+				)
+				this.tabbarTotalHeight = this.tabbarBaseHeight + this.safeBottom
+
 				this.avatarSize = clamp(
-					Math.floor(this.profileBodyHeight * 0.34),
-					62,
-					82
+					Math.floor(this.profileBodyHeight * 0.38),
+					84,
+					106
 				)
 
 				const gridWidth = windowWidth - CONTENT_PADDING_X * 2
-				const cardWidth = Math.floor((gridWidth - GRID_GAP * 2) / 3)
+				const cardWidth = Math.floor((gridWidth - GRID_GAP) / 2)
 
-				// 整个创作卡片按宽度决定，高宽比 4:3。
-				this.creationCardHeight = Math.floor(cardWidth * 4 / 3)
-
-				// 信息区沿用首页策略：按卡片宽度轻微缩放，并限制上下限。
-				this.cardContentHeight = clamp(
-					Math.floor(cardWidth * 0.32),
-					MIN_CARD_CONTENT_HEIGHT,
-					MAX_CARD_CONTENT_HEIGHT
-				)
-
-				this.imageHeight = Math.max(0, this.creationCardHeight - this.cardContentHeight)
+				this.creationCardHeight = Math.floor(cardWidth * CARD_ASPECT_HEIGHT / CARD_ASPECT_WIDTH)
+				this.imageHeight = cardWidth
+				this.cardContentHeight = Math.max(0, this.creationCardHeight - this.imageHeight)
 			} catch (err) {
 				this.windowWidth = 375
 				this.windowHeight = 667
 				this.statusBarHeight = 0
 				this.safeBottom = 0
 
-				this.profileBodyHeight = 206
-				this.profileHeaderHeight = 206
-				this.compactProfileHeight = 36
-				this.tabBarHeight = 36
-				this.avatarSize = 72
+				this.profileBodyHeight = 246
+				this.profileHeaderHeight = 246
+				this.compactProfileHeight = 44
+				this.tabBarHeight = 42
+				this.tabbarBaseHeight = 50
+				this.tabbarTotalHeight = 50
+				this.avatarSize = 92
 
-				this.creationCardHeight = 148
-				this.cardContentHeight = 38
-				this.imageHeight = 110
+				this.creationCardHeight = 249
+				this.imageHeight = 178
+				this.cardContentHeight = 71
 			}
 		},
 
@@ -686,8 +939,41 @@ export default {
 			this.showSetting = true
 		},
 
+		onWorkTouchStart(e) {
+			const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+
+			this.workTouch = {
+				startX: touch.clientX ?? touch.pageX ?? 0,
+				startY: touch.clientY ?? touch.pageY ?? 0,
+				moved: false
+			}
+		},
+
+		onWorkTouchMove(e) {
+			const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+			const x = touch.clientX ?? touch.pageX ?? 0
+			const y = touch.clientY ?? touch.pageY ?? 0
+			const dx = Math.abs(x - this.workTouch.startX)
+			const dy = Math.abs(y - this.workTouch.startY)
+
+			if (dx > 8 || dy > 8) {
+				this.workTouch.moved = true
+			}
+		},
+
+		onWorkTouchEnd() {
+			setTimeout(() => {
+				this.workTouch = {
+					startX: 0,
+					startY: 0,
+					moved: false
+				}
+			}, 80)
+		},
+
 		showWorkOptions(work) {
 			if (!work || !work.creation_id) return
+			if (this.workTouch.moved || this.pullDistance > 4 || this.isRefreshing) return
 			this.selectedWork = work
 			this.showWorkAction = true
 		},
@@ -722,13 +1008,13 @@ export default {
 				url: `/pages/user/follow_list?userId=${this.userId}&tab=friend`
 			})
 		},
-		
+
 		goToFollowingList() {
 			uni.navigateTo({
 				url: `/pages/user/follow_list?userId=${this.userId}&tab=following`
 			})
 		},
-		
+
 		goToFollowerList() {
 			uni.navigateTo({
 				url: `/pages/user/follow_list?userId=${this.userId}&tab=follower`
@@ -813,6 +1099,7 @@ export default {
 						delete getApp().globalData.token
 						uni.removeStorageSync('token')
 						uni.removeStorageSync('user_id')
+						uni.removeStorageSync('notify_permission_asked')
 						uni.reLaunch({
 							url: '/pages/user/login'
 						})
@@ -823,8 +1110,8 @@ export default {
 
 		formatNumber(num) {
 			if (!num && num !== 0) return '0'
-			if (num >= 10000) return (num / 10000).toFixed(1) + 'w'
-			if (num >= 1000) return (num / 1000).toFixed(1) + 'k'
+			if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
+			if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
 			return num.toString()
 		}
 	}
@@ -837,9 +1124,79 @@ export default {
 
 <style scoped>
 .user-profile-container {
-	min-height: 100vh;
-	background: #f8f9fa;
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	padding: 0;
+	margin: 0;
+	box-sizing: border-box;
+	background: #fefefe;
+	overflow: hidden;
 	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	overscroll-behavior-y: none;
+}
+
+
+.refresh-gradient-backdrop {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	z-index: 0;
+	background:
+		radial-gradient(circle at 0% 0%, rgba(248, 211, 174, 0.96) 0%, rgba(253, 231, 209, 0.86) 25%, rgba(255, 250, 244, 0.2) 52%, rgba(255, 250, 244, 0) 70%),
+		linear-gradient(135deg, rgba(255, 246, 235, 1) 0%, rgba(253, 231, 209, 1) 62%, rgba(248, 211, 174, 1) 100%);
+	pointer-events: none;
+}
+
+.refresh-overlay {
+	position: fixed;
+	left: 50%;
+	z-index: 98;
+	height: 30px;
+	min-width: 92px;
+	padding: 0 12px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.48);
+	backdrop-filter: blur(12px);
+	box-shadow: 0 6px 18px rgba(138, 90, 43, 0.12);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	box-sizing: border-box;
+	transform: translateX(-50%);
+	pointer-events: none;
+	transition: top 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: rgba(81, 55, 31, 0.72);
+	font-weight: 400;
+	line-height: 1;
+}
+
+.profile-scroll {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1;
+	background: transparent;
+	box-sizing: border-box;
+	overflow: hidden;
+	overscroll-behavior-y: contain;
+}
+
+.scroll-content {
+	position: relative;
+	z-index: 1;
+	will-change: transform;
+	background: transparent;
 }
 
 .compact-sticky-header {
@@ -863,20 +1220,20 @@ export default {
 }
 
 .compact-avatar {
-	width: 24px;
-	height: 24px;
-	border-radius: 12px;
+	width: 30px;
+	height: 30px;
+	border-radius: 15px;
 	border: 1px solid rgba(138, 90, 43, 0.08);
-	margin-right: 7px;
+	margin-right: 8px;
 	background: rgba(0, 0, 0, 0.04);
 	flex-shrink: 0;
 }
 
 .compact-username {
-	font-size: 13px;
+	font-size: 15px;
 	font-weight: 400;
 	color: #51371f;
-	max-width: 220px;
+	max-width: 240px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -904,11 +1261,11 @@ export default {
 .setting-btn {
 	position: absolute;
 	right: 14px;
-	width: 32px;
-	height: 32px;
+	width: 34px;
+	height: 34px;
 	background: rgba(255, 255, 255, 0.68);
 	backdrop-filter: blur(10px);
-	border-radius: 16px;
+	border-radius: 17px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -917,7 +1274,7 @@ export default {
 }
 
 .setting-icon {
-	font-size: 17px;
+	font-size: 18px;
 	color: #8a5a2b;
 	line-height: 1;
 }
@@ -925,7 +1282,7 @@ export default {
 .avatar-section {
 	display: flex;
 	justify-content: center;
-	margin-bottom: 10px;
+	margin-bottom: 12px;
 }
 
 .avatar {
@@ -937,12 +1294,12 @@ export default {
 
 .user-info {
 	text-align: center;
-	margin-bottom: 13px;
+	margin-bottom: 15px;
 }
 
 .username {
 	display: block;
-	font-size: 20px;
+	font-size: 24px;
 	font-weight: 500;
 	color: #51371f;
 	text-shadow: none;
@@ -965,15 +1322,15 @@ export default {
 }
 
 .stat-number {
-	font-size: 18px;
+	font-size: 19px;
 	font-weight: 500;
 	color: #51371f;
-	margin-bottom: 3px;
+	margin-bottom: 4px;
 	text-shadow: none;
 }
 
 .stat-label {
-	font-size: 11px;
+	font-size: 12px;
 	color: rgba(81, 55, 31, 0.68);
 }
 
@@ -995,7 +1352,7 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 5px;
 	transition: all 0.24s;
 	color: #666;
 	box-sizing: border-box;
@@ -1006,17 +1363,21 @@ export default {
 	color: #8a5a2b;
 }
 
+.works-tab .tab-icon {
+	color: #8a5a2b;
+}
+
 .like-tab .tab-icon {
 	color: #ff4d67;
 }
 
 .tab-icon {
-	font-size: 15px;
+	font-size: 17px;
 	line-height: 1;
 }
 
 .tab-text {
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 400;
 	line-height: 1;
 }
@@ -1048,26 +1409,28 @@ export default {
 
 .content-container {
 	box-sizing: border-box;
-	background: #f8f9fa;
+	background: #fefefe;
 }
 
 .creation-grid {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 6px;
+	grid-template-columns: repeat(2, 1fr);
+	column-gap: 6px;
+	row-gap: 10px;
 }
 
 .creation-card {
-	background: #fff;
-	border-radius: 8px;
+	background: #ffffff;
+	border-radius: 10px;
 	overflow: hidden;
-	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.045);
+	box-shadow: 0 1px 7px rgba(0, 0, 0, 0.06);
 	box-sizing: border-box;
+	transition: all 0.24s;
 }
 
 .creation-card:active {
 	transform: translateY(-1px);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
 }
 
 .image-wrapper {
@@ -1087,22 +1450,24 @@ export default {
 }
 
 .card-content {
-	padding: 4px 5px 4px;
+	padding: 7px 8px 6px;
 	box-sizing: border-box;
 	overflow: hidden;
-	background: #fff;
+	background: #ffffff;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
 }
 
 .card-title-container {
-	height: 16px;
-	margin-bottom: 2px;
+	min-height: 22px;
 }
 
 .card-title {
-	font-size: 10px;
+	font-size: 15px;
 	font-weight: 500;
-	color: #333;
-	line-height: 16px;
+	color: #333333;
+	line-height: 22px;
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
@@ -1113,20 +1478,21 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 16px;
+	height: 31px;
+	margin-top: 5px;
 }
 
 .card-author {
 	display: flex;
 	align-items: center;
-	gap: 3px;
+	gap: 6px;
 	flex: 1;
 	min-width: 0;
 }
 
 .author-avatar {
-	width: 14px;
-	height: 14px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	border: 1px solid #f0f0f0;
 	object-fit: cover;
@@ -1134,8 +1500,9 @@ export default {
 }
 
 .author-name {
-	font-size: 9px;
-	color: #555;
+	font-size: 14px;
+	font-weight: 400;
+	color: #666666;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1144,26 +1511,27 @@ export default {
 .card-likes {
 	display: flex;
 	align-items: center;
-	gap: 2px;
+	gap: 4px;
 	flex-shrink: 0;
-	padding-left: 3px;
+	padding-left: 6px;
 }
 
 .like-icon {
-	font-size: 11px;
+	font-size: 18px;
 	line-height: 1;
-	color: #ff4d67;
+	color: #b8b8b8;
 	transition: transform 0.15s ease;
 }
 
 .like-icon.active {
-	transform: scale(1.1);
+	transform: scale(1.08);
 	color: #ff4d67;
 }
 
 .like-count {
-	font-size: 9px;
-	color: #999;
+	font-size: 14px;
+	font-weight: 400;
+	color: #888888;
 }
 
 .empty-state {
@@ -1207,10 +1575,22 @@ export default {
 .loading-spinner {
 	width: 20px;
 	height: 20px;
-	border: 2px solid #f3f3f3;
+	border: 2px solid rgba(216, 162, 93, 0.22);
 	border-top-color: #d8a25d;
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
+}
+
+.loading-spinner.small {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+}
+
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
 }
 
 .loading-text {
@@ -1222,6 +1602,31 @@ export default {
 	to {
 		transform: rotate(360deg);
 	}
+}
+
+
+.load-more-state {
+	padding: 4px 0 0;
+	margin: 0;
+	text-align: center;
+	font-size: 11px;
+	line-height: 14px;
+	color: #999;
+	font-weight: 400;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+}
+
+.loading-more-inline {
+	font-size: 12px;
+}
+
+.bottom-spacer {
+	width: 100%;
+	flex-shrink: 0;
+	background: #fefefe;
 }
 
 .work-action-overlay {

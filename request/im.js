@@ -173,6 +173,7 @@ export const getMessageByConversation = async (conShortId, conIndex, limit) => {
   for (let i = 0; i < msgBodies.length; i++) {
     const msg = await handleMessageExtra(msgBodies[i]);
     msg.msg_content = await transformContent(msg);
+	msgBodies[i] = msg;
     msgRows.push({
       sender_id: msg.sender_id,
       sender_type: msg.sender_type,
@@ -597,7 +598,7 @@ export const handleCommandMessage = async (msg) => {
       				agentRows.push({
       					agent_id: aid,
       					agent_name: a.agent_name || "AI",
-      					avatar_uri: a.avatar_uri || "/static/ai.png",
+      					avatar_uri: a.avatar_uri || "/static/ai_avatar.png",
       					local_avatar_uri: "",
       					description: a.description || "",
       					owner_id: a.owner_id ?? 0n,
@@ -710,11 +711,11 @@ export const handleMessageExtra = async (message) => {
 	return message;
 };
 
-export const getNoitceCount = async (payload) => {
+export const getNoitceCounts = async (payload) => {
 	const data = {
-		group: payload.group
+		groups: payload.groups
 	};
-	return httpRequestBackData("/notice/get_notice_count",data);
+	return httpRequestBackData("/notice/get_notice_counts",data);
 };
 
 export const getNoticeList = async (payload) => {

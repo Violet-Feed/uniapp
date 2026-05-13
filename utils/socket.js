@@ -243,7 +243,7 @@ class Socket {
 			const a = rows && rows[0] ? rows[0] : null;
 			conInfo.con_core_info = conInfo.con_core_info || {};
 			conInfo.con_core_info.name = a?.agent_name || conInfo.con_core_info.name || "AI";
-			conInfo.con_core_info.avatar_uri = a?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/ai.png";
+			conInfo.con_core_info.avatar_uri = a?.avatar_uri || conInfo.con_core_info.avatar_uri || "/static/ai_avatar.png";
 		  } else if (conInfo.con_type === 2) {
 			enqueueGroupRosters([conInfo.con_id]);
 			conInfo.con_core_info = conInfo.con_core_info || {};

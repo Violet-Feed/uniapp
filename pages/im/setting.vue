@@ -143,6 +143,7 @@
 					class="edit-textarea"
 					v-model="editValue"
 					:placeholder="editPlaceholder"
+					:adjust-position="false"
 					maxlength="-1"
 				/>
 
@@ -151,6 +152,7 @@
 					class="edit-input"
 					v-model="editValue"
 					:placeholder="editPlaceholder"
+					:adjust-position="false"
 				/>
 
 				<view class="edit-actions">
@@ -675,8 +677,8 @@ export default {
 
 .members-section {
 	background-color: #ffffff;
-	padding: 24rpx 18rpx 4rpx;
-	margin: 12rpx 18rpx 18rpx;
+	padding: 22rpx 6rpx 2rpx;
+	margin: 12rpx 10rpx 16rpx;
 	border-radius: 16rpx;
 	box-sizing: border-box;
 }
@@ -691,13 +693,14 @@ export default {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	margin-bottom: 30rpx;
+	margin-bottom: 24rpx;
+	box-sizing: border-box;
 }
 
 .member-avatar {
-	width: 100rpx;
-	height: 100rpx;
-	border-radius: 10rpx;
+	width: 116rpx;
+	height: 116rpx;
+	border-radius: 14rpx;
 	background-color: #f0f0f0;
 }
 
@@ -705,22 +708,22 @@ export default {
 	font-size: 24rpx;
 	font-weight: 400;
 	color: #333;
-	margin-top: 10rpx;
+	margin-top: 8rpx;
 	text-align: center;
 	width: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	padding: 0 5rpx;
+	padding: 0 3rpx;
 	box-sizing: border-box;
 }
 
 .add-btn .add-icon,
 .remove-btn .remove-icon,
 .expand-btn .expand-icon {
-	width: 100rpx;
-	height: 100rpx;
-	border-radius: 10rpx;
+	width: 116rpx;
+	height: 116rpx;
+	border-radius: 14rpx;
 	border: 2rpx dashed #ccc;
 	display: flex;
 	align-items: center;
@@ -732,14 +735,15 @@ export default {
 .add-icon .icon,
 .remove-icon .icon,
 .expand-icon .icon {
-	font-size: 50rpx;
+	font-size: 58rpx;
 	color: #999;
 	font-weight: 400;
+	line-height: 1;
 }
 
 .info-section {
 	background-color: #ffffff;
-	margin: 0 18rpx 18rpx;
+	margin: 0 10rpx 16rpx;
 	border-radius: 16rpx;
 	overflow: hidden;
 	box-sizing: border-box;
@@ -795,7 +799,7 @@ export default {
 }
 
 .action-section {
-	padding: 0 18rpx 18rpx;
+	padding: 0 10rpx 18rpx;
 	box-sizing: border-box;
 }
 
@@ -833,7 +837,7 @@ export default {
 	max-height: 78vh;
 	background: #fff;
 	border-radius: 20rpx;
-	padding: 36rpx 30rpx 24rpx;
+	padding: 36rpx 30rpx 26rpx;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -869,16 +873,21 @@ export default {
 	display: flex;
 	justify-content: flex-end;
 	align-items: center;
-	margin-top: 24rpx;
+	margin-top: 28rpx;
 	flex-shrink: 0;
 }
 
 .desc-btn {
-	font-size: 28rpx;
+	min-width: 112rpx;
+	height: 64rpx;
+	line-height: 64rpx;
+	text-align: center;
+	font-size: 30rpx;
 	font-weight: 400;
-	padding: 14rpx 26rpx;
-	border-radius: 10rpx;
-	margin-left: 20rpx;
+	padding: 0 34rpx;
+	border-radius: 14rpx;
+	margin-left: 22rpx;
+	box-sizing: border-box;
 }
 
 .desc-cancel-btn {
@@ -908,7 +917,7 @@ export default {
 	width: 620rpx;
 	background: #fff;
 	border-radius: 20rpx;
-	padding: 36rpx 30rpx 24rpx;
+	padding: 38rpx 30rpx 28rpx;
 	box-sizing: border-box;
 }
 
@@ -924,18 +933,18 @@ export default {
 	font-weight: 400;
 	color: #333;
 	text-align: center;
-	margin-bottom: 28rpx;
+	margin-bottom: 30rpx;
 }
 
 .edit-input {
-	height: 84rpx;
+	height: 88rpx;
 	background: #f5f6f8;
 	border-radius: 12rpx;
 	padding: 0 24rpx;
 	font-size: 28rpx;
 	font-weight: 400;
 	color: #333;
-	margin-bottom: 28rpx;
+	margin-bottom: 30rpx;
 	box-sizing: border-box;
 }
 
@@ -950,7 +959,7 @@ export default {
 	font-weight: 400;
 	line-height: 1.7;
 	color: #333;
-	margin-bottom: 28rpx;
+	margin-bottom: 30rpx;
 	box-sizing: border-box;
 }
 
@@ -961,11 +970,16 @@ export default {
 }
 
 .edit-btn {
-	font-size: 28rpx;
+	min-width: 112rpx;
+	height: 64rpx;
+	line-height: 64rpx;
+	text-align: center;
+	font-size: 30rpx;
 	font-weight: 400;
-	padding: 14rpx 26rpx;
-	border-radius: 10rpx;
-	margin-left: 20rpx;
+	padding: 0 34rpx;
+	border-radius: 14rpx;
+	margin-left: 22rpx;
+	box-sizing: border-box;
 }
 
 .cancel-btn {

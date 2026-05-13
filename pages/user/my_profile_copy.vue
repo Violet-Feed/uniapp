@@ -1,5 +1,14 @@
 <template>
 	<view class="user-profile-container">
+		<page-meta page-style="overflow: hidden;" />
+
+		<!-- 下拉刷新背景：沿用头部渐变，避免顶部露出灰底 -->
+		<view
+			v-if="refreshBackdropVisible"
+			class="refresh-gradient-backdrop"
+			:style="refreshGradientBackdropStyle"
+		></view>
+
 		<view
 			v-if="stickyHeaderVisible"
 			class="compact-sticky-header"
@@ -13,6 +22,31 @@
 				<text class="compact-username">{{ username || '我的' }}</text>
 			</view>
 		</view>
+
+
+		<view
+			v-if="pullDistance > 0 || isRefreshing"
+			class="refresh-overlay"
+			:style="refreshOverlayStyle"
+		>
+			<view class="loading-spinner tiny" v-if="isRefreshing"></view>
+			<text class="refresh-overlay-text">{{ refresherText }}</text>
+		</view>
+
+
+		<scroll-view
+			class="profile-scroll"
+			scroll-y
+			:show-scrollbar="false"
+			:lower-threshold="120"
+			@scroll="onProfileScroll"
+			@scrolltolower="handleScrollToLower"
+			@touchstart="onScrollTouchStart"
+			@touchmove="onScrollTouchMove"
+			@touchend="onScrollTouchEnd"
+			@touchcancel="onScrollTouchEnd"
+		>
+			<view class="scroll-content" :style="scrollContentStyle">
 
 		<view class="profile-header" :style="profileHeaderStyle">
 			<view class="back-btn" :style="topActionBtnStyle" @click="goBack">
@@ -52,7 +86,7 @@
 
 		<view class="tab-bar" :style="tabBarStyle">
 			<view
-				class="tab-item"
+				class="tab-item works-tab"
 				:class="{ active: activeTab === 'works' }"
 				@click="switchTab('works')"
 			>
@@ -117,6 +151,14 @@
 					<text class="empty-text">还没有发布作品</text>
 					<text class="empty-hint">快去创作第一个作品吧！</text>
 				</view>
+
+				<view v-if="loading && worksList.length > 0 && !isRefreshing" class="load-more-state loading-more-inline">
+					<view class="loading-spinner small"></view>
+					<text>加载中...</text>
+				</view>
+				<view v-else-if="!worksHasMore && worksList.length > 0" class="load-more-state">
+					<text>没有更多了</text>
+				</view>
 			</view>
 
 			<view v-if="activeTab === 'likes'">
@@ -164,13 +206,25 @@
 					<text class="empty-text">还没有点赞内容</text>
 					<text class="empty-hint">去发现更多精彩作品吧！</text>
 				</view>
+
+				<view v-if="loading && likesList.length > 0 && !isRefreshing" class="load-more-state loading-more-inline">
+					<view class="loading-spinner small"></view>
+					<text>加载中...</text>
+				</view>
+				<view v-else-if="!likesHasMore && likesList.length > 0" class="load-more-state">
+					<text>没有更多了</text>
+				</view>
 			</view>
 
-			<view v-if="loading" class="loading-more">
+			<view v-if="loading && currentListLength === 0 && !isRefreshing" class="loading-more">
 				<view class="loading-spinner"></view>
 				<text class="loading-text">加载中...</text>
 			</view>
 		</view>
+
+				<view v-if="currentListLength > 0" class="bottom-spacer" :style="bottomSpacerStyle"></view>
+			</view>
+		</scroll-view>
 	</view>
 </template>
 
@@ -182,17 +236,25 @@ import { getUserProfile } from '@/request/user.js'
 
 const GRID_GAP = 6
 const CONTENT_PADDING_TOP = 6
-const CONTENT_PADDING_X = 8
+const CONTENT_PADDING_X = 6
 const CONTENT_PADDING_BOTTOM = 10
 
-const MIN_PROFILE_BODY_HEIGHT = 190
-const MAX_PROFILE_BODY_HEIGHT = 238
-const MIN_TAB_BAR_HEIGHT = 34
-const MAX_TAB_BAR_HEIGHT = 40
-const MIN_COMPACT_HEIGHT = 34
-const MAX_COMPACT_HEIGHT = 40
-const MIN_CARD_CONTENT_HEIGHT = 36
-const MAX_CARD_CONTENT_HEIGHT = 44
+const PULL_TRIGGER_DISTANCE = 64
+const PULL_MAX_DISTANCE = 92
+const PULL_MOVE_RATIO = 0.62
+const REFRESH_HOLD_OFFSET = 42
+const LOAD_MORE_BOTTOM_GAP = 0
+
+
+const MIN_PROFILE_BODY_HEIGHT = 220
+const MAX_PROFILE_BODY_HEIGHT = 286
+const MIN_TAB_BAR_HEIGHT = 38
+const MAX_TAB_BAR_HEIGHT = 46
+const MIN_COMPACT_HEIGHT = 40
+const MAX_COMPACT_HEIGHT = 48
+
+const CARD_ASPECT_WIDTH = 5
+const CARD_ASPECT_HEIGHT = 7
 
 const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value))
@@ -227,18 +289,26 @@ export default {
 			statusBarHeight: 0,
 			safeBottom: 0,
 
-			profileHeaderHeight: 230,
-			profileBodyHeight: 206,
-			compactProfileHeight: 36,
-			tabBarHeight: 36,
-			avatarSize: 72,
+			profileHeaderHeight: 270,
+			profileBodyHeight: 246,
+			compactProfileHeight: 44,
+			tabBarHeight: 42,
+			avatarSize: 92,
 
-			creationCardHeight: 148,
-			imageHeight: 110,
-			cardContentHeight: 38,
+			creationCardHeight: 249,
+			imageHeight: 178,
+			cardContentHeight: 71,
 
 			stickyHeaderVisible: false,
-			stickyHeaderProgress: 0
+			stickyHeaderProgress: 0,
+
+			profileScrollTop: 0,
+			pulling: false,
+			pullStartY: 0,
+			pullDistance: 0,
+			refreshBackdropVisible: false,
+			refreshBackdropHideTimer: null,
+			isRefreshing: false
 		}
 	},
 
@@ -316,6 +386,70 @@ export default {
 
 		cardImageStyle() {
 			return 'width:100%;height:' + this.imageHeight + 'px;'
+		},
+
+		currentListLength() {
+			return this.activeTab === 'works' ? this.worksList.length : this.likesList.length
+		},
+
+		currentHasMore() {
+			return this.activeTab === 'works' ? this.worksHasMore : this.likesHasMore
+		},
+
+		pullVisualOffset() {
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+
+			return Math.min(
+				REFRESH_HOLD_OFFSET,
+				Math.round(this.pullDistance * PULL_MOVE_RATIO)
+			)
+		},
+
+		scrollContentStyle() {
+			const transition = this.pulling
+				? 'none'
+				: 'transform 0.16s ease'
+
+			return [
+				'transform: translateY(' + this.pullVisualOffset + 'px)',
+				'transition:' + transition
+			].join(';')
+		},
+
+		refreshGradientBackdropStyle() {
+			const height = this.isRefreshing
+				? this.profileHeaderHeight + REFRESH_HOLD_OFFSET
+				: this.profileHeaderHeight + Math.max(0, this.pullVisualOffset)
+
+			return 'height:' + height + 'px;'
+		},
+
+		refreshOverlayStyle() {
+			const topBase = this.statusBarHeight + 10
+			const top = this.isRefreshing
+				? topBase + 6
+				: topBase + Math.round(this.pullVisualOffset * 0.42)
+
+			const opacity = this.isRefreshing
+				? 1
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+
+			return [
+				'top:' + top + 'px',
+				'opacity:' + opacity
+			].join(';')
+		},
+
+		refresherText() {
+			if (this.isRefreshing) return '正在刷新...'
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
+			if (this.pullDistance > 0) return '下拉刷新'
+			return ''
+		},
+
+		bottomSpacerStyle() {
+			const height = this.safeBottom + LOAD_MORE_BOTTOM_GAP
+			return 'height:' + height + 'px;'
 		}
 	},
 
@@ -353,7 +487,143 @@ export default {
 		Promise.all(tasks).finally(() => uni.stopPullDownRefresh())
 	},
 
+	onUnload() {
+		if (this.refreshBackdropHideTimer) {
+			clearTimeout(this.refreshBackdropHideTimer)
+			this.refreshBackdropHideTimer = null
+		}
+	},
+
 	methods: {
+
+		hideRefreshBackdropLater() {
+			if (this.refreshBackdropHideTimer) {
+				clearTimeout(this.refreshBackdropHideTimer)
+			}
+
+			this.refreshBackdropHideTimer = setTimeout(() => {
+				if (!this.isRefreshing && this.pullDistance <= 0) {
+					this.refreshBackdropVisible = false
+				}
+
+				this.refreshBackdropHideTimer = null
+			}, 220)
+		},
+
+		handleScrollToLower() {
+			if (this.activeTab === 'works') {
+				this.loadUserWorks(false)
+				return
+			}
+
+			this.loadUserLikes(false)
+		},
+
+		onProfileScroll(e) {
+			const scrollTop = Number(e?.detail?.scrollTop || 0)
+			this.profileScrollTop = scrollTop
+			this.updateStickyHeaderByScroll(scrollTop)
+		},
+
+		updateStickyHeaderByScroll(scrollTop) {
+			const value = Number(scrollTop || 0)
+			const infoBarHeight = this.statusBarHeight + this.compactProfileHeight
+			const start = Math.max(0, this.profileHeaderHeight - infoBarHeight - 150)
+			const end = Math.max(start + 1, this.profileHeaderHeight - infoBarHeight)
+			const progress = clamp((value - start) / (end - start), 0, 1)
+
+			this.stickyHeaderProgress = progress
+			this.stickyHeaderVisible = progress > 0.01
+		},
+
+		getTouchY(e) {
+			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
+			return Number(touch.clientY ?? touch.pageY ?? 0)
+		},
+
+		onScrollTouchStart(e) {
+			if (this.loading || this.isRefreshing) return
+
+			if (this.refreshBackdropHideTimer) {
+				clearTimeout(this.refreshBackdropHideTimer)
+				this.refreshBackdropHideTimer = null
+			}
+
+			this.pullStartY = this.getTouchY(e)
+			this.pulling = this.profileScrollTop <= 2
+			this.pullDistance = 0
+
+			if (this.profileScrollTop <= 2) {
+				this.refreshBackdropVisible = true
+			}
+		},
+
+		onScrollTouchMove(e) {
+			if (!this.pulling || this.loading || this.isRefreshing) return
+
+			if (this.profileScrollTop > 2) {
+				this.pulling = false
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+				return
+			}
+
+			const currentY = this.getTouchY(e)
+			const deltaY = currentY - this.pullStartY
+
+			if (deltaY <= 0) {
+				this.pullDistance = 0
+				return
+			}
+
+			this.pullDistance = Math.min(
+				PULL_MAX_DISTANCE,
+				Math.floor(deltaY * 0.38)
+			)
+		},
+
+		async onScrollTouchEnd() {
+			if (!this.pulling) return
+
+			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE
+			this.pulling = false
+
+			if (!shouldRefresh) {
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+				return
+			}
+
+			await this.refreshList()
+		},
+
+		async refreshList() {
+			if (this.loading || this.isRefreshing) {
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+				return
+			}
+
+			this.refreshBackdropVisible = true
+			this.isRefreshing = true
+			this.pullDistance = PULL_TRIGGER_DISTANCE
+
+			try {
+				const tasks = [this.loadUserProfile()]
+
+				if (this.activeTab === 'works') {
+					tasks.push(this.loadUserWorks(true))
+				} else {
+					tasks.push(this.loadUserLikes(true))
+				}
+
+				await Promise.all(tasks)
+			} finally {
+				this.isRefreshing = false
+				this.pullDistance = 0
+				this.hideRefreshBackdropLater()
+			}
+		},
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync()
@@ -368,7 +638,7 @@ export default {
 				this.safeBottom = Number(safeAreaInsets.bottom || 0)
 
 				this.profileBodyHeight = clamp(
-					Math.floor(windowWidth * 0.55),
+					Math.floor(windowWidth * 0.66),
 					MIN_PROFILE_BODY_HEIGHT,
 					MAX_PROFILE_BODY_HEIGHT
 				)
@@ -376,50 +646,44 @@ export default {
 				this.profileHeaderHeight = this.statusBarHeight + this.profileBodyHeight
 
 				this.compactProfileHeight = clamp(
-					Math.floor(windowWidth * 0.098),
+					Math.floor(windowWidth * 0.118),
 					MIN_COMPACT_HEIGHT,
 					MAX_COMPACT_HEIGHT
 				)
 
 				this.tabBarHeight = clamp(
-					Math.floor(windowWidth * 0.096),
+					Math.floor(windowWidth * 0.112),
 					MIN_TAB_BAR_HEIGHT,
 					MAX_TAB_BAR_HEIGHT
 				)
 
 				this.avatarSize = clamp(
-					Math.floor(this.profileBodyHeight * 0.34),
-					62,
-					82
+					Math.floor(this.profileBodyHeight * 0.38),
+					84,
+					106
 				)
 
 				const gridWidth = windowWidth - CONTENT_PADDING_X * 2
-				const cardWidth = Math.floor((gridWidth - GRID_GAP * 2) / 3)
+				const cardWidth = Math.floor((gridWidth - GRID_GAP) / 2)
 
-				this.creationCardHeight = Math.floor(cardWidth * 4 / 3)
-
-				this.cardContentHeight = clamp(
-					Math.floor(cardWidth * 0.32),
-					MIN_CARD_CONTENT_HEIGHT,
-					MAX_CARD_CONTENT_HEIGHT
-				)
-
-				this.imageHeight = Math.max(0, this.creationCardHeight - this.cardContentHeight)
+				this.creationCardHeight = Math.floor(cardWidth * CARD_ASPECT_HEIGHT / CARD_ASPECT_WIDTH)
+				this.imageHeight = cardWidth
+				this.cardContentHeight = Math.max(0, this.creationCardHeight - this.imageHeight)
 			} catch (err) {
 				this.windowWidth = 375
 				this.windowHeight = 667
 				this.statusBarHeight = 0
 				this.safeBottom = 0
 
-				this.profileBodyHeight = 206
-				this.profileHeaderHeight = 206
-				this.compactProfileHeight = 36
-				this.tabBarHeight = 36
-				this.avatarSize = 72
+				this.profileBodyHeight = 246
+				this.profileHeaderHeight = 246
+				this.compactProfileHeight = 44
+				this.tabBarHeight = 42
+				this.avatarSize = 92
 
-				this.creationCardHeight = 148
-				this.cardContentHeight = 38
-				this.imageHeight = 110
+				this.creationCardHeight = 249
+				this.imageHeight = 178
+				this.cardContentHeight = 71
 			}
 		},
 
@@ -597,13 +861,13 @@ export default {
 				url: `/pages/user/follow_list?userId=${this.userId}&tab=friend`
 			})
 		},
-		
+
 		goToFollowingList() {
 			uni.navigateTo({
 				url: `/pages/user/follow_list?userId=${this.userId}&tab=following`
 			})
 		},
-		
+
 		goToFollowerList() {
 			uni.navigateTo({
 				url: `/pages/user/follow_list?userId=${this.userId}&tab=follower`
@@ -621,8 +885,8 @@ export default {
 
 		formatNumber(num) {
 			if (!num && num !== 0) return '0'
-			if (num >= 10000) return (num / 10000).toFixed(1) + 'w'
-			if (num >= 1000) return (num / 1000).toFixed(1) + 'k'
+			if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
+			if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
 			return num.toString()
 		}
 	}
@@ -631,14 +895,107 @@ export default {
 
 <style>
 @import "@/static/icon/iconfont.css";
+
+.load-more-state {
+	padding: 4px 0 0;
+	margin: 0;
+	text-align: center;
+	font-size: 11px;
+	line-height: 14px;
+	color: #999;
+	font-weight: 400;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+}
+
+.loading-more-inline {
+	font-size: 12px;
+}
+
+.bottom-spacer {
+	width: 100%;
+	flex-shrink: 0;
+	background: #fefefe;
+}
+
 </style>
 
 <style scoped>
 .user-profile-container {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
 	min-height: 100vh;
-	background: #f8f9fa;
+	background: #fefefe;
+	overflow: hidden;
 	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	overscroll-behavior-y: none;
 }
+
+.refresh-gradient-backdrop {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	z-index: 0;
+	background:
+		radial-gradient(circle at 0% 0%, rgba(248, 211, 174, 0.96) 0%, rgba(253, 231, 209, 0.86) 25%, rgba(255, 250, 244, 0.2) 52%, rgba(255, 250, 244, 0) 70%),
+		linear-gradient(135deg, rgba(255, 246, 235, 1) 0%, rgba(253, 231, 209, 1) 62%, rgba(248, 211, 174, 1) 100%);
+	pointer-events: none;
+}
+
+.refresh-overlay {
+	position: fixed;
+	left: 50%;
+	z-index: 98;
+	height: 30px;
+	min-width: 92px;
+	padding: 0 12px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.48);
+	backdrop-filter: blur(12px);
+	box-shadow: 0 6px 18px rgba(138, 90, 43, 0.12);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	box-sizing: border-box;
+	transform: translateX(-50%);
+	pointer-events: none;
+	transition: top 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: rgba(81, 55, 31, 0.72);
+	font-weight: 400;
+	line-height: 1;
+}
+
+.profile-scroll {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1;
+	background: transparent;
+	box-sizing: border-box;
+	overflow: hidden;
+	overscroll-behavior-y: contain;
+}
+
+.scroll-content {
+	position: relative;
+	z-index: 1;
+	will-change: transform;
+	background: transparent;
+}
+
 
 .compact-sticky-header {
 	position: fixed;
@@ -678,20 +1035,20 @@ export default {
 }
 
 .compact-avatar {
-	width: 24px;
-	height: 24px;
-	border-radius: 12px;
+	width: 30px;
+	height: 30px;
+	border-radius: 15px;
 	border: 1px solid rgba(138, 90, 43, 0.08);
-	margin-right: 7px;
+	margin-right: 8px;
 	background: rgba(0, 0, 0, 0.04);
 	flex-shrink: 0;
 }
 
 .compact-username {
-	font-size: 13px;
+	font-size: 15px;
 	font-weight: 400;
 	color: #51371f;
-	max-width: 220px;
+	max-width: 240px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -719,11 +1076,11 @@ export default {
 .back-btn {
 	position: absolute;
 	left: 14px;
-	width: 32px;
-	height: 32px;
+	width: 34px;
+	height: 34px;
 	background: rgba(255, 255, 255, 0.68);
 	backdrop-filter: blur(10px);
-	border-radius: 16px;
+	border-radius: 17px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -741,7 +1098,7 @@ export default {
 .avatar-section {
 	display: flex;
 	justify-content: center;
-	margin-bottom: 10px;
+	margin-bottom: 12px;
 }
 
 .avatar {
@@ -753,12 +1110,12 @@ export default {
 
 .user-info {
 	text-align: center;
-	margin-bottom: 13px;
+	margin-bottom: 15px;
 }
 
 .username {
 	display: block;
-	font-size: 20px;
+	font-size: 24px;
 	font-weight: 500;
 	color: #51371f;
 	text-shadow: none;
@@ -781,22 +1138,22 @@ export default {
 }
 
 .stat-number {
-	font-size: 18px;
+	font-size: 19px;
 	font-weight: 500;
 	color: #51371f;
-	margin-bottom: 3px;
+	margin-bottom: 4px;
 	text-shadow: none;
 }
 
 .stat-label {
-	font-size: 11px;
+	font-size: 12px;
 	color: rgba(81, 55, 31, 0.68);
 }
 
 .tab-bar {
 	display: flex;
 	align-items: center;
-	background: #f8f9fa;
+	background: #fefefe;
 	border-bottom: none;
 	position: sticky;
 	top: 0;
@@ -811,14 +1168,18 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 5px;
 	transition: all 0.24s;
 	color: #666;
 	box-sizing: border-box;
-	background: #f8f9fa;
+	background: #fefefe;
 }
 
 .tab-item.active {
+	color: #8a5a2b;
+}
+
+.works-tab .tab-icon {
 	color: #8a5a2b;
 }
 
@@ -827,12 +1188,12 @@ export default {
 }
 
 .tab-icon {
-	font-size: 15px;
+	font-size: 17px;
 	line-height: 1;
 }
 
 .tab-text {
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 400;
 	line-height: 1;
 }
@@ -864,26 +1225,28 @@ export default {
 
 .content-container {
 	box-sizing: border-box;
-	background: #f8f9fa;
+	background: #fefefe;
 }
 
 .creation-grid {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 6px;
+	grid-template-columns: repeat(2, 1fr);
+	column-gap: 6px;
+	row-gap: 10px;
 }
 
 .creation-card {
-	background: #fff;
-	border-radius: 8px;
+	background: #ffffff;
+	border-radius: 10px;
 	overflow: hidden;
-	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.045);
+	box-shadow: 0 1px 7px rgba(0, 0, 0, 0.06);
 	box-sizing: border-box;
+	transition: all 0.24s;
 }
 
 .creation-card:active {
 	transform: translateY(-1px);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
 }
 
 .image-wrapper {
@@ -903,22 +1266,24 @@ export default {
 }
 
 .card-content {
-	padding: 4px 5px 4px;
+	padding: 7px 8px 6px;
 	box-sizing: border-box;
 	overflow: hidden;
-	background: #fff;
+	background: #ffffff;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
 }
 
 .card-title-container {
-	height: 16px;
-	margin-bottom: 2px;
+	min-height: 22px;
 }
 
 .card-title {
-	font-size: 10px;
+	font-size: 15px;
 	font-weight: 500;
-	color: #333;
-	line-height: 16px;
+	color: #333333;
+	line-height: 22px;
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
@@ -929,20 +1294,21 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 16px;
+	height: 31px;
+	margin-top: 5px;
 }
 
 .card-author {
 	display: flex;
 	align-items: center;
-	gap: 3px;
+	gap: 6px;
 	flex: 1;
 	min-width: 0;
 }
 
 .author-avatar {
-	width: 14px;
-	height: 14px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	border: 1px solid #f0f0f0;
 	object-fit: cover;
@@ -950,8 +1316,9 @@ export default {
 }
 
 .author-name {
-	font-size: 9px;
-	color: #555;
+	font-size: 14px;
+	font-weight: 400;
+	color: #666666;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -960,26 +1327,27 @@ export default {
 .card-likes {
 	display: flex;
 	align-items: center;
-	gap: 2px;
+	gap: 4px;
 	flex-shrink: 0;
-	padding-left: 3px;
+	padding-left: 6px;
 }
 
 .like-icon {
-	font-size: 11px;
+	font-size: 18px;
 	line-height: 1;
-	color: #ff4d67;
+	color: #b8b8b8;
 	transition: transform 0.15s ease;
 }
 
 .like-icon.active {
-	transform: scale(1.1);
+	transform: scale(1.08);
 	color: #ff4d67;
 }
 
 .like-count {
-	font-size: 9px;
-	color: #999;
+	font-size: 14px;
+	font-weight: 400;
+	color: #888888;
 }
 
 .empty-state {
@@ -1023,10 +1391,22 @@ export default {
 .loading-spinner {
 	width: 20px;
 	height: 20px;
-	border: 2px solid #f3f3f3;
+	border: 2px solid rgba(216, 162, 93, 0.22);
 	border-top-color: #d8a25d;
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
+}
+
+.loading-spinner.small {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+}
+
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
 }
 
 @keyframes spin {

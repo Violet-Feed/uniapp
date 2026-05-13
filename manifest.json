@@ -11,10 +11,9 @@
         "nvueStyleCompiler" : "uni-app",
         "compilerVersion" : 3,
         "splashscreen" : {
-            "alwaysShowBeforeRender" : true,
-            "waiting" : true,
-            "autoclose" : true,
-            "delay" : 0
+            "alwaysShowBeforeRender" : false,
+            "waiting" : false,
+            "autoclose" : false
         },
         /* 模块配置 */
         "modules" : {
@@ -96,11 +95,11 @@
             "splashscreen" : {
                 "androidStyle" : "default",
                 "android" : {
-                    "hdpi" : "D:/H/Downloads/start.png",
-                    "xhdpi" : "D:/H/Downloads/start.png",
-                    "xxhdpi" : "D:/H/Downloads/start.png"
+                    "hdpi" : "unpackage/res/start/480x762.png",
+                    "xhdpi" : "unpackage/res/start/720x1242.png",
+                    "xxhdpi" : "unpackage/res/start/1080x1882.png"
                 },
-                "iosStyle" : "common"
+                "iosStyle" : "default"
             }
         }
     },

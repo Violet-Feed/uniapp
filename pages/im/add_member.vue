@@ -23,7 +23,28 @@
 			</view>
 		</view>
 
-		<view class="page-body" :style="pageBodyStyle">
+		<view
+			v-if="pullDistance > 0 || isRefreshing"
+			class="refresh-overlay"
+			:style="refreshOverlayStyle"
+		>
+			<view class="loading-spinner tiny" v-if="isRefreshing"></view>
+			<text class="refresh-overlay-text">{{ refresherText }}</text>
+		</view>
+
+		<scroll-view
+			class="content-scroll"
+			scroll-y
+			:lower-threshold="120"
+			@scroll="onContentScroll"
+			@scrolltolower="loadMore"
+			@touchstart="onScrollTouchStart"
+			@touchmove="onScrollTouchMove"
+			@touchend="onScrollTouchEnd"
+			@touchcancel="onScrollTouchEnd"
+		>
+			<view class="scroll-content" :style="scrollContentStyle">
+				<view class="page-body" :style="pageBodyStyle">
 			<view class="state-box" v-if="loading && users.length === 0">
 				<text class="state-text" :style="stateTextStyle">加载中...</text>
 			</view>
@@ -59,13 +80,10 @@
 					</view>
 				</view>
 
-				<view class="bottom-status">
-					<text class="bottom-text" :style="stateTextStyle" v-if="loadingMore">正在加载更多...</text>
-					<text class="bottom-text" :style="stateTextStyle" v-else-if="finished">没有更多了</text>
-					<text class="bottom-text" :style="stateTextStyle" v-else>上拉加载更多</text>
-				</view>
 			</view>
 		</view>
+			</view>
+		</scroll-view>
 	</view>
 </template>
 
@@ -73,6 +91,11 @@
 import DB from '@/utils/sqlite.js';
 import { getFriendList } from '@/request/action.js';
 import { addConversationMembers } from '@/request/im.js';
+
+const PULL_TRIGGER_DISTANCE = 64;
+const PULL_MAX_DISTANCE = 92;
+const PULL_MOVE_RATIO = 0.62;
+const REFRESH_HOLD_OFFSET = 42;
 
 const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value));
@@ -87,6 +110,11 @@ export default {
 			users: [],
 			page: 1,
 			loading: false,
+			isRefreshing: false,
+			scrollTop: 0,
+			pulling: false,
+			pullStartY: 0,
+			pullDistance: 0,
 			loadingMore: false,
 			finished: false,
 			submitting: false,
@@ -179,7 +207,51 @@ export default {
 
 		stateTextStyle() {
 			return 'font-size:' + this.stateFontSize + 'px;';
+		},
+
+		pullVisualOffset() {
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET;
+
+			return Math.min(
+				REFRESH_HOLD_OFFSET,
+				Math.round(this.pullDistance * PULL_MOVE_RATIO)
+			);
+		},
+
+		scrollContentStyle() {
+			const transition = this.pulling
+				? 'none'
+				: 'transform 0.16s ease';
+
+			return [
+				'transform: translateY(' + this.pullVisualOffset + 'px)',
+				'transition:' + transition
+			].join(';');
+		},
+
+		refreshOverlayStyle() {
+			const top = this.headerHeight;
+			const height = this.isRefreshing
+				? 34
+				: Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)));
+			const opacity = this.isRefreshing
+				? 1
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE);
+
+			return [
+				'top:' + top + 'px',
+				'height:' + height + 'px',
+				'opacity:' + opacity
+			].join(';');
+		},
+
+		refresherText() {
+			if (this.isRefreshing) return '正在刷新...';
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新';
+			if (this.pullDistance > 0) return '下拉刷新';
+			return '';
 		}
+
 	},
 
 	async onLoad(option) {
@@ -210,15 +282,81 @@ export default {
 		this.initResponsiveLayout();
 	},
 
-	onPullDownRefresh() {
-		this.refreshList();
-	},
 
-	onReachBottom() {
-		this.loadMore();
-	},
 
 	methods: {
+
+		onContentScroll(e) {
+			this.scrollTop = Number(e && e.detail ? e.detail.scrollTop || 0 : 0);
+		},
+
+		getTouchY(e) {
+			const touch = (e && e.touches && e.touches[0]) || (e && e.changedTouches && e.changedTouches[0]) || {};
+			return Number(touch.clientY !== undefined ? touch.clientY : (touch.pageY || 0));
+		},
+
+		onScrollTouchStart(e) {
+			if (this.loading || this.loadingMore || this.isRefreshing) return;
+
+			this.pullStartY = this.getTouchY(e);
+			this.pulling = this.scrollTop <= 2;
+			this.pullDistance = 0;
+		},
+
+		onScrollTouchMove(e) {
+			if (!this.pulling || this.loading || this.loadingMore || this.isRefreshing) return;
+
+			if (this.scrollTop > 2) {
+				this.pulling = false;
+				this.pullDistance = 0;
+				return;
+			}
+
+			const currentY = this.getTouchY(e);
+			const deltaY = currentY - this.pullStartY;
+
+			if (deltaY <= 0) {
+				this.pullDistance = 0;
+				return;
+			}
+
+			this.pullDistance = Math.min(
+				PULL_MAX_DISTANCE,
+				Math.floor(deltaY * 0.38)
+			);
+		},
+
+		async onScrollTouchEnd() {
+			if (!this.pulling) return;
+
+			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE;
+			this.pulling = false;
+
+			if (!shouldRefresh) {
+				this.pullDistance = 0;
+				return;
+			}
+
+			await this.onRefresh();
+		},
+
+		async onRefresh() {
+			if (this.loading || this.loadingMore || this.isRefreshing) {
+				this.pullDistance = 0;
+				return;
+			}
+
+			this.isRefreshing = true;
+			this.pullDistance = PULL_TRIGGER_DISTANCE;
+
+			try {
+				await this.refreshList();
+			} finally {
+				this.isRefreshing = false;
+				this.pullDistance = 0;
+			}
+		},
+
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync();
@@ -460,18 +598,79 @@ export default {
 
 <style>
 @import "@/static/icon/iconfont.css";
+
+.content-scroll {
+	flex: 1;
+	overflow: hidden;
+	background: #f7f8fa;
+	box-sizing: border-box;
+}
+
+.scroll-content {
+	min-height: 100%;
+	will-change: transform;
+}
+
+.refresh-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	background: #f7f8fa;
+	overflow: hidden;
+	box-sizing: border-box;
+	pointer-events: none;
+	transition: height 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: #999999;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.loading-spinner {
+	width: 34px;
+	height: 34px;
+	border: 3px solid rgba(216, 162, 93, 0.22);
+	border-top-color: #d8a25d;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 </style>
 
 <style scoped>
 .member-page {
-	min-height: 100vh;
+	height: 100vh;
 	background: #f7f8fa;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
 	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 	box-sizing: border-box;
 }
 
 .nav-bar {
 	width: 100%;
+	flex-shrink: 0;
 	background: #ffffff;
 	box-sizing: border-box;
 	overflow: hidden;
@@ -599,16 +798,66 @@ export default {
 }
 
 .state-box,
-.bottom-status {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 40rpx 0;
-}
 
-.state-text,
-.bottom-text {
+.state-text {
 	color: #98a2b3;
 	font-weight: 400;
 }
+
+.content-scroll {
+	flex: 1;
+	overflow: hidden;
+	background: #f7f8fa;
+	box-sizing: border-box;
+}
+
+.scroll-content {
+	min-height: 100%;
+	will-change: transform;
+}
+
+.refresh-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	background: #f7f8fa;
+	overflow: hidden;
+	box-sizing: border-box;
+	pointer-events: none;
+	transition: height 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: #999999;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.loading-spinner {
+	width: 34px;
+	height: 34px;
+	border: 3px solid rgba(216, 162, 93, 0.22);
+	border-top-color: #d8a25d;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 </style>

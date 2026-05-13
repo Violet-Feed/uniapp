@@ -58,7 +58,7 @@
 						placeholder-class="input-placeholder"
 						maxlength="50"
 						confirm-type="done"
-						:adjust-position="true"
+						:adjust-position="false"
 						cursor-spacing="20"
 					/>
 				</view>
@@ -74,7 +74,7 @@
 						placeholder-class="input-placeholder"
 						maxlength="300"
 						:auto-height="false"
-						:adjust-position="true"
+						:adjust-position="false"
 						cursor-spacing="20"
 					/>
 				</view>
@@ -90,7 +90,7 @@
 						placeholder-class="input-placeholder"
 						maxlength="1000"
 						:auto-height="false"
-						:adjust-position="true"
+						:adjust-position="false"
 						cursor-spacing="20"
 					/>
 				</view>
@@ -124,7 +124,7 @@ export default {
 		return {
 			submitting: false,
 			uploadingAvatar: false,
-			defaultAvatar: '/static/ai.png',
+			defaultAvatar: '/static/ai_avatar.png',
 			avatarCropper: {
 				visible: false,
 				src: ''
@@ -141,9 +141,9 @@ export default {
 			statusBarHeight: 0,
 			safeBottom: 0,
 
-			navContentHeight: 46,
+			navContentHeight: 38,
 			navSideWidth: 86,
-			titleFontSize: 16,
+			titleFontSize: 17,
 			backIconSize: 20,
 			buttonHeight: 32,
 			buttonWidth: 64,
@@ -323,9 +323,9 @@ export default {
 				this.statusBarHeight = statusBarHeight;
 				this.safeBottom = safeBottom;
 
-				this.navContentHeight = clamp(Math.floor(width * 0.122), 44, 50);
+				this.navContentHeight = 38;
 				this.navSideWidth = clamp(Math.floor(width * 0.23), 78, 94);
-				this.titleFontSize = clamp(Math.floor(width * 0.043), 15, 17);
+				this.titleFontSize = clamp(Math.floor(this.navContentHeight * 0.44) + (width <= 360 ? 1 : 0), 16, 18);
 				this.backIconSize = clamp(Math.floor(width * 0.054), 19, 22);
 
 				this.buttonHeight = clamp(Math.floor(width * 0.086), 30, 34);

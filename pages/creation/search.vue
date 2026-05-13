@@ -1,9 +1,11 @@
 <template>
 	<view class="container" v-if="isPageAlive">
+		<page-meta page-style="overflow: hidden;" />
+
 		<!-- 顶部固定安全栏：遮住状态栏 / 刘海区域 -->
 		<view class="safe-status-bar" :style="safeStatusBarStyle"></view>
 
-		<!-- 搜索栏 -->
+		<!-- 搜索栏：固定不动 -->
 		<view class="search-wrapper" :style="searchWrapperStyle">
 			<view class="fixed-search-bar" :style="fixedSearchBarStyle">
 				<view class="back-button" :style="backButtonStyle" @click="goBack">
@@ -20,6 +22,10 @@
 						placeholder="搜索创作或用户"
 						:focus="autoFocus"
 						confirm-type="search"
+						:adjust-position="false"
+						cursor-spacing="12"
+						@focus="handleSearchFocus"
+						@blur="handleSearchBlur"
 						@confirm="onSearchConfirm"
 					/>
 
@@ -32,7 +38,7 @@
 			</view>
 		</view>
 
-		<!-- 筛选栏：创作 / 好友 -->
+		<!-- 筛选栏：固定不动 -->
 		<view class="filter-bar" :style="filterBarStyle">
 			<view
 				class="filter-item"
@@ -53,136 +59,163 @@
 			</view>
 		</view>
 
-		<!-- 内容区域 -->
-		<view class="content-container" :style="contentContainerStyle">
-			<!-- 创作搜索结果 -->
-			<view v-if="activeFilter === 'creation'">
-				<view v-if="creationLoading && creationList.length === 0" class="initial-loading">
-					<view class="loading-spinner"></view>
-					<text class="loading-text">搜索中...</text>
-				</view>
+		<!-- 自定义悬浮刷新提示，不占用列表空间 -->
+		<view
+			v-if="pullDistance > 0 || isRefreshing"
+			class="refresh-overlay"
+			:style="refreshOverlayStyle"
+		>
+			<view class="loading-spinner tiny" v-if="isRefreshing"></view>
+			<text class="refresh-overlay-text">{{ refresherText }}</text>
+		</view>
 
-				<view v-else-if="creationList.length > 0" class="creation-grid">
-					<view
-						v-for="(creation, index) in creationList"
-						:key="'creation-' + creation.creation_id + '-' + index"
-						class="creation-card"
-						:style="cardStyle"
-						@click="goToCreationDetail(creation)"
-					>
-						<view class="image-wrapper" :style="imageWrapperStyle">
-							<image
-								class="card-image"
-								:src="creation.cover"
-								mode="aspectFill"
-								lazy-load
-								@error="handleCreationImageError(creation)"
-							></image>
-
-							<view v-if="Number(creation.material_type) === 2" class="video-badge">
-								<text class="video-badge-icon">▶</text>
-							</view>
+		<!-- 内容滚动区：只让 scroll-view 滚动，不让页面本身滚动 -->
+		<scroll-view
+			class="result-scroll"
+			scroll-y
+			:lower-threshold="120"
+			@scroll="onResultScroll"
+			@touchstart="onScrollTouchStart"
+			@touchmove="onScrollTouchMove"
+			@touchend="onScrollTouchEnd"
+			@touchcancel="onScrollTouchEnd"
+			@scrolltolower="loadMoreCurrent"
+		>
+			<view class="scroll-content" :style="scrollContentStyle">
+				<view class="content-container" :style="contentContainerStyle">
+					<!-- 创作搜索结果 -->
+					<view v-if="activeFilter === 'creation'">
+						<view v-if="creationLoading && creationList.length === 0" class="initial-loading">
+							<view class="loading-spinner"></view>
+							<text class="loading-text">搜索中...</text>
 						</view>
 
-						<view class="card-content" :style="cardContentStyle">
-							<view class="card-title-container">
-								<text class="card-title">{{ creation.title }}</text>
-							</view>
-
-							<view class="card-footer">
-								<view class="card-author">
+						<view v-else-if="creationList.length > 0" class="creation-grid">
+							<view
+								v-for="(creation, index) in creationList"
+								:key="'creation-' + creation.creation_id + '-' + index"
+								class="creation-card"
+								:style="cardStyle"
+								@click="goToCreationDetail(creation)"
+							>
+								<view class="image-wrapper" :style="imageWrapperStyle">
 									<image
-										class="author-avatar"
-										:src="creation.avatar"
+										class="card-image"
+										:src="creation.cover"
 										mode="aspectFill"
 										lazy-load
+										@error="handleCreationImageError(creation)"
 									></image>
-									<text class="author-name">{{ creation.username }}</text>
+
+									<view v-if="Number(creation.material_type) === 2" class="video-badge">
+										<text class="video-badge-icon">▶</text>
+									</view>
 								</view>
 
-								<view class="card-likes" @click.stop="toggleDigg(creation, index)">
-									<text
-										class="iconfont like-icon"
-										:class="creation.is_digg ? 'icon-xihuan liked' : 'icon-xihuan1'"
-									></text>
-									<text class="like-count">{{ formatNumber(creation.digg_count) }}</text>
+								<view class="card-content" :style="cardContentStyle">
+									<view class="card-title-container">
+										<text class="card-title">{{ creation.title }}</text>
+									</view>
+
+									<view class="card-footer">
+										<view class="card-author">
+											<image
+												class="author-avatar"
+												:src="creation.avatar"
+												mode="aspectFill"
+												lazy-load
+											></image>
+											<text class="author-name">{{ creation.username }}</text>
+										</view>
+
+										<view class="card-likes" @click.stop="toggleDigg(creation, index)">
+											<text
+												class="iconfont like-icon"
+												:class="creation.is_digg ? 'icon-xihuan liked' : 'icon-xihuan1'"
+											></text>
+											<text class="like-count">{{ formatNumber(creation.digg_count) }}</text>
+										</view>
+									</view>
 								</view>
 							</view>
 						</view>
-					</view>
-				</view>
 
-				<view v-else class="empty-state">
-					<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
-					<text class="empty-text">没有找到相关创作</text>
-					<text class="empty-hint">试试其他关键词吧</text>
-				</view>
+						<view v-else-if="!creationLoading" class="empty-state">
+							<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
+							<text class="empty-text">没有找到相关创作</text>
+							<text class="empty-hint">试试其他关键词吧</text>
+						</view>
 
-				<view v-if="creationLoadingMore && creationList.length > 0" class="loading-more">
-					<view class="loading-spinner small"></view>
-					<text class="loading-more-text">正在加载更多...</text>
-				</view>
-			</view>
+						<view v-if="creationLoadingMore && creationList.length > 0" class="load-more-state">加载中...</view>
 
-			<!-- 用户搜索结果 -->
-			<view v-else>
-				<view v-if="userLoading && userList.length === 0" class="initial-loading">
-					<view class="loading-spinner"></view>
-					<text class="loading-text">搜索中...</text>
-				</view>
-
-				<scroll-view
-					v-else
-					class="user-list-scroll"
-					:style="userListScrollStyle"
-					scroll-y
-					refresher-enabled
-					:refresher-triggered="userRefreshing"
-					@scrolltolower="loadMoreUsers"
-					@refresherrefresh="onUserRefresh"
-				>
-					<view v-if="userList.length > 0" class="user-list">
 						<view
-							v-for="(user, index) in userList"
-							:key="'user-' + user.user_id + '-' + index"
-							class="user-item"
-							:style="userItemStyle"
+							v-else-if="!creationHasMore && creationList.length > 0"
+							class="load-more-state"
 						>
-							<view class="user-left" @click="goToUserPage(user)">
-								<image
-									class="avatar"
-									:style="userAvatarStyle"
-									:src="user.avatar"
-									mode="aspectFill"
-								></image>
-
-								<view class="user-info">
-									<text class="user-name">{{ user.username }}</text>
-									<text class="user-fans">粉丝：{{ formatFans(user.follower_count) }}</text>
-								</view>
-							</view>
-
-							<view v-if="!isSelf(user)" class="user-right">
-								<view :class="followBtnClass(user)" @click.stop="onFollowBtnClick(user)">
-									<text class="btn-text">{{ followBtnText(user) }}</text>
-								</view>
-							</view>
+							没有更多了
 						</view>
 					</view>
 
-					<view v-else class="empty-state">
-						<text class="iconfont icon-qunliaox empty-icon"></text>
-						<text class="empty-text">没有找到相关用户</text>
-						<text class="empty-hint">试试换个昵称或关键词</text>
-					</view>
+					<!-- 用户搜索结果 -->
+					<view v-else>
+						<view v-if="userLoading && userList.length === 0" class="initial-loading">
+							<view class="loading-spinner"></view>
+							<text class="loading-text">搜索中...</text>
+						</view>
 
-					<view v-if="userLoadingMore" class="loading-state">
-						<view class="loading-spinner small"></view>
-						<text class="loading-text">加载中...</text>
+						<view v-else-if="userList.length > 0" class="user-list">
+							<view
+								v-for="(user, index) in userList"
+								:key="'user-' + user.user_id + '-' + index"
+								class="user-item"
+								:style="userItemStyle"
+							>
+								<view class="user-left" @click="goToUserPage(user)">
+									<image
+										class="avatar"
+										:style="userAvatarStyle"
+										:src="user.avatar"
+										mode="aspectFill"
+									></image>
+
+									<view class="user-info">
+										<text class="user-name">{{ user.username }}</text>
+										<text class="user-fans">粉丝：{{ formatFans(user.follower_count) }}</text>
+									</view>
+								</view>
+
+								<view v-if="!isSelf(user)" class="user-right">
+									<view :class="followBtnClass(user)" @click.stop="onFollowBtnClick(user)">
+										<text class="btn-text">{{ followBtnText(user) }}</text>
+									</view>
+								</view>
+							</view>
+						</view>
+
+						<view v-else-if="!userLoading" class="empty-state">
+							<text class="iconfont icon-qunliaox empty-icon"></text>
+							<text class="empty-text">没有找到相关用户</text>
+							<text class="empty-hint">试试换个昵称或关键词</text>
+						</view>
+
+						<view v-if="userLoadingMore && userList.length > 0" class="load-more-state">加载中...</view>
+
+						<view
+							v-else-if="!userHasMore && userList.length > 0"
+							class="load-more-state"
+						>
+							没有更多了
+						</view>
 					</view>
-				</scroll-view>
+				</view>
+
+				<view
+					v-if="activeFilter === 'creation' ? creationList.length > 0 : userList.length > 0"
+					class="bottom-spacer"
+					:style="bottomSpacerStyle"
+				></view>
 			</view>
-		</view>
+		</scroll-view>
 	</view>
 </template>
 
@@ -193,13 +226,11 @@ import { follow, unfollow, digg, cancelDigg } from '@/request/action.js'
 
 const GRID_PADDING_X = 6
 const GRID_GAP = 6
-const CONTENT_BOTTOM_PADDING = 10
+const CONTENT_BOTTOM_PADDING = 8
 
-const CARD_ASPECT_WIDTH = 3
-const CARD_ASPECT_HEIGHT = 4
-const CARD_CONTENT_RATIO = 0.26
-const MIN_CARD_CONTENT_HEIGHT = 42
-const MAX_CARD_CONTENT_HEIGHT = 50
+// 创作卡片样式同步首页：高:宽 = 7:5，封面 1:1
+const CARD_ASPECT_WIDTH = 5
+const CARD_ASPECT_HEIGHT = 7
 
 const SEARCH_INPUT_HEIGHT_MIN = 36
 const SEARCH_INPUT_HEIGHT_MAX = 40
@@ -212,6 +243,11 @@ const FILTER_BAR_HEIGHT_MAX = 42
 const USER_ITEM_HEIGHT_MIN = 56
 const USER_ITEM_HEIGHT_MAX = 66
 
+const PULL_TRIGGER_DISTANCE = 64
+const PULL_MAX_DISTANCE = 92
+const PULL_MOVE_RATIO = 0.62
+const REFRESH_HOLD_OFFSET = 42
+
 const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value))
 }
@@ -223,6 +259,14 @@ export default {
 			autoFocus: false,
 			activeFilter: 'creation',
 			isPageAlive: true,
+
+			searchFocused: false,
+			isRefreshing: false,
+
+			scrollTop: 0,
+			pulling: false,
+			pullStartY: 0,
+			pullDistance: 0,
 
 			statusBarHeight: 0,
 			windowWidth: 375,
@@ -243,20 +287,19 @@ export default {
 
 			userList: [],
 			userPage: 1,
+			userPageSize: 20,
 			userHasMore: true,
 			userLoading: false,
 			userLoadingMore: false,
-			userRefreshing: false,
 
 			defaultImage: '/static/images/default.png',
 			defaultAvatar: '/static/user_avatar.png',
 
 			cardWidth: 176,
-			cardHeight: 235,
-			imageHeight: 189,
-			cardContentHeight: 46,
+			cardHeight: 246,
+			imageHeight: 176,
+			cardContentHeight: 70,
 
-			userListHeight: 500,
 			userItemHeight: 60,
 			userAvatarSize: 42
 		}
@@ -311,7 +354,7 @@ export default {
 				'padding-top:' + (this.statusBarHeight + this.searchAreaHeight + this.filterBarHeight + 6) + 'px;' +
 				'padding-left:' + GRID_PADDING_X + 'px;' +
 				'padding-right:' + GRID_PADDING_X + 'px;' +
-				'padding-bottom:' + (CONTENT_BOTTOM_PADDING + this.safeBottom) + 'px;'
+				'padding-bottom:' + CONTENT_BOTTOM_PADDING + 'px;'
 			)
 		},
 
@@ -327,10 +370,6 @@ export default {
 			return 'height:' + this.cardContentHeight + 'px;'
 		},
 
-		userListScrollStyle() {
-			return 'height:' + this.userListHeight + 'px;'
-		},
-
 		userItemStyle() {
 			return 'height:' + this.userItemHeight + 'px;'
 		},
@@ -342,6 +381,56 @@ export default {
 				'height:' + this.userAvatarSize + 'px;' +
 				'border-radius:' + radius + 'px;'
 			)
+		},
+
+		pullVisualOffset() {
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+
+			return Math.min(
+				REFRESH_HOLD_OFFSET,
+				Math.round(this.pullDistance * PULL_MOVE_RATIO)
+			)
+		},
+
+		scrollContentStyle() {
+			const transition = this.pulling
+				? 'none'
+				: 'transform 0.16s ease'
+
+			return [
+				'transform: translateY(' + this.pullVisualOffset + 'px)',
+				'transition:' + transition
+			].join(';')
+		},
+
+		refreshOverlayStyle() {
+			const top = this.statusBarHeight + this.searchAreaHeight + this.filterBarHeight
+
+			const height = this.isRefreshing
+				? 34
+				: Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)))
+
+			const opacity = this.isRefreshing
+				? 1
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+
+			return [
+				'top:' + top + 'px',
+				'height:' + height + 'px',
+				'opacity:' + opacity
+			].join(';')
+		},
+
+		refresherText() {
+			if (this.isRefreshing) return '正在刷新...'
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
+			if (this.pullDistance > 0) return '下拉刷新'
+			return ''
+		},
+
+		bottomSpacerStyle() {
+			const height = this.safeBottom + 4
+			return 'height:' + height + 'px;'
 		}
 	},
 
@@ -359,32 +448,6 @@ export default {
 
 	onShow() {
 		this.initResponsiveLayout()
-	},
-
-	onReachBottom() {
-		if (!this.isPageAlive) return
-
-		if (this.activeFilter === 'creation') {
-			this.loadMoreCreations()
-		}
-	},
-
-	onPullDownRefresh() {
-		if (!this.isPageAlive) {
-			uni.stopPullDownRefresh()
-			return
-		}
-
-		let task = null
-		if (this.activeFilter === 'creation') {
-			task = this.searchCreations(true)
-		} else if (this.activeFilter === 'user') {
-			task = this.searchUsers(true)
-		}
-
-		Promise.resolve(task).finally(() => {
-			uni.stopPullDownRefresh()
-		})
 	},
 
 	onUnload() {
@@ -428,17 +491,15 @@ export default {
 				const totalPadding = GRID_PADDING_X * 2
 				const availableWidth = windowWidth - totalPadding - GRID_GAP
 				const cardWidth = Math.floor(availableWidth / 2)
+
 				const cardHeight = Math.floor(cardWidth * CARD_ASPECT_HEIGHT / CARD_ASPECT_WIDTH)
-				const contentHeight = Math.floor(cardWidth * CARD_CONTENT_RATIO)
+				const imageHeight = cardWidth
+				const contentHeight = Math.max(0, cardHeight - imageHeight)
 
 				this.cardWidth = cardWidth
 				this.cardHeight = cardHeight
-				this.cardContentHeight = clamp(
-					contentHeight,
-					MIN_CARD_CONTENT_HEIGHT,
-					MAX_CARD_CONTENT_HEIGHT
-				)
-				this.imageHeight = Math.max(0, this.cardHeight - this.cardContentHeight)
+				this.imageHeight = imageHeight
+				this.cardContentHeight = contentHeight
 
 				this.userItemHeight = clamp(
 					Math.floor(windowWidth * 0.16),
@@ -450,17 +511,6 @@ export default {
 					Math.floor(this.userItemHeight * 0.68),
 					38,
 					46
-				)
-
-				this.userListHeight = Math.max(
-					320,
-					windowHeight -
-						statusBarHeight -
-						this.searchAreaHeight -
-						this.filterBarHeight -
-						CONTENT_BOTTOM_PADDING -
-						this.safeBottom -
-						6
 				)
 			} catch (err) {
 				this.statusBarHeight = 0
@@ -474,14 +524,122 @@ export default {
 				this.filterBarHeight = 38
 
 				this.cardWidth = 176
-				this.cardHeight = 235
-				this.cardContentHeight = 46
-				this.imageHeight = 189
+				this.cardHeight = 246
+				this.imageHeight = 176
+				this.cardContentHeight = 70
 
-				this.userListHeight = 500
 				this.userItemHeight = 60
 				this.userAvatarSize = 42
 			}
+		},
+
+		handleSearchFocus() {
+			this.searchFocused = true
+			this.pulling = false
+			this.pullDistance = 0
+		},
+
+		handleSearchBlur() {
+			this.searchFocused = false
+		},
+
+		onResultScroll(e) {
+			this.scrollTop = Number(e?.detail?.scrollTop || 0)
+		},
+
+		getTouchY(e) {
+			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
+			return Number(touch.clientY ?? touch.pageY ?? 0)
+		},
+
+		onScrollTouchStart(e) {
+			if (this.creationLoading || this.creationLoadingMore || this.userLoading || this.userLoadingMore || this.isRefreshing) {
+				return
+			}
+
+			if (this.searchFocused) {
+				this.searchFocused = false
+
+				try {
+					uni.hideKeyboard()
+				} catch (err) {}
+			}
+
+			this.pullStartY = this.getTouchY(e)
+			this.pulling = this.scrollTop <= 2
+			this.pullDistance = 0
+		},
+
+		onScrollTouchMove(e) {
+			if (!this.pulling || this.isRefreshing) return
+
+			if (this.scrollTop > 2) {
+				this.pulling = false
+				this.pullDistance = 0
+				return
+			}
+
+			const currentY = this.getTouchY(e)
+			const deltaY = currentY - this.pullStartY
+
+			if (deltaY <= 0) {
+				this.pullDistance = 0
+				return
+			}
+
+			this.pullDistance = Math.min(
+				PULL_MAX_DISTANCE,
+				Math.floor(deltaY * 0.38)
+			)
+		},
+
+		async onScrollTouchEnd() {
+			if (!this.pulling) return
+
+			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE
+
+			this.pulling = false
+
+			if (!shouldRefresh) {
+				this.pullDistance = 0
+				return
+			}
+
+			await this.refreshCurrent()
+		},
+
+		async refreshCurrent() {
+			if (this.isRefreshing) {
+				this.pullDistance = 0
+				return
+			}
+
+			const kw = this.keyword.trim()
+			if (!kw) {
+				this.pullDistance = 0
+				return
+			}
+
+			this.isRefreshing = true
+			this.pullDistance = PULL_TRIGGER_DISTANCE
+
+			if (this.activeFilter === 'creation') {
+				await this.searchCreations(true)
+			} else {
+				await this.searchUsers(true)
+			}
+
+			this.isRefreshing = false
+			this.pullDistance = 0
+		},
+
+		loadMoreCurrent() {
+			if (this.activeFilter === 'creation') {
+				this.loadMoreCreations()
+				return
+			}
+
+			this.loadMoreUsers()
 		},
 
 		goBack() {
@@ -514,6 +672,10 @@ export default {
 			if (this.activeFilter === type) return
 
 			this.activeFilter = type
+			this.scrollTop = 0
+			this.pullDistance = 0
+			this.pulling = false
+
 			const kw = this.keyword.trim()
 			if (!kw) return
 
@@ -557,6 +719,11 @@ export default {
 				this.creationHasMore = list.length >= this.creationPageSize
 			} catch (err) {
 				console.error('搜索创作失败:', err)
+
+				if (!reset && this.creationPage > 1) {
+					this.creationPage -= 1
+				}
+
 				uni.showToast({ title: '搜索失败', icon: 'none' })
 			} finally {
 				this.creationLoading = false
@@ -566,6 +733,7 @@ export default {
 
 		async loadMoreCreations() {
 			if (!this.creationHasMore || this.creationLoading || this.creationLoadingMore) return
+
 			this.creationPage += 1
 			await this.searchCreations(false)
 		},
@@ -600,7 +768,9 @@ export default {
 			const creationId = encodeURIComponent(creation.creation_id)
 			const userId = encodeURIComponent(creation.user_id || '')
 			const isVideo = Number(creation.material_type) === 2
-			const basePath = isVideo ? '/pages/creation/creation_video' : '/pages/creation/creation_image'
+			const basePath = isVideo
+				? '/pages/creation/creation_video'
+				: '/pages/creation/creation_image'
 
 			uni.navigateTo({
 				url: basePath + '?creationId=' + creationId + '&userId=' + userId
@@ -611,10 +781,12 @@ export default {
 			if (!creation || creation._digging) return
 
 			creation._digging = true
+
 			try {
 				if (creation.is_digg) {
 					await cancelDigg('creation', creation.creation_id)
 					this.creationList[index].is_digg = false
+
 					if (this.creationList[index].digg_count > 0) {
 						this.creationList[index].digg_count -= 1
 					}
@@ -664,6 +836,11 @@ export default {
 				this.userHasMore = list.length > 0
 			} catch (err) {
 				console.error('搜索用户失败:', err)
+
+				if (!reset && this.userPage > 1) {
+					this.userPage -= 1
+				}
+
 				uni.showToast({ title: '搜索失败', icon: 'none' })
 			} finally {
 				this.userLoading = false
@@ -684,14 +861,9 @@ export default {
 
 		async loadMoreUsers() {
 			if (!this.userHasMore || this.userLoading || this.userLoadingMore) return
+
 			this.userPage += 1
 			await this.searchUsers(false)
-		},
-
-		async onUserRefresh() {
-			this.userRefreshing = true
-			await this.searchUsers(true)
-			this.userRefreshing = false
 		},
 
 		isSelf(user) {
@@ -802,12 +974,18 @@ export default {
 
 <style scoped>
 .container {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
 	padding: 0;
 	margin: 0;
 	box-sizing: border-box;
 	background: #fefefe;
-	min-height: 100vh;
+	overflow: hidden;
 	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	overscroll-behavior-y: none;
 }
 
 .safe-status-bar {
@@ -815,17 +993,19 @@ export default {
 	top: 0;
 	left: 0;
 	right: 0;
-	z-index: 1000;
+	z-index: 3002;
 	background: #fefefe;
+	pointer-events: none;
 }
 
 .search-wrapper {
 	position: fixed;
 	left: 0;
 	right: 0;
-	z-index: 999;
+	z-index: 3001;
 	background: #fefefe;
 	box-shadow: none;
+	transform: translateZ(0);
 }
 
 .fixed-search-bar {
@@ -847,7 +1027,7 @@ export default {
 
 .back-icon {
 	font-size: 18px;
-	color: #333;
+	color: #333333;
 	line-height: 1;
 }
 
@@ -874,7 +1054,7 @@ export default {
 	height: 100%;
 	font-size: 14px;
 	font-weight: 400;
-	color: #333;
+	color: #333333;
 }
 
 .search-input-container input {
@@ -896,7 +1076,7 @@ export default {
 	align-items: center;
 	justify-content: center;
 	font-size: 10px;
-	color: #fff;
+	color: #ffffff;
 	flex-shrink: 0;
 }
 
@@ -928,7 +1108,7 @@ export default {
 	right: 0;
 	display: flex;
 	background: #fefefe;
-	z-index: 998;
+	z-index: 3000;
 	box-sizing: border-box;
 }
 
@@ -942,7 +1122,7 @@ export default {
 
 .filter-text {
 	font-size: 14px;
-	color: #666;
+	color: #666666;
 	font-weight: 400;
 }
 
@@ -960,6 +1140,46 @@ export default {
 	height: 3px;
 	background: rgba(253, 231, 209, 1);
 	border-radius: 2px 2px 0 0;
+}
+
+.refresh-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 2999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	background: #fefefe;
+	overflow: hidden;
+	box-sizing: border-box;
+	pointer-events: none;
+	transition: height 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: #999999;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.result-scroll {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1;
+	background: #fefefe;
+	box-sizing: border-box;
+	overflow: hidden;
+	overscroll-behavior-y: contain;
+}
+
+.scroll-content {
+	will-change: transform;
 }
 
 .content-container {
@@ -990,6 +1210,14 @@ export default {
 	border-width: 2px;
 }
 
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+	border-color: #f3f3f3;
+	border-top-color: #d8a25d;
+}
+
 @keyframes spin {
 	to {
 		transform: rotate(360deg);
@@ -1000,21 +1228,21 @@ export default {
 	margin-top: 14px;
 	font-size: 13px;
 	font-weight: 400;
-	color: #999;
+	color: #999999;
 }
 
 .creation-grid {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	column-gap: 6px;
-	row-gap: 8px;
+	row-gap: 10px;
 }
 
 .creation-card {
-	background: #fff;
-	border-radius: 8px;
+	background: #ffffff;
+	border-radius: 10px;
 	overflow: hidden;
-	box-shadow: 0 1px 6px rgba(0, 0, 0, 0.055);
+	box-shadow: 0 1px 7px rgba(0, 0, 0, 0.06);
 	transition: all 0.24s;
 }
 
@@ -1040,26 +1268,26 @@ export default {
 
 .video-badge {
 	position: absolute;
-	top: 6px;
-	right: 6px;
-	width: 20px;
-	height: 20px;
+	top: 7px;
+	right: 7px;
+	width: 24px;
+	height: 24px;
 	background: rgba(0, 0, 0, 0.42);
-	border-radius: 10px;
+	border-radius: 12px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 
 .video-badge-icon {
-	font-size: 11px;
+	font-size: 12px;
 	color: rgba(255, 255, 255, 0.94);
 	line-height: 1;
 	margin-left: 1px;
 }
 
 .card-content {
-	padding: 5px 6px 4px;
+	padding: 7px 8px 6px;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -1067,14 +1295,14 @@ export default {
 }
 
 .card-title-container {
-	height: 17px;
+	min-height: 22px;
 }
 
 .card-title {
-	font-size: 11px;
-	font-weight: 500;
-	color: #333;
-	line-height: 17px;
+	font-size: 15px;
+	font-weight: 400;
+	color: #333333;
+	line-height: 22px;
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
@@ -1085,20 +1313,21 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 18px;
+	height: 31px;
+	margin-top: 5px;
 }
 
 .card-author {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	flex: 1;
 	min-width: 0;
 }
 
 .author-avatar {
-	width: 16px;
-	height: 16px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	border: 1px solid #f0f0f0;
 	object-fit: cover;
@@ -1106,9 +1335,9 @@ export default {
 }
 
 .author-name {
-	font-size: 10px;
+	font-size: 14px;
 	font-weight: 400;
-	color: #666;
+	color: #666666;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1117,15 +1346,15 @@ export default {
 .card-likes {
 	display: flex;
 	align-items: center;
-	gap: 3px;
+	gap: 4px;
 	flex-shrink: 0;
-	padding-left: 4px;
+	padding-left: 6px;
 }
 
 .like-icon {
-	font-size: 12px;
+	font-size: 18px;
 	line-height: 1;
-	color: #ff4d67;
+	color: #b8b8b8;
 }
 
 .like-icon.liked {
@@ -1133,13 +1362,9 @@ export default {
 }
 
 .like-count {
-	font-size: 10px;
+	font-size: 14px;
 	font-weight: 400;
-	color: #999;
-}
-
-.user-list-scroll {
-	box-sizing: border-box;
+	color: #888888;
 }
 
 .user-list {
@@ -1185,7 +1410,7 @@ export default {
 .user-name {
 	font-size: 14px;
 	font-weight: 500;
-	color: #333;
+	color: #333333;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1194,7 +1419,7 @@ export default {
 .user-fans {
 	font-size: 11px;
 	font-weight: 400;
-	color: #888;
+	color: #888888;
 	line-height: 1.2;
 }
 
@@ -1230,7 +1455,7 @@ export default {
 }
 
 .following-btn .btn-text {
-	color: #666;
+	color: #666666;
 }
 
 .btn-text {
@@ -1255,29 +1480,30 @@ export default {
 .empty-text {
 	font-size: 16px;
 	font-weight: 500;
-	color: #666;
+	color: #666666;
 	margin-bottom: 8px;
 }
 
 .empty-hint {
 	font-size: 13px;
 	font-weight: 400;
-	color: #999;
+	color: #999999;
 	text-align: center;
 }
 
-.loading-more {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	padding: 18px 0;
+.load-more-state {
+	padding: 4px 0 0;
+	margin: 0;
+	text-align: center;
+	font-size: 11px;
+	line-height: 14px;
+	color: #999999;
+	font-weight: 400;
 }
 
-.loading-more-text {
-	font-size: 13px;
-	font-weight: 400;
-	color: #999;
+.bottom-spacer {
+	width: 100%;
+	flex-shrink: 0;
 }
 
 .loading-state {

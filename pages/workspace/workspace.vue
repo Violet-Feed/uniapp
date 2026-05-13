@@ -1,89 +1,124 @@
 <template>
-  <view class="container">
+  <view
+    class="container"
+    :style="containerStyle"
+    @touchmove.stop.prevent="noop"
+  >
+    <page-meta page-style="overflow: hidden;" />
+
     <view class="safe-status-bar" :style="safeStatusBarStyle"></view>
 
-    <view class="material-grid-container" :style="materialGridContainerStyle">
-      <view v-if="loading && materials.length === 0" class="initial-loading" :style="emptyStateStyle">
-        <text class="initial-loading-text">加载中...</text>
-      </view>
+    <view
+      v-if="pullDistance > 0 || isRefreshing"
+      class="refresh-overlay"
+      :style="refreshOverlayStyle"
+    >
+      <view class="loading-spinner tiny" v-if="isRefreshing"></view>
+      <text class="refresh-overlay-text">{{ refresherText }}</text>
+    </view>
 
-      <view class="material-grid" :style="materialGridStyle" v-else-if="materials.length > 0">
-        <view
-          class="material-card"
-          v-for="(material, index) in materials"
-          :key="'material-' + (material.material_id || index)"
-          :style="materialCardStyle"
-          @click="goToMaterialDetail(material)"
-          @longpress="showMaterialOptions(material, index)"
-        >
-          <view class="image-wrapper" :style="imageWrapperStyle">
-            <view
-              v-if="material.status === 1 || material.uiStatus === 'generating'"
-              class="card-generating"
-            >
-              <image
-                class="card-image blurred"
-                :src="material.cover_url || material.material_url || '/static/images/placeholder.png'"
-                mode="aspectFill"
-              ></image>
-              <view class="generating-overlay">
-                <view class="loading-spinner"></view>
-                <text class="generating-text">生成中...</text>
+    <scroll-view
+      class="material-scroll"
+      :style="materialScrollStyle"
+      scroll-y
+      :show-scrollbar="false"
+      :lower-threshold="120"
+      @scroll="onMaterialScroll"
+      @scrolltolower="handleScrollToLower"
+      @touchstart="onScrollTouchStart"
+      @touchmove.stop="onScrollTouchMove"
+      @touchend="onScrollTouchEnd"
+      @touchcancel="onScrollTouchEnd"
+    >
+      <view class="scroll-content" :style="scrollContentStyle">
+        <view class="material-grid-container" :style="materialGridContainerStyle">
+        <view v-if="loading && materials.length === 0" class="initial-loading" :style="emptyStateStyle">
+          <text class="initial-loading-text">加载中...</text>
+        </view>
+
+        <view class="material-grid" :style="materialGridStyle" v-else-if="materials.length > 0">
+          <view
+            class="material-card"
+            v-for="(material, index) in materials"
+            :key="'material-' + (material.material_id || index)"
+            :style="materialCardStyle"
+            @click="goToMaterialDetail(material)"
+            @touchstart="onMaterialTouchStart"
+            @touchmove="onMaterialTouchMove"
+            @touchend="onMaterialTouchEnd"
+            @touchcancel="onMaterialTouchEnd"
+            @longpress="showMaterialOptions(material, index)"
+          >
+            <view class="image-wrapper" :style="imageWrapperStyle">
+              <view
+                v-if="material.status === 1 || material.uiStatus === 'generating'"
+                class="card-generating"
+              >
+                <image
+                  class="card-image blurred"
+                  :src="material.cover_url || material.material_url || '/static/images/placeholder.png'"
+                  mode="aspectFill"
+                ></image>
+                <view class="generating-overlay">
+                  <view class="loading-spinner"></view>
+                  <text class="generating-text">生成中...</text>
+                </view>
               </view>
-            </view>
 
-            <view
-              v-else-if="material.status === 3 || material.uiStatus === 'failed'"
-              class="card-generating"
-            >
+              <view
+                v-else-if="material.status === 3 || material.uiStatus === 'failed'"
+                class="card-generating"
+              >
+                <image
+                  class="card-image"
+                  :src="material.cover_url || material.material_url || '/static/images/default.png'"
+                  mode="aspectFill"
+                  @error="handleImageError(material)"
+                ></image>
+                <view class="generating-overlay failed">
+                  <text class="failed-icon">⚠</text>
+                  <text class="generating-text">生成失败</text>
+                </view>
+              </view>
+
               <image
+                v-else
                 class="card-image"
                 :src="material.cover_url || material.material_url || '/static/images/default.png'"
                 mode="aspectFill"
                 @error="handleImageError(material)"
               ></image>
-              <view class="generating-overlay failed">
-                <text class="failed-icon">⚠</text>
-                <text class="generating-text">生成失败</text>
+            </view>
+
+            <view class="card-content" :style="cardContentStyle">
+              <view class="card-title-container">
+                <text class="card-title">
+                  {{ material.displayTitle || material.prompt || '未命名作品' }}
+                </text>
               </view>
-            </view>
 
-            <image
-              v-else
-              class="card-image"
-              :src="material.cover_url || material.material_url || '/static/images/default.png'"
-              mode="aspectFill"
-              @error="handleImageError(material)"
-            ></image>
-          </view>
-
-          <view class="card-content" :style="cardContentStyle">
-            <view class="card-title-container">
-              <text class="card-title">
-                {{ material.displayTitle || material.prompt || '未命名作品' }}
-              </text>
-            </view>
-
-            <view class="card-meta">
-              <text class="card-type-tag">
-                {{ Number(material.material_type) === 2 ? '视频' : '图片' }}
-              </text>
-              <text class="card-time">{{ material.displayTime }}</text>
+              <view class="card-meta">
+                <text class="card-type-tag">
+                  {{ Number(material.material_type) === 2 ? '视频' : '图片' }}
+                </text>
+                <text class="card-time">{{ material.displayTime }}</text>
+              </view>
             </view>
           </view>
         </view>
-      </view>
 
-      <view v-else class="empty-state" :style="emptyStateStyle">
-        <text class="iconfont icon-neirongchuangzuo empty-icon" :style="emptyIconStyle"></text>
-        <text class="empty-text">还没有创作，快来生成第一个作品吧！</text>
-      </view>
+        <view v-else class="empty-state" :style="emptyStateStyle">
+          <text class="iconfont icon-neirongchuangzuo empty-icon" :style="emptyIconStyle"></text>
+          <text class="empty-text">还没有素材，快来生成第一个作品吧！</text>
+        </view>
 
-      <view v-if="materials.length > 0" class="load-more-footer" :style="loadMoreFooterStyle">
-        <text v-if="isLoadingMore">加载中...</text>
-        <text v-else-if="!hasMore">没有更多了</text>
+          <view v-if="isLoadingMore" class="load-more-state">加载中...</view>
+          <view v-else-if="!hasMore && materials.length > 0" class="load-more-state">没有更多了</view>
+        </view>
+
+        <view v-if="materials.length > 0" class="bottom-spacer" :style="bottomSpacerStyle"></view>
       </view>
-    </view>
+    </scroll-view>
 
     <view
       v-if="materialAction.visible"
@@ -92,8 +127,19 @@
     >
       <view class="material-action-menu" @click.stop>
         <view
+          v-if="canReCreateAction"
           class="material-action-item"
-          :class="{ 'material-action-item-disabled': materialAction.deleting }"
+          :class="{ 'material-action-item-disabled': materialAction.reCreating || materialAction.deleting }"
+          @click="handleReCreateFromAction"
+        >
+          <text class="material-action-text">
+            {{ materialAction.reCreating ? '重新生成中...' : '重新生成' }}
+          </text>
+        </view>
+
+        <view
+          class="material-action-item"
+          :class="{ 'material-action-item-disabled': materialAction.deleting || materialAction.reCreating }"
           @click="handleDeleteFromAction"
         >
           <text class="material-action-text danger-action-text">
@@ -103,7 +149,7 @@
       </view>
     </view>
 
-    <view class="input-container" :style="inputContainerStyle">
+    <view class="input-container" :style="inputContainerStyle" @touchmove.stop.prevent="noop">
       <view class="input-inner" :style="inputInnerStyle">
         <view class="input-top" :style="inputTopStyle">
           <view class="type-selector">
@@ -144,8 +190,12 @@
             :style="promptInputStyle"
             v-model="prompt"
             placeholder="输入提示词，描述你想生成的内容..."
-            :adjust-position="true"
+            :adjust-position="false"
+            cursor-spacing="0"
             confirm-type="send"
+            @focus="handleInputFocus"
+            @blur="handleInputBlur"
+            @keyboardheightchange="handleKeyboardHeightChange"
             @confirm="handleGenerate"
           />
 
@@ -161,12 +211,15 @@
       </view>
     </view>
 
-    <custom-tabbar active-path="pages/workspace/workspace" />
+    <custom-tabbar
+      v-if="!keyboardVisible"
+      active-path="pages/workspace/workspace"
+    />
   </view>
 </template>
 
 <script>
-import { getMaterialByUser, createMaterial, deleteMaterial } from '@/request/creation.js'
+import { getMaterialByUser, createMaterial, deleteMaterial, reCreateMaterial } from '@/request/creation.js'
 import { uploadImage } from '@/request/common.js'
 
 const GRID_TOP_PADDING = 10
@@ -181,6 +234,16 @@ const MAX_INPUT_HEIGHT = 136
 const MIN_TABBAR_BASE_HEIGHT = 46
 const MAX_TABBAR_BASE_HEIGHT = 52
 
+const PULL_TRIGGER_DISTANCE = 64
+const PULL_MAX_DISTANCE = 92
+const PULL_MOVE_RATIO = 0.62
+const REFRESH_HOLD_OFFSET = 42
+
+// 底部“没有更多”到输入栏的呼吸间距。
+// 普通态保留 tabbar + 输入栏高度；键盘态只保留贴底输入栏高度。
+const LOAD_MORE_BOTTOM_GAP = 4
+const LOAD_MORE_KEYBOARD_BOTTOM_GAP = 2
+
 const clamp = (value, min, max) => {
   return Math.max(min, Math.min(max, value))
 }
@@ -190,6 +253,13 @@ export default {
     return {
       materials: [],
       loading: false,
+      refreshing: false,
+      isRefreshing: false,
+
+      scrollTop: 0,
+      pulling: false,
+      pullStartY: 0,
+      pullDistance: 0,
 
       page: 1,
       hasMore: true,
@@ -201,6 +271,11 @@ export default {
       generationType: 'image',
       generating: false,
 
+      inputFocused: false,
+      keyboardVisible: false,
+      keyboardHeight: 0,
+      inputBlurTimer: null,
+
       statusBarHeight: 0,
       safeBottom: 0,
       windowWidth: 375,
@@ -208,7 +283,6 @@ export default {
 
       gridSidePadding: 8,
       gridGap: 8,
-      gridBottomPadding: 144,
 
       cardWidth: 170,
       cardHeight: 227,
@@ -228,15 +302,24 @@ export default {
       tabbarBaseHeight: 50,
       tabbarTotalHeight: 50,
 
-      footerReserveHeight: 28,
+      footerReserveHeight: 26,
       emptyTopPadding: 128,
       emptyIconSize: 52,
+
+      materialTouch: {
+        startX: 0,
+        startY: 0,
+        moved: false
+      },
+      materialScrolling: false,
+      materialScrollTimer: null,
 
       materialAction: {
         visible: false,
         material: null,
         index: -1,
-        deleting: false
+        deleting: false,
+        reCreating: false
       },
       materialLongPressGuard: false
     }
@@ -247,10 +330,31 @@ export default {
       return this.prompt.trim().length > 0
     },
 
+    containerStyle() {
+      return (
+        'height:' + this.windowHeight + 'px;' +
+        'width:' + this.windowWidth + 'px;'
+      )
+    },
+
+    materialScrollStyle() {
+      const height = Math.max(
+        0,
+        this.windowHeight - this.statusBarHeight
+      )
+
+      return (
+        'top:' + this.statusBarHeight + 'px;' +
+        'height:' + height + 'px;'
+      )
+    },
+
     inputContainerStyle() {
+      const bottom = this.keyboardVisible ? 0 : this.inputBottom
+
       return (
         'height:' + this.inputHeight + 'px;' +
-        'bottom:' + this.inputBottom + 'px;'
+        'bottom:' + bottom + 'px;'
       )
     },
 
@@ -272,10 +376,10 @@ export default {
 
     materialGridContainerStyle() {
       return (
-        'padding-top:' + (this.statusBarHeight + GRID_TOP_PADDING) + 'px;' +
+        'padding-top:' + GRID_TOP_PADDING + 'px;' +
         'padding-left:' + this.gridSidePadding + 'px;' +
         'padding-right:' + this.gridSidePadding + 'px;' +
-        'padding-bottom:' + this.gridBottomPadding + 'px;'
+        'padding-bottom:2px;'
       )
     },
 
@@ -342,8 +446,65 @@ export default {
       return 'font-size:' + this.emptyIconSize + 'px;'
     },
 
-    loadMoreFooterStyle() {
-      return 'height:' + this.footerReserveHeight + 'px;'
+    pullVisualOffset() {
+      if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+
+      return Math.min(
+        REFRESH_HOLD_OFFSET,
+        Math.round(this.pullDistance * PULL_MOVE_RATIO)
+      )
+    },
+
+    scrollContentStyle() {
+      const transition = this.pulling
+        ? 'none'
+        : 'transform 0.16s ease'
+
+      return [
+        'transform: translateY(' + this.pullVisualOffset + 'px)',
+        'transition:' + transition
+      ].join(';')
+    },
+
+    refreshOverlayStyle() {
+      const top = this.statusBarHeight
+
+      const height = this.isRefreshing
+        ? 34
+        : Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)))
+
+      const opacity = this.isRefreshing
+        ? 1
+        : Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+
+      return [
+        'top:' + top + 'px',
+        'height:' + height + 'px',
+        'opacity:' + opacity
+      ].join(';')
+    },
+
+    refresherText() {
+      if (this.isRefreshing) return '正在刷新...'
+      if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
+      if (this.pullDistance > 0) return '下拉刷新'
+      return ''
+    },
+
+    bottomSpacerStyle() {
+      const inputOffset = this.keyboardVisible ? 0 : this.inputBottom
+      const gap = this.keyboardVisible
+        ? LOAD_MORE_KEYBOARD_BOTTOM_GAP
+        : LOAD_MORE_BOTTOM_GAP
+      const height = this.inputHeight + inputOffset + gap
+
+      return 'height:' + height + 'px;'
+    },
+
+    canReCreateAction() {
+      const material = this.materialAction.material
+      if (!material) return false
+      return Number(material.status) !== 1 && material.uiStatus !== 'generating'
     }
   },
 
@@ -353,26 +514,23 @@ export default {
     uni.$on('material', this.handleMaterialEvent)
   },
 
-  onShow() {
-    this.initLayout()
-  },
-
   onUnload() {
     uni.$off('material', this.handleMaterialEvent)
-  },
 
-  onReachBottom() {
-    this.loadMaterials(false)
-  },
+    if (this.materialScrollTimer) {
+      clearTimeout(this.materialScrollTimer)
+      this.materialScrollTimer = null
+    }
 
-  onPullDownRefresh() {
-    const p = this.loadMaterials(true)
-    Promise.resolve(p).finally(() => {
-      uni.stopPullDownRefresh()
-    })
+    if (this.inputBlurTimer) {
+      clearTimeout(this.inputBlurTimer)
+      this.inputBlurTimer = null
+    }
   },
 
   methods: {
+    noop() {},
+
     initLayout() {
       try {
         const sys = uni.getSystemInfoSync()
@@ -409,6 +567,7 @@ export default {
           MIN_TABBAR_BASE_HEIGHT,
           MAX_TABBAR_BASE_HEIGHT
         )
+
         this.tabbarTotalHeight = this.tabbarBaseHeight + this.safeBottom
         this.inputBottom = this.tabbarTotalHeight
 
@@ -434,14 +593,9 @@ export default {
         this.uploadedPreviewSize = clamp(this.inputTopHeight - 6, 34, 48)
 
         this.footerReserveHeight = clamp(
-          Math.floor(windowWidth * 0.074),
-          24,
-          30
-        )
-
-        this.gridBottomPadding = Math.max(
-          this.inputBottom + this.inputHeight - this.footerReserveHeight + 4,
-          this.inputBottom + this.inputControlHeight + 8
+          Math.floor(windowWidth * 0.068),
+          22,
+          28
         )
 
         this.emptyTopPadding = clamp(
@@ -482,12 +636,193 @@ export default {
         this.inputControlHeight = 38
         this.uploadedPreviewSize = 40
 
-        this.footerReserveHeight = 28
-        this.gridBottomPadding = 144
-
+        this.footerReserveHeight = 26
         this.emptyTopPadding = 128
         this.emptyIconSize = 52
       }
+    },
+
+    handleInputFocus() {
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+        this.inputBlurTimer = null
+      }
+
+      this.inputFocused = true
+    },
+
+    handleInputBlur() {
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+      }
+
+      this.inputBlurTimer = setTimeout(() => {
+        if (!this.keyboardVisible) {
+          this.inputFocused = false
+        }
+
+        this.inputBlurTimer = null
+      }, 180)
+    },
+
+    handleKeyboardHeightChange(e) {
+      const height = Number(e?.detail?.height || 0)
+
+      if (this.inputBlurTimer) {
+        clearTimeout(this.inputBlurTimer)
+        this.inputBlurTimer = null
+      }
+
+      this.keyboardHeight = height
+
+      if (height > 0) {
+        this.inputFocused = true
+        this.keyboardVisible = true
+        return
+      }
+
+      setTimeout(() => {
+        this.keyboardVisible = false
+        this.inputFocused = false
+        this.keyboardHeight = 0
+      }, 80)
+    },
+
+    handleScrollToLower() {
+      this.loadMaterials(false)
+    },
+
+    handleRefresh() {
+      return this.refreshList()
+    },
+
+    onMaterialScroll(e) {
+      this.scrollTop = Number(e?.detail?.scrollTop || 0)
+      this.materialScrolling = true
+
+      if (this.materialScrollTimer) {
+        clearTimeout(this.materialScrollTimer)
+      }
+
+      this.materialScrollTimer = setTimeout(() => {
+        this.materialScrolling = false
+        this.materialScrollTimer = null
+      }, 140)
+    },
+
+    getTouchY(e) {
+      const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
+      return Number(touch.clientY ?? touch.pageY ?? 0)
+    },
+
+    onScrollTouchStart(e) {
+      if (this.loading || this.isLoadingMore || this.isRefreshing) return
+
+      if (this.inputFocused || this.keyboardVisible) {
+        this.pulling = false
+        this.pullDistance = 0
+
+        try {
+          uni.hideKeyboard()
+        } catch (err) {}
+
+        return
+      }
+
+      this.pullStartY = this.getTouchY(e)
+      this.pulling = this.scrollTop <= 2
+      this.pullDistance = 0
+    },
+
+    onScrollTouchMove(e) {
+      if (!this.pulling || this.loading || this.isLoadingMore || this.isRefreshing) return
+
+      if (this.scrollTop > 2) {
+        this.pulling = false
+        this.pullDistance = 0
+        return
+      }
+
+      const currentY = this.getTouchY(e)
+      const deltaY = currentY - this.pullStartY
+
+      if (deltaY <= 0) {
+        this.pullDistance = 0
+        return
+      }
+
+      this.pullDistance = Math.min(
+        PULL_MAX_DISTANCE,
+        Math.floor(deltaY * 0.38)
+      )
+    },
+
+    async onScrollTouchEnd() {
+      if (!this.pulling) return
+
+      const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE
+
+      this.pulling = false
+
+      if (!shouldRefresh) {
+        this.pullDistance = 0
+        return
+      }
+
+      await this.refreshList()
+    },
+
+    async refreshList() {
+      if (this.loading || this.isLoadingMore || this.isRefreshing) {
+        this.pullDistance = 0
+        return
+      }
+
+      this.isRefreshing = true
+      this.refreshing = true
+      this.pullDistance = PULL_TRIGGER_DISTANCE
+      this.hasMore = true
+
+      try {
+        await this.loadMaterials(true)
+      } finally {
+        this.isRefreshing = false
+        this.refreshing = false
+        this.pullDistance = 0
+      }
+    },
+
+    onMaterialTouchStart(e) {
+      const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+
+      this.materialTouch = {
+        startX: touch.clientX ?? touch.pageX ?? 0,
+        startY: touch.clientY ?? touch.pageY ?? 0,
+        moved: false
+      }
+    },
+
+    onMaterialTouchMove(e) {
+      const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {}
+
+      const x = touch.clientX ?? touch.pageX ?? 0
+      const y = touch.clientY ?? touch.pageY ?? 0
+      const dx = Math.abs(x - this.materialTouch.startX)
+      const dy = Math.abs(y - this.materialTouch.startY)
+
+      if (dx > 8 || dy > 8) {
+        this.materialTouch.moved = true
+      }
+    },
+
+    onMaterialTouchEnd() {
+      setTimeout(() => {
+        this.materialTouch = {
+          startX: 0,
+          startY: 0,
+          moved: false
+        }
+      }, 80)
     },
 
     mapStatusToUi(status) {
@@ -505,7 +840,9 @@ export default {
       if (reset) {
         this.page = 1
         this.hasMore = true
-        this.materials = []
+        if (!this.isRefreshing) {
+          this.materials = []
+        }
         this.loading = true
         this.isLoadingMore = false
       } else {
@@ -695,12 +1032,17 @@ export default {
     showMaterialOptions(material, index) {
       if (!material) return
 
+      if (this.materialTouch.moved || this.materialScrolling) {
+        return
+      }
+
       this.materialLongPressGuard = true
       this.materialAction = {
         visible: true,
         material,
         index,
-        deleting: false
+        deleting: false,
+        reCreating: false
       }
 
       setTimeout(() => {
@@ -709,7 +1051,7 @@ export default {
     },
 
     closeMaterialOptions() {
-      if (this.materialAction.deleting) return
+      if (this.materialAction.deleting || this.materialAction.reCreating) return
       this.resetMaterialAction()
     },
 
@@ -718,13 +1060,105 @@ export default {
         visible: false,
         material: null,
         index: -1,
-        deleting: false
+        deleting: false,
+        reCreating: false
       }
     },
 
     handleDeleteFromAction() {
-      if (this.materialAction.deleting) return
+      if (this.materialAction.deleting || this.materialAction.reCreating) return
       this.confirmDeleteMaterial(this.materialAction.material, this.materialAction.index)
+    },
+
+    async handleReCreateFromAction() {
+      if (this.materialAction.deleting || this.materialAction.reCreating) return
+
+      const material = this.materialAction.material
+      const index = this.materialAction.index
+
+      if (!material) return
+
+      if (Number(material.status) === 1 || material.uiStatus === 'generating') {
+        uni.showToast({
+          title: '素材生成中，暂时不能重新生成',
+          icon: 'none'
+        })
+        this.resetMaterialAction()
+        return
+      }
+
+      if (!material.material_id) {
+        uni.showToast({
+          title: '素材ID无效',
+          icon: 'none'
+        })
+        this.resetMaterialAction()
+        return
+      }
+
+      this.materialAction.reCreating = true
+
+      try {
+        const ok = await reCreateMaterial({
+          materialId: material.material_id
+        })
+
+        if (!ok) throw new Error('reCreateMaterial 返回失败')
+
+        const recreated = this.buildReCreatingMaterial(material)
+        this.removeMaterialFromList(material, index)
+        this.materials.unshift(recreated)
+        this.resetMaterialAction()
+
+        uni.showToast({
+          title: '开始重新生成',
+          icon: 'success'
+        })
+      } catch (err) {
+        console.error('重新生成素材失败：', err)
+        this.materialAction.reCreating = false
+        uni.showToast({
+          title: '重新生成失败',
+          icon: 'none'
+        })
+      }
+    },
+
+    buildReCreatingMaterial(material) {
+      const now = Date.now()
+      const prompt = material.prompt || material.displayTitle || ''
+      const sourceUrl = material.source_url || material.sourceUrl || ''
+      const previewUrl = sourceUrl || '/static/images/placeholder.png'
+
+      return {
+        ...material,
+        material_id: String(material.material_id),
+        material_type: material.material_type || 1,
+        prompt,
+        source_url: sourceUrl,
+        material_url: previewUrl,
+        cover_url: previewUrl,
+        model: '',
+        create_time: now,
+        status: 1,
+        uiStatus: 'generating',
+        displayTitle: prompt || '未命名作品',
+        displayTime: this.formatRelativeTime(now)
+      }
+    },
+
+    removeMaterialFromList(material, fallbackIndex) {
+      const materialId = String(material.material_id || '')
+      const index = this.materials.findIndex(item => String(item.material_id) === materialId)
+
+      if (index !== -1) {
+        this.materials.splice(index, 1)
+        return
+      }
+
+      if (fallbackIndex >= 0 && fallbackIndex < this.materials.length) {
+        this.materials.splice(fallbackIndex, 1)
+      }
     },
 
     confirmDeleteMaterial(material, index) {
@@ -896,54 +1330,54 @@ export default {
     },
 
     goToMaterialDetail(material) {
-    	if (this.materialLongPressGuard || !material) return
-    
-    	const status = Number(material.status)
-    	const uiStatus = material.uiStatus || ''
-    	const materialId = material.material_id || ''
-    	const materialType = material.material_type || 1
-    	const materialUrl = material.material_url || material.cover_url || ''
-    	const prompt = material.prompt || material.displayTitle || ''
-    
-    	if (status === 1 || uiStatus === 'generating') {
-    		uni.showToast({
-    			title: '素材生成中，暂时不能查看',
-    			icon: 'none'
-    		})
-    		return
-    	}
-    
-    	if (status === 3 || uiStatus === 'failed') {
-    		uni.showToast({
-    			title: '素材生成失败，无法查看',
-    			icon: 'none'
-    		})
-    		return
-    	}
-    
-    	if (status === 4 || uiStatus === 'deleted') {
-    		uni.showToast({
-    			title: '素材已删除',
-    			icon: 'none'
-    		})
-    		return
-    	}
-    
-    	if (!materialId) {
-    		uni.showToast({
-    			title: '素材ID无效',
-    			icon: 'none'
-    		})
-    		return
-    	}
-    
-    	uni.navigateTo({
-    		url:
-    			`/pages/workspace/material_detail?id=${encodeURIComponent(materialId)}` +
-    			`&type=${encodeURIComponent(materialType)}` +
-    			`&url=${encodeURIComponent(materialUrl)}` +
-    			`&prompt=${encodeURIComponent(prompt)}`
-    	})
+      if (this.materialLongPressGuard || !material) return
+
+      const status = Number(material.status)
+      const uiStatus = material.uiStatus || ''
+      const materialId = material.material_id || ''
+      const materialType = material.material_type || 1
+      const materialUrl = material.material_url || material.cover_url || ''
+      const prompt = material.prompt || material.displayTitle || ''
+
+      if (status === 1 || uiStatus === 'generating') {
+        uni.showToast({
+          title: '素材生成中，暂时不能查看',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (status === 3 || uiStatus === 'failed') {
+        uni.showToast({
+          title: '素材生成失败，无法查看',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (status === 4 || uiStatus === 'deleted') {
+        uni.showToast({
+          title: '素材已删除',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!materialId) {
+        uni.showToast({
+          title: '素材ID无效',
+          icon: 'none'
+        })
+        return
+      }
+
+      uni.navigateTo({
+        url:
+          `/pages/workspace/material_detail?id=${encodeURIComponent(materialId)}` +
+          `&type=${encodeURIComponent(materialType)}` +
+          `&url=${encodeURIComponent(materialUrl)}` +
+          `&prompt=${encodeURIComponent(prompt)}`
+      })
     }
   }
 }
@@ -955,11 +1389,15 @@ export default {
 
 <style scoped>
 .container {
+  position: fixed;
+  left: 0;
+  top: 0;
   padding: 0;
   margin: 0;
   box-sizing: border-box;
-  background-color: #f5f5f7;
-  min-height: 100vh;
+  background-color: #fefefe;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .safe-status-bar {
@@ -969,6 +1407,44 @@ export default {
   right: 0;
   z-index: 120;
   background-color: #f5f5f7;
+}
+
+.refresh-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #f5f5f7;
+  overflow: hidden;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: height 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+  font-size: 12px;
+  color: #999999;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.material-scroll {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  background-color: #fefefe;
+  overflow: hidden;
+  overscroll-behavior-y: contain;
+}
+
+.scroll-content {
+  will-change: transform;
 }
 
 .material-grid-container {
@@ -993,7 +1469,7 @@ export default {
 }
 
 .empty-icon {
-  color: rgba(253, 190, 120, 1);
+  color: #d8a25d !important;
   line-height: 1;
   margin-bottom: 16rpx;
   font-weight: 400;
@@ -1071,6 +1547,14 @@ export default {
   animation: spin 1s linear infinite;
 }
 
+.loading-spinner.tiny {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  border-color: #f3f3f3;
+  border-top-color: #d8a25d;
+}
+
 .generating-text {
   margin-top: 10px;
   color: #fff;
@@ -1139,15 +1623,19 @@ export default {
   white-space: nowrap;
 }
 
-.load-more-footer {
-  padding: 0;
+.load-more-state {
+  padding: 4px 0 0;
+  margin: 0;
   text-align: center;
-  font-size: 24rpx;
+  font-size: 11px;
+  line-height: 14px;
   color: #999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-weight: 400;
+}
+
+.bottom-spacer {
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .material-action-overlay {
@@ -1179,6 +1667,11 @@ export default {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  border-bottom: 1px solid #f4f4f4;
+}
+
+.material-action-item:last-child {
+  border-bottom: none;
 }
 
 .material-action-item:active {
@@ -1242,7 +1735,7 @@ export default {
   background-color: #f5f5f7;
   border-radius: 10px;
   border: 1px solid transparent;
-  transition: all 0.2s;
+  transition: none;
   box-sizing: border-box;
 }
 
@@ -1341,7 +1834,7 @@ export default {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: opacity 0.2s;
+  transition: none;
 }
 
 .generate-btn.disabled {

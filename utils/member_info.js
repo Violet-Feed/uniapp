@@ -7,7 +7,7 @@ import { getUserInfos } from '@/request/user.js';
 import { getAgentsByIds } from '@/request/agent.js';
 
 const USER_DEFAULT_AVATAR = '/static/user_avatar.png';
-const AI_DEFAULT_AVATAR = '/static/ai.png';
+const AI_DEFAULT_AVATAR = '/static/ai_avatar.png';
 
 function buildSenderKey(senderType, senderId) {
 	return `${Number(senderType)}:${String(senderId)}`;

@@ -1,9 +1,11 @@
 <template>
 	<view class="container">
+		<page-meta page-style="overflow: hidden;" />
+
 		<!-- 顶部固定安全栏：遮住状态栏 / 刘海区域 -->
 		<view class="safe-status-bar" :style="safeStatusBarStyle"></view>
 
-		<!-- 搜索区域 -->
+		<!-- 搜索区域：固定不动 -->
 		<view class="search-wrapper" :style="searchWrapperStyle">
 			<view class="fixed-search-bar" :style="fixedSearchBarStyle">
 				<view class="search-input-container" :style="searchInputContainerStyle">
@@ -15,6 +17,10 @@
 						type="text"
 						placeholder="搜索你感兴趣的创作..."
 						confirm-type="search"
+						:adjust-position="false"
+						cursor-spacing="12"
+						@focus="handleSearchFocus"
+						@blur="handleSearchBlur"
 						@confirm="goToSearchPage"
 					/>
 
@@ -27,78 +33,101 @@
 			</view>
 		</view>
 
-		<!-- 双列创作列表 -->
-		<view class="creation-grid-container" :style="creationGridContainerStyle">
-			<view v-if="loading && creations.length === 0" class="initial-loading">
-				<view class="loading-spinner"></view>
-				<text class="loading-text">精彩内容加载中...</text>
-			</view>
+		<!-- 自定义悬浮刷新提示，不占用列表空间 -->
+		<view
+			v-if="pullDistance > 0 || isRefreshing"
+			class="refresh-overlay"
+			:style="refreshOverlayStyle"
+		>
+			<view class="loading-spinner tiny" v-if="isRefreshing"></view>
+			<text class="refresh-overlay-text">{{ refresherText }}</text>
+		</view>
 
-			<view class="creation-grid" v-else-if="creations.length > 0">
-				<view
-					class="creation-card"
-					:style="cardStyle"
-					v-for="(creation, index) in creations"
-					:key="'creation-' + creation.creation_id + '-' + index"
-					@click="goToCreationDetail(creation)"
-				>
-					<view class="image-wrapper" :style="imageWrapperStyle">
-						<image
-							class="card-image"
-							:src="creation.image || defaultImage"
-							mode="aspectFill"
-							@error="handleImageError(creation)"
-							lazy-load
-						></image>
-
-						<view class="video-badge" v-if="creation.type === 'video'">
-							<text class="video-badge-icon">▶</text>
-						</view>
+		<!-- 内容滚动区：只让 scroll-view 滚动，不让页面本身滚动 -->
+		<scroll-view
+			class="creation-scroll"
+			scroll-y
+			:lower-threshold="120"
+			@scroll="onContentScroll"
+			@touchstart="onScrollTouchStart"
+			@touchmove="onScrollTouchMove"
+			@touchend="onScrollTouchEnd"
+			@touchcancel="onScrollTouchEnd"
+			@scrolltolower="loadMore"
+		>
+			<!-- 下拉时移动的是这一层，因此创作列表会跟着往下动 -->
+			<view class="scroll-content" :style="scrollContentStyle">
+				<view class="creation-grid-container" :style="creationGridContainerStyle">
+					<view v-if="loading && creations.length === 0" class="initial-loading">
+						<view class="loading-spinner"></view>
+						<text class="loading-text">精彩内容加载中...</text>
 					</view>
 
-					<view class="card-content" :style="cardContentStyle">
-						<view class="card-title-container">
-							<text class="card-title">{{ creation.title }}</text>
-						</view>
-
-						<view class="card-footer">
-							<view class="card-author">
+					<view class="creation-grid" v-else-if="creations.length > 0">
+						<view
+							class="creation-card"
+							:style="cardStyle"
+							v-for="(creation, index) in creations"
+							:key="'creation-' + creation.creation_id + '-' + index"
+							@click="goToCreationDetail(creation)"
+						>
+							<view class="image-wrapper" :style="imageWrapperStyle">
 								<image
-									class="author-avatar"
-									:src="creation.author.avatar || defaultAvatar"
+									class="card-image"
+									:src="creation.image || defaultImage"
 									mode="aspectFill"
+									@error="handleImageError(creation)"
 									lazy-load
 								></image>
-								<text class="author-name">{{ creation.author.name || '未知作者' }}</text>
+
+								<view class="video-badge" v-if="creation.type === 'video'">
+									<text class="video-badge-icon">▶</text>
+								</view>
 							</view>
 
-							<view class="card-likes" @click.stop="toggleDigg(index)">
-								<text
-									class="iconfont like-icon"
-									:class="creation.is_digg ? 'icon-xihuan liked' : 'icon-xihuan1'"
-								></text>
-								<text class="like-count">
-									{{ formatNumber(creation.likes) }}
-								</text>
+							<view class="card-content" :style="cardContentStyle">
+								<view class="card-title-container">
+									<text class="card-title">{{ creation.title }}</text>
+								</view>
+
+								<view class="card-footer">
+									<view class="card-author">
+										<image
+											class="author-avatar"
+											:src="creation.author.avatar || defaultAvatar"
+											mode="aspectFill"
+											lazy-load
+										></image>
+										<text class="author-name">{{ creation.author.name || '未知作者' }}</text>
+									</view>
+
+									<view class="card-likes" @click.stop="toggleDigg(index)">
+										<text
+											class="iconfont like-icon"
+											:class="creation.is_digg ? 'icon-xihuan liked' : 'icon-xihuan1'"
+										></text>
+										<text class="like-count">
+											{{ formatNumber(creation.likes) }}
+										</text>
+									</view>
+								</view>
 							</view>
 						</view>
 					</view>
+
+					<view v-else-if="!loading" class="empty-state">
+						<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
+						<text class="empty-text">暂无创作内容</text>
+						<text class="empty-hint">快去创作第一个作品吧！</text>
+					</view>
+
+					<view v-if="loading && creations.length > 0" class="load-more-state">加载中...</view>
+					<view v-else-if="!hasMore && creations.length > 0" class="load-more-state">没有更多了</view>
 				</view>
-			</view>
 
-			<view v-else class="empty-state">
-				<text class="iconfont icon-neirongchuangzuo empty-icon"></text>
-				<text class="empty-text">暂无创作内容</text>
-				<text class="empty-hint">快去创作第一个作品吧！</text>
+				<view v-if="creations.length > 0" class="bottom-spacer" :style="bottomSpacerStyle"></view>
 			</view>
-
-			<view v-if="loading && creations.length > 0" class="loading-more">
-				<view class="loading-spinner small"></view>
-				<text class="loading-more-text">
-					{{ hasMore ? '正在加载更多...' : '没有更多了' }}
-				</text>
-			</view>
-		</view>
+		</scroll-view>
 
 		<custom-tabbar active-path="pages/creation/home" />
 	</view>
@@ -110,18 +139,25 @@ import { digg, cancelDigg } from '@/request/action.js'
 
 const GRID_PADDING_X = 6
 const GRID_GAP = 6
-const GRID_BOTTOM_PADDING = 10
+const GRID_BOTTOM_PADDING = 2
 
-const CARD_ASPECT_WIDTH = 3
-const CARD_ASPECT_HEIGHT = 4
-const CARD_CONTENT_RATIO = 0.26
-const MIN_CARD_CONTENT_HEIGHT = 42
-const MAX_CARD_CONTENT_HEIGHT = 50
+// 整体卡片高宽比：高:宽 = 7:5
+const CARD_ASPECT_WIDTH = 5
+const CARD_ASPECT_HEIGHT = 7
 
+// 封面固定 1:1；信息栏高度 = 卡片高度 - 封面高度
 const SEARCH_INPUT_HEIGHT_MIN = 36
 const SEARCH_INPUT_HEIGHT_MAX = 40
 const SEARCH_VERTICAL_PADDING_MIN = 6
 const SEARCH_VERTICAL_PADDING_MAX = 8
+
+const MIN_TABBAR_BASE_HEIGHT = 46
+const MAX_TABBAR_BASE_HEIGHT = 52
+const LOAD_MORE_BOTTOM_GAP = 14
+const PULL_TRIGGER_DISTANCE = 64
+const PULL_MAX_DISTANCE = 92
+const PULL_MOVE_RATIO = 0.62
+const REFRESH_HOLD_OFFSET = 42
 
 const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value))
@@ -135,11 +171,20 @@ export default {
 			loading: false,
 			currentPage: 1,
 			hasMore: true,
+
+			searchFocused: false,
 			isRefreshing: false,
+
+			scrollTop: 0,
+			pulling: false,
+			pullStartY: 0,
+			pullDistance: 0,
 
 			statusBarHeight: 0,
 			windowWidth: 375,
 			safeBottom: 0,
+			tabbarBaseHeight: 50,
+			tabbarTotalHeight: 50,
 
 			searchInputHeight: 38,
 			searchVerticalPadding: 7,
@@ -149,9 +194,9 @@ export default {
 			defaultAvatar: '/static/user_avatar.png',
 
 			cardWidth: 176,
-			cardHeight: 235,
-			imageHeight: 189,
-			cardContentHeight: 46
+			cardHeight: 246,
+			imageHeight: 176,
+			cardContentHeight: 70
 		}
 	},
 
@@ -193,7 +238,7 @@ export default {
 				'padding-top:' + (this.statusBarHeight + this.searchAreaHeight) + 'px;' +
 				'padding-left:' + GRID_PADDING_X + 'px;' +
 				'padding-right:' + GRID_PADDING_X + 'px;' +
-				'padding-bottom:' + (GRID_BOTTOM_PADDING + this.safeBottom) + 'px;'
+				'padding-bottom:' + GRID_BOTTOM_PADDING + 'px;'
 			)
 		},
 
@@ -207,6 +252,56 @@ export default {
 
 		cardContentStyle() {
 			return 'height:' + this.cardContentHeight + 'px;'
+		},
+
+		pullVisualOffset() {
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+
+			return Math.min(
+				REFRESH_HOLD_OFFSET,
+				Math.round(this.pullDistance * PULL_MOVE_RATIO)
+			)
+		},
+
+		scrollContentStyle() {
+			const transition = this.pulling
+				? 'none'
+				: 'transform 0.16s ease'
+
+			return [
+				'transform: translateY(' + this.pullVisualOffset + 'px)',
+				'transition:' + transition
+			].join(';')
+		},
+
+		refreshOverlayStyle() {
+			const top = this.statusBarHeight + this.searchAreaHeight
+
+			const height = this.isRefreshing
+				? 34
+				: Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)))
+
+			const opacity = this.isRefreshing
+				? 1
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+
+			return [
+				'top:' + top + 'px',
+				'height:' + height + 'px',
+				'opacity:' + opacity
+			].join(';')
+		},
+
+		refresherText() {
+			if (this.isRefreshing) return '正在刷新...'
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
+			if (this.pullDistance > 0) return '下拉刷新'
+			return ''
+		},
+
+		bottomSpacerStyle() {
+			const height = this.tabbarTotalHeight + LOAD_MORE_BOTTOM_GAP
+			return 'height:' + height + 'px;'
 		}
 	},
 
@@ -217,16 +312,6 @@ export default {
 
 	onShow() {
 		this.initLayout()
-	},
-
-	onPullDownRefresh() {
-		this.refreshList()
-	},
-
-	onReachBottom() {
-		if (!this.loading && this.hasMore) {
-			this.loadMore()
-		}
 	},
 
 	methods: {
@@ -241,8 +326,13 @@ export default {
 				this.windowWidth = windowWidth
 				this.statusBarHeight = statusBarHeight
 				this.safeBottom = Number(safeAreaInsets.bottom || 0)
+				this.tabbarBaseHeight = clamp(
+					Math.floor(windowWidth * 0.132),
+					MIN_TABBAR_BASE_HEIGHT,
+					MAX_TABBAR_BASE_HEIGHT
+				)
+				this.tabbarTotalHeight = this.tabbarBaseHeight + this.safeBottom
 
-				// 搜索栏：按屏幕宽度轻微缩放，但限制上下限，避免不同设备差异过大
 				this.searchInputHeight = clamp(
 					Math.floor(windowWidth * 0.102),
 					SEARCH_INPUT_HEIGHT_MIN,
@@ -257,43 +347,117 @@ export default {
 
 				this.searchAreaHeight = this.searchInputHeight + this.searchVerticalPadding * 2
 
-				// 创作卡片：不再按屏幕高度算“一屏几个”，而是由双列宽度决定
 				const totalPadding = GRID_PADDING_X * 2
 				const availableWidth = windowWidth - totalPadding - GRID_GAP
 				const cardWidth = Math.floor(availableWidth / 2)
 
-				// 整个创作卡片宽高比：宽 3，高 4
+				// 整卡高宽比 7:5
 				const cardHeight = Math.floor(cardWidth * CARD_ASPECT_HEIGHT / CARD_ASPECT_WIDTH)
 
-				// 底部信息区按卡片宽度轻微缩放，并限制上下限
-				const contentHeight = Math.floor(cardWidth * CARD_CONTENT_RATIO)
+				// 封面 1:1
+				const imageHeight = cardWidth
+
+				// 信息栏占剩余高度
+				const contentHeight = Math.max(0, cardHeight - imageHeight)
 
 				this.cardWidth = cardWidth
 				this.cardHeight = cardHeight
-				this.cardContentHeight = clamp(
-					contentHeight,
-					MIN_CARD_CONTENT_HEIGHT,
-					MAX_CARD_CONTENT_HEIGHT
-				)
-				this.imageHeight = Math.max(0, this.cardHeight - this.cardContentHeight)
+				this.imageHeight = imageHeight
+				this.cardContentHeight = contentHeight
 			} catch (err) {
 				this.statusBarHeight = 0
 				this.windowWidth = 375
 				this.safeBottom = 0
+				this.tabbarBaseHeight = 50
+				this.tabbarTotalHeight = 50
 
 				this.searchInputHeight = 38
 				this.searchVerticalPadding = 7
 				this.searchAreaHeight = 52
 
 				this.cardWidth = 176
-				this.cardHeight = 235
-				this.cardContentHeight = 46
-				this.imageHeight = 189
+				this.cardHeight = 246
+				this.imageHeight = 176
+				this.cardContentHeight = 70
 			}
+		},
+
+		handleSearchFocus() {
+			this.searchFocused = true
+			this.pulling = false
+			this.pullDistance = 0
+		},
+
+		handleSearchBlur() {
+			this.searchFocused = false
+		},
+
+		onContentScroll(e) {
+			this.scrollTop = Number(e?.detail?.scrollTop || 0)
+		},
+
+		getTouchY(e) {
+			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
+			return Number(touch.clientY ?? touch.pageY ?? 0)
+		},
+
+		onScrollTouchStart(e) {
+			if (this.loading || this.isRefreshing) return
+
+			if (this.searchFocused) {
+				this.searchFocused = false
+
+				try {
+					uni.hideKeyboard()
+				} catch (err) {}
+			}
+
+			this.pullStartY = this.getTouchY(e)
+			this.pulling = this.scrollTop <= 2
+			this.pullDistance = 0
+		},
+
+		onScrollTouchMove(e) {
+			if (!this.pulling || this.loading || this.isRefreshing) return
+
+			if (this.scrollTop > 2) {
+				this.pulling = false
+				this.pullDistance = 0
+				return
+			}
+
+			const currentY = this.getTouchY(e)
+			const deltaY = currentY - this.pullStartY
+
+			if (deltaY <= 0) {
+				this.pullDistance = 0
+				return
+			}
+
+			this.pullDistance = Math.min(
+				PULL_MAX_DISTANCE,
+				Math.floor(deltaY * 0.38)
+			)
+		},
+
+		async onScrollTouchEnd() {
+			if (!this.pulling) return
+
+			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE
+
+			this.pulling = false
+
+			if (!shouldRefresh) {
+				this.pullDistance = 0
+				return
+			}
+
+			await this.refreshList()
 		},
 
 		async fetchCreations(page = 1, append = false) {
 			if (this.loading) return
+
 			this.loading = true
 
 			try {
@@ -349,24 +513,30 @@ export default {
 				})
 			} finally {
 				this.loading = false
-
-				if (this.isRefreshing) {
-					this.isRefreshing = false
-					uni.stopPullDownRefresh()
-				}
 			}
 		},
 
-		async loadMore() {
-			if (!this.hasMore) return
-			const nextPage = this.currentPage + 1
-			await this.fetchCreations(nextPage, true)
+		async refreshList() {
+			if (this.loading || this.isRefreshing) {
+				this.pullDistance = 0
+				return
+			}
+
+			this.isRefreshing = true
+			this.pullDistance = PULL_TRIGGER_DISTANCE
+			this.hasMore = true
+
+			await this.fetchCreations(1, false)
+
+			this.isRefreshing = false
+			this.pullDistance = 0
 		},
 
-		async refreshList() {
-			this.isRefreshing = true
-			this.hasMore = true
-			await this.fetchCreations(1, false)
+		async loadMore() {
+			if (this.loading || this.isRefreshing || !this.hasMore) return
+
+			const nextPage = this.currentPage + 1
+			await this.fetchCreations(nextPage, true)
 		},
 
 		handleImageError(creation) {
@@ -443,8 +613,10 @@ export default {
 
 		formatNumber(num) {
 			const n = Number(num || 0)
+
 			if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
 			if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+
 			return n.toString()
 		}
 	}
@@ -457,12 +629,18 @@ export default {
 
 <style scoped>
 .container {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
 	padding: 0;
 	margin: 0;
 	box-sizing: border-box;
 	background: #fefefe;
-	min-height: 100vh;
+	overflow: hidden;
 	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	overscroll-behavior-y: none;
 }
 
 .safe-status-bar {
@@ -470,17 +648,19 @@ export default {
 	top: 0;
 	left: 0;
 	right: 0;
-	z-index: 1000;
+	z-index: 3002;
 	background: #fefefe;
+	pointer-events: none;
 }
 
 .search-wrapper {
 	position: fixed;
 	left: 0;
 	right: 0;
-	z-index: 999;
+	z-index: 3001;
 	background: #fefefe;
 	box-shadow: none;
+	transform: translateZ(0);
 }
 
 .fixed-search-bar {
@@ -490,6 +670,46 @@ export default {
 	padding-left: 10px;
 	padding-right: 10px;
 	box-sizing: border-box;
+}
+
+.refresh-overlay {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 3000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	background: #fefefe;
+	overflow: hidden;
+	box-sizing: border-box;
+	pointer-events: none;
+	transition: height 0.12s ease, opacity 0.12s ease;
+}
+
+.refresh-overlay-text {
+	font-size: 12px;
+	color: #999999;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.creation-scroll {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1;
+	background: #fefefe;
+	box-sizing: border-box;
+	overflow: hidden;
+	overscroll-behavior-y: contain;
+}
+
+.scroll-content {
+	will-change: transform;
 }
 
 .search-input-container {
@@ -515,7 +735,7 @@ export default {
 	height: 100%;
 	font-size: 14px;
 	font-weight: 400;
-	color: #333;
+	color: #333333;
 }
 
 .search-input-container input {
@@ -537,7 +757,7 @@ export default {
 	align-items: center;
 	justify-content: center;
 	font-size: 10px;
-	color: #fff;
+	color: #ffffff;
 	flex-shrink: 0;
 }
 
@@ -572,14 +792,14 @@ export default {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	column-gap: 6px;
-	row-gap: 8px;
+	row-gap: 10px;
 }
 
 .creation-card {
-	background: #fff;
-	border-radius: 8px;
+	background: #ffffff;
+	border-radius: 10px;
 	overflow: hidden;
-	box-shadow: 0 1px 6px rgba(0, 0, 0, 0.055);
+	box-shadow: 0 1px 7px rgba(0, 0, 0, 0.06);
 	transition: all 0.24s;
 }
 
@@ -605,26 +825,26 @@ export default {
 
 .video-badge {
 	position: absolute;
-	top: 6px;
-	right: 6px;
-	width: 20px;
-	height: 20px;
+	top: 7px;
+	right: 7px;
+	width: 24px;
+	height: 24px;
 	background: rgba(0, 0, 0, 0.42);
-	border-radius: 10px;
+	border-radius: 12px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 
 .video-badge-icon {
-	font-size: 11px;
+	font-size: 12px;
 	color: rgba(255, 255, 255, 0.94);
 	line-height: 1;
 	margin-left: 1px;
 }
 
 .card-content {
-	padding: 5px 6px 4px;
+	padding: 7px 8px 6px;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -632,14 +852,14 @@ export default {
 }
 
 .card-title-container {
-	height: 17px;
+	min-height: 22px;
 }
 
 .card-title {
-	font-size: 11px;
-	font-weight: 500;
-	color: #333;
-	line-height: 17px;
+	font-size: 15px;
+	font-weight: 400;
+	color: #333333;
+	line-height: 22px;
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
@@ -650,20 +870,21 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 18px;
+	height: 31px;
+	margin-top: 5px;
 }
 
 .card-author {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	flex: 1;
 	min-width: 0;
 }
 
 .author-avatar {
-	width: 16px;
-	height: 16px;
+	width: 22px;
+	height: 22px;
 	border-radius: 50%;
 	border: 1px solid #f0f0f0;
 	object-fit: cover;
@@ -671,9 +892,9 @@ export default {
 }
 
 .author-name {
-	font-size: 10px;
+	font-size: 14px;
 	font-weight: 400;
-	color: #666;
+	color: #666666;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -682,15 +903,15 @@ export default {
 .card-likes {
 	display: flex;
 	align-items: center;
-	gap: 3px;
+	gap: 4px;
 	flex-shrink: 0;
-	padding-left: 4px;
+	padding-left: 6px;
 }
 
 .like-icon {
-	font-size: 12px;
+	font-size: 18px;
 	line-height: 1;
-	color: #ff4d67;
+	color: #b8b8b8;
 }
 
 .like-icon.liked {
@@ -698,9 +919,9 @@ export default {
 }
 
 .like-count {
-	font-size: 10px;
+	font-size: 14px;
 	font-weight: 400;
-	color: #999;
+	color: #888888;
 }
 
 .initial-loading {
@@ -715,15 +936,23 @@ export default {
 	width: 40px;
 	height: 40px;
 	border: 3px solid #f3f3f3;
-	border-top-color: #667eea;
+	border-top-color: #d8a25d;
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 }
 
 .loading-spinner.small {
-	width: 20px;
-	height: 20px;
+	width: 18px;
+	height: 18px;
 	border-width: 2px;
+}
+
+.loading-spinner.tiny {
+	width: 14px;
+	height: 14px;
+	border-width: 2px;
+	border-color: #f3f3f3;
+	border-top-color: #d8a25d;
 }
 
 @keyframes spin {
@@ -736,7 +965,7 @@ export default {
 	margin-top: 16px;
 	font-size: 14px;
 	font-weight: 400;
-	color: #999;
+	color: #999999;
 }
 
 .empty-state {
@@ -748,7 +977,7 @@ export default {
 
 .empty-icon {
 	font-size: 58px;
-	color: #c8c8c8;
+	color: #d8a25d !important;
 	line-height: 1;
 	margin-bottom: 16px;
 }
@@ -756,27 +985,29 @@ export default {
 .empty-text {
 	font-size: 16px;
 	font-weight: 500;
-	color: #666;
+	color: #666666;
 	margin-bottom: 8px;
 }
 
 .empty-hint {
 	font-size: 13px;
 	font-weight: 400;
-	color: #999;
+	color: #999999;
 }
 
-.loading-more {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	padding: 18px 0;
-}
-
-.loading-more-text {
-	font-size: 13px;
+.load-more-state {
+	padding: 4px 0 0;
+	margin: 0;
+	text-align: center;
+	font-size: 11px;
+	line-height: 14px;
+	color: #999999;
 	font-weight: 400;
-	color: #999;
+}
+
+.bottom-spacer {
+	width: 100%;
+	flex-shrink: 0;
+	background: #fefefe;
 }
 </style>

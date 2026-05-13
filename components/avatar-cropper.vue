@@ -1,10 +1,20 @@
 <template>
   <view v-if="visible" class="cropper-mask" @touchmove.stop.prevent="noop">
     <view class="cropper-header">
-      <view class="header-btn" @click="handleCancel">取消</view>
+      <view class="header-side left" @click="handleCancel">
+        <text class="iconfont icon-fanhui header-back-icon"></text>
+      </view>
+
       <view class="header-title">{{ title }}</view>
-      <view class="header-btn primary" :class="{ disabled: confirming || !imageReady }" @click="handleConfirm">
-        {{ confirming ? '处理中' : '确定' }}
+
+      <view class="header-side right">
+        <view
+          class="confirm-btn"
+          :class="{ disabled: confirming || !imageReady }"
+          @click="handleConfirm"
+        >
+          {{ confirming ? '处理中' : '确定' }}
+        </view>
       </view>
     </view>
 
@@ -21,7 +31,7 @@
           v-if="imageReady"
           class="crop-image"
           :src="imagePath"
-          mode="scaleToFill"
+          mode="widthFix"
           :style="imageStyle"
           draggable="false"
         />
@@ -38,19 +48,7 @@
         ></view>
       </view>
 
-      <view class="tips">拖动图片调整位置，双指或滑块缩放</view>
-
-      <slider
-        class="zoom-slider"
-        :value="zoomValue"
-        min="100"
-        max="400"
-        activeColor="#667eea"
-        backgroundColor="#3a3a3a"
-        block-size="20"
-        @changing="onZoomChange"
-        @change="onZoomChange"
-      />
+      <view class="tips">拖动图片调整位置，双指缩放</view>
     </view>
 
     <canvas
@@ -71,45 +69,56 @@ export default {
       type: Boolean,
       default: false
     },
+
     src: {
       type: String,
       default: ''
     },
+
     title: {
       type: String,
       default: '裁剪头像'
     },
+
     outputWidth: {
       type: Number,
       default: 512
     },
+
     outputHeight: {
       type: Number,
       default: 512
     },
+
     maskShape: {
       type: String,
-      default: 'circle' // circle | round | square，仅影响预览遮罩；输出仍为正方形图片
+      default: 'circle'
     }
   },
 
   data() {
     return {
       canvasId: `avatarCropCanvas_${Math.random().toString(36).slice(2)}`,
+
       imagePath: '',
       imageReady: false,
       confirming: false,
 
-      stageSize: 320,
-      cropSize: 280,
-      cropLeft: 20,
-      cropTop: 20,
+      stageWidth: 375,
+      stageHeight: 500,
+
+      cropSize: 340,
+      cropLeft: 17,
+      cropTop: 80,
 
       naturalWidth: 0,
       naturalHeight: 0,
+      sourceSize: 0,
+
       scale: 1,
       minScale: 1,
       maxScale: 4,
+
       imgLeft: 0,
       imgTop: 0,
 
@@ -119,23 +128,23 @@ export default {
 
       pinching: false,
       pinchStartDistance: 0,
-      pinchStartScale: 1,
-
-      zoomValue: 100
+      pinchStartScale: 1
     }
   },
 
   computed: {
     stageStyle() {
-      return `width:${this.stageSize}px;height:${this.stageSize}px;`
+      return [
+        `width:${this.stageWidth}px`,
+        `height:${this.stageHeight}px`
+      ].join(';')
     },
 
     imageStyle() {
-      const width = this.naturalWidth * this.scale
-      const height = this.naturalHeight * this.scale
+      const width = this.getDisplayWidth()
+
       return [
         `width:${width}px`,
-        `height:${height}px`,
         `left:${this.imgLeft}px`,
         `top:${this.imgTop}px`
       ].join(';')
@@ -151,23 +160,46 @@ export default {
     },
 
     dimTopStyle() {
-      return `left:0;top:0;width:${this.stageSize}px;height:${this.cropTop}px;`
+      return [
+        'left:0',
+        'top:0',
+        `width:${this.stageWidth}px`,
+        `height:${this.cropTop}px`
+      ].join(';')
     },
 
     dimBottomStyle() {
-      return `left:0;top:${this.cropTop + this.cropSize}px;width:${this.stageSize}px;height:${this.stageSize - this.cropTop - this.cropSize}px;`
+      return [
+        'left:0',
+        `top:${this.cropTop + this.cropSize}px`,
+        `width:${this.stageWidth}px`,
+        `height:${this.stageHeight - this.cropTop - this.cropSize}px`
+      ].join(';')
     },
 
     dimLeftStyle() {
-      return `left:0;top:${this.cropTop}px;width:${this.cropLeft}px;height:${this.cropSize}px;`
+      return [
+        'left:0',
+        `top:${this.cropTop}px`,
+        `width:${this.cropLeft}px`,
+        `height:${this.cropSize}px`
+      ].join(';')
     },
 
     dimRightStyle() {
-      return `left:${this.cropLeft + this.cropSize}px;top:${this.cropTop}px;width:${this.stageSize - this.cropLeft - this.cropSize}px;height:${this.cropSize}px;`
+      return [
+        `left:${this.cropLeft + this.cropSize}px`,
+        `top:${this.cropTop}px`,
+        `width:${this.stageWidth - this.cropLeft - this.cropSize}px`,
+        `height:${this.cropSize}px`
+      ].join(';')
     },
 
     canvasStyle() {
-      return `width:${this.outputWidth}px;height:${this.outputHeight}px;`
+      return [
+        `width:${this.outputWidth}px`,
+        `height:${this.outputHeight}px`
+      ].join(';')
     }
   },
 
@@ -175,6 +207,7 @@ export default {
     visible(val) {
       if (val) {
         this.$nextTick(() => {
+          this.initStageSize()
           this.initCropper()
         })
       }
@@ -183,6 +216,7 @@ export default {
     src() {
       if (this.visible) {
         this.$nextTick(() => {
+          this.initStageSize()
           this.initCropper()
         })
       }
@@ -191,6 +225,7 @@ export default {
 
   mounted() {
     this.initStageSize()
+
     if (this.visible) {
       this.initCropper()
     }
@@ -202,16 +237,38 @@ export default {
     initStageSize() {
       try {
         const sys = uni.getSystemInfoSync()
-        const width = Number(sys.windowWidth || 375)
-        this.stageSize = Math.min(width, 430)
-        this.cropSize = Math.floor(this.stageSize * 0.78)
-        this.cropLeft = Math.floor((this.stageSize - this.cropSize) / 2)
-        this.cropTop = this.cropLeft
+        const windowWidth = Number(sys.windowWidth || 375)
+        const windowHeight = Number(sys.windowHeight || 667)
+
+        this.stageWidth = windowWidth
+
+        // 裁剪方框略小于屏幕宽度。
+        // 375px 屏幕约为 341px，左右各留约 17px。
+        const cropInset = Math.max(
+          14,
+          Math.min(22, Math.floor(windowWidth * 0.045))
+        )
+
+        this.cropSize = windowWidth - cropInset * 2
+        this.cropLeft = Math.floor((windowWidth - this.cropSize) / 2)
+
+        // 舞台高度大于裁剪框，且比上一版更高。
+        // 这样裁剪框上下能露出更多被遮罩压暗的图片。
+        const preferredHeight = Math.floor(this.cropSize * 1.75)
+        const maxUsableHeight = Math.floor(windowHeight * 0.85)
+
+        this.stageHeight = Math.max(
+          this.cropSize + 180,
+          Math.min(preferredHeight, maxUsableHeight)
+        )
+
+        this.cropTop = Math.floor((this.stageHeight - this.cropSize) / 2)
       } catch (e) {
-        this.stageSize = 320
-        this.cropSize = 280
-        this.cropLeft = 20
-        this.cropTop = 20
+        this.stageWidth = 375
+        this.cropSize = 341
+        this.cropLeft = 17
+        this.stageHeight = 500
+        this.cropTop = 79
       }
     },
 
@@ -219,6 +276,8 @@ export default {
       this.confirming = false
       this.imageReady = false
       this.imagePath = ''
+      this.dragging = false
+      this.pinching = false
 
       if (!this.src) return
 
@@ -229,29 +288,47 @@ export default {
           this.naturalWidth = Number(info.width || 1)
           this.naturalHeight = Number(info.height || 1)
 
-          this.minScale = Math.max(
-            this.cropSize / this.naturalWidth,
-            this.cropSize / this.naturalHeight
-          )
+          // 初始裁剪源区域取原图短边，避免横向或纵向压缩。
+          this.sourceSize = Math.min(this.naturalWidth, this.naturalHeight)
+
+          // 初始状态：原图短边撑满裁剪方框。
+          this.minScale = this.cropSize / this.sourceSize
           this.maxScale = this.minScale * 4
           this.scale = this.minScale
-          this.zoomValue = 100
 
-          this.imgLeft = (this.stageSize - this.naturalWidth * this.scale) / 2
-          this.imgTop = (this.stageSize - this.naturalHeight * this.scale) / 2
-          this.clampImagePosition()
+          this.resetImageToCenter()
 
           this.imageReady = true
         },
         fail: (err) => {
           console.error('AvatarCropper getImageInfo failed:', err)
+
           uni.showToast({
             title: '图片读取失败',
             icon: 'none'
           })
+
           this.handleCancel()
         }
       })
+    },
+
+    resetImageToCenter() {
+      const displayWidth = this.getDisplayWidth()
+      const displayHeight = this.getDisplayHeight()
+
+      this.imgLeft = this.cropLeft + (this.cropSize - displayWidth) / 2
+      this.imgTop = this.cropTop + (this.cropSize - displayHeight) / 2
+
+      this.clampImagePosition()
+    },
+
+    getDisplayWidth() {
+      return this.naturalWidth * this.scale
+    },
+
+    getDisplayHeight() {
+      return this.naturalHeight * this.scale
     },
 
     handleCancel() {
@@ -268,15 +345,21 @@ export default {
 
     getTouchDistance(touches) {
       if (!touches || touches.length < 2) return 0
+
       const p1 = this.getTouchPoint(touches[0])
       const p2 = this.getTouchPoint(touches[1])
+
       const dx = p1.x - p2.x
       const dy = p1.y - p2.y
+
       return Math.sqrt(dx * dx + dy * dy)
     },
 
     onTouchStart(e) {
+      if (!this.imageReady) return
+
       const touches = e.touches || []
+      if (!touches.length) return
 
       if (touches.length >= 2) {
         this.pinching = true
@@ -286,7 +369,8 @@ export default {
         return
       }
 
-      const point = this.getTouchPoint(touches[0] || {})
+      const point = this.getTouchPoint(touches[0])
+
       this.dragging = true
       this.pinching = false
       this.lastX = point.x
@@ -294,25 +378,32 @@ export default {
     },
 
     onTouchMove(e) {
+      if (!this.imageReady) return
+
       const touches = e.touches || []
+      if (!touches.length) return
 
       if (touches.length >= 2 && this.pinching) {
         const distance = this.getTouchDistance(touches)
+
         if (!distance || !this.pinchStartDistance) return
 
         const nextScale = this.pinchStartScale * (distance / this.pinchStartDistance)
         this.setScale(nextScale)
+
         return
       }
 
-      if (!this.dragging || !touches.length) return
+      if (!this.dragging) return
 
       const point = this.getTouchPoint(touches[0])
+
       const dx = point.x - this.lastX
       const dy = point.y - this.lastY
 
       this.imgLeft += dx
       this.imgTop += dy
+
       this.lastX = point.x
       this.lastY = point.y
 
@@ -324,24 +415,18 @@ export default {
       this.pinching = false
     },
 
-    onZoomChange(e) {
-      const value = Number(e?.detail?.value || 100)
-      this.zoomValue = value
-      const nextScale = this.minScale * (value / 100)
-      this.setScale(nextScale)
-    },
-
     setScale(nextScale) {
       const oldScale = this.scale || this.minScale
       const scale = Math.max(this.minScale, Math.min(this.maxScale, nextScale))
 
       const centerX = this.cropLeft + this.cropSize / 2
       const centerY = this.cropTop + this.cropSize / 2
+
       const imagePointX = (centerX - this.imgLeft) / oldScale
       const imagePointY = (centerY - this.imgTop) / oldScale
 
       this.scale = scale
-      this.zoomValue = Math.round((this.scale / this.minScale) * 100)
+
       this.imgLeft = centerX - imagePointX * this.scale
       this.imgTop = centerY - imagePointY * this.scale
 
@@ -349,22 +434,23 @@ export default {
     },
 
     clampImagePosition() {
-      const width = this.naturalWidth * this.scale
-      const height = this.naturalHeight * this.scale
+      const displayWidth = this.getDisplayWidth()
+      const displayHeight = this.getDisplayHeight()
 
-      const minLeft = this.cropLeft + this.cropSize - width
+      const minLeft = this.cropLeft + this.cropSize - displayWidth
       const maxLeft = this.cropLeft
-      const minTop = this.cropTop + this.cropSize - height
+
+      const minTop = this.cropTop + this.cropSize - displayHeight
       const maxTop = this.cropTop
 
-      if (width <= this.cropSize) {
-        this.imgLeft = this.cropLeft + (this.cropSize - width) / 2
+      if (displayWidth <= this.cropSize) {
+        this.imgLeft = this.cropLeft + (this.cropSize - displayWidth) / 2
       } else {
         this.imgLeft = Math.min(maxLeft, Math.max(minLeft, this.imgLeft))
       }
 
-      if (height <= this.cropSize) {
-        this.imgTop = this.cropTop + (this.cropSize - height) / 2
+      if (displayHeight <= this.cropSize) {
+        this.imgTop = this.cropTop + (this.cropSize - displayHeight) / 2
       } else {
         this.imgTop = Math.min(maxTop, Math.max(minTop, this.imgTop))
       }
@@ -375,19 +461,31 @@ export default {
 
       this.confirming = true
 
-      const sx = Math.max(0, (this.cropLeft - this.imgLeft) / this.scale)
-      const sy = Math.max(0, (this.cropTop - this.imgTop) / this.scale)
-      const sw = Math.min(this.naturalWidth - sx, this.cropSize / this.scale)
-      const sh = Math.min(this.naturalHeight - sy, this.cropSize / this.scale)
+      const sourceSize = this.cropSize / this.scale
+
+      const sx = (this.cropLeft - this.imgLeft) / this.scale
+      const sy = (this.cropTop - this.imgTop) / this.scale
+
+      const safeSx = Math.max(
+        0,
+        Math.min(this.naturalWidth - sourceSize, sx)
+      )
+
+      const safeSy = Math.max(
+        0,
+        Math.min(this.naturalHeight - sourceSize, sy)
+      )
 
       const ctx = uni.createCanvasContext(this.canvasId, this)
+
       ctx.clearRect(0, 0, this.outputWidth, this.outputHeight)
+
       ctx.drawImage(
         this.imagePath,
-        sx,
-        sy,
-        sw,
-        sh,
+        safeSx,
+        safeSy,
+        sourceSize,
+        sourceSize,
         0,
         0,
         this.outputWidth,
@@ -409,7 +507,9 @@ export default {
           },
           fail: (err) => {
             console.error('AvatarCropper canvasToTempFilePath failed:', err)
+
             this.confirming = false
+
             uni.showToast({
               title: '裁剪失败',
               icon: 'none'
@@ -422,6 +522,10 @@ export default {
 }
 </script>
 
+<style>
+@import "@/static/icon/iconfont.css";
+</style>
+
 <style scoped>
 .cropper-mask {
   position: fixed;
@@ -430,9 +534,11 @@ export default {
   top: 0;
   bottom: 0;
   z-index: 2000;
-  background: #111;
+  background: #111111;
   display: flex;
   flex-direction: column;
+  font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  box-sizing: border-box;
 }
 
 .cropper-header {
@@ -445,28 +551,58 @@ export default {
   color: #ffffff;
 }
 
-.header-btn {
-  min-width: 100rpx;
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.86);
+.header-side {
+  width: 120rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-.header-btn.primary {
-  color: #8ea2ff;
-  text-align: right;
-  font-weight: 600;
+.header-side.left {
+  justify-content: flex-start;
 }
 
-.header-btn.disabled {
-  opacity: 0.5;
+.header-side.right {
+  justify-content: flex-end;
+}
+
+.header-back-icon {
+  font-size: 38rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
+  line-height: 1;
 }
 
 .header-title {
   flex: 1;
   text-align: center;
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 400;
   color: #ffffff;
+  line-height: 1;
+}
+
+.confirm-btn {
+  margin: 0;
+  padding: 0 24rpx;
+  min-width: 104rpx;
+  height: 58rpx;
+  line-height: 58rpx;
+  border-radius: 29rpx;
+  background: rgba(253, 231, 209, 1);
+  color: #8a5a2b;
+  font-size: 26rpx;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.confirm-btn.disabled {
+  opacity: 0.55;
 }
 
 .cropper-body {
@@ -475,7 +611,7 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 30rpx 0 70rpx;
+  padding: 24rpx 0 60rpx;
   box-sizing: border-box;
 }
 
@@ -488,13 +624,15 @@ export default {
 .crop-image {
   position: absolute;
   z-index: 1;
-  will-change: left, top, width, height;
+  display: block;
+  will-change: left, top, width;
 }
 
 .dim {
   position: absolute;
   z-index: 2;
   background: rgba(0, 0, 0, 0.48);
+  pointer-events: none;
 }
 
 .crop-frame {
@@ -502,8 +640,9 @@ export default {
   z-index: 3;
   box-sizing: border-box;
   border: 2rpx solid rgba(255, 255, 255, 0.96);
-  border-radius: 24rpx;
+  border-radius: 0;
   box-shadow: 0 0 0 1rpx rgba(0, 0, 0, 0.14);
+  pointer-events: none;
 }
 
 .crop-frame.circle {
@@ -514,11 +653,8 @@ export default {
   margin-top: 34rpx;
   font-size: 24rpx;
   color: rgba(255, 255, 255, 0.72);
-}
-
-.zoom-slider {
-  width: 560rpx;
-  margin-top: 28rpx;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .crop-canvas {

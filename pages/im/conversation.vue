@@ -29,6 +29,7 @@
             scroll-y="true"
             :scroll-into-view="scrollIntoViewId"
             @scroll="onScroll"
+            @touchstart="onChatScrollTouchStart"
         >
             <view class="messages">
                 <view v-if="isLoading" class="loading-tip" :style="systemRowStyle">
@@ -209,6 +210,7 @@
             </view>
         </scroll-view>
 
+
         <view class="message-action-mask" v-if="messageAction.visible" @click="hideMessageActions">
             <view
                 class="message-action-menu"
@@ -228,8 +230,13 @@
                     v-model="inputText"
                     placeholder="说点什么..."
                     placeholder-class="input-placeholder"
-                    @confirm="sendMessage"
+                    :adjust-position="false"
+                    cursor-spacing="0"
                     confirm-type="send"
+                    @focus="handleInputFocus"
+                    @blur="handleInputBlur"
+                    @keyboardheightchange="handleKeyboardHeightChange"
+                    @confirm="sendMessage"
                 />
             </view>
 
@@ -279,7 +286,7 @@ export default {
             commandListener: null,
             chatName: '',
             userDefaultAvatar: '/static/user_avatar.png',
-            aiDefaultAvatar: '/static/ai.png',
+            aiDefaultAvatar: '/static/ai_avatar.png',
             defaultCover: '/static/images/default.png',
             firstPageProfileRefreshed: false,
             groupProfileTtlMs: 7 * 24 * 60 * 60 * 1000,
@@ -289,11 +296,11 @@ export default {
             statusBarHeight: 0,
             bottomSafeHeight: 0,
 
-            headerHeight: 60,
-            headerContentHeight: 44,
-            headerButtonSize: 36,
-            headerTitleFontSize: 15,
-            backIconSize: 18,
+            headerHeight: 42,
+            headerContentHeight: 42,
+            headerButtonSize: 30,
+            headerTitleFontSize: 16,
+            backIconSize: 19,
             settingsIconSize: 20,
 
             inputBarHeight: 56,
@@ -330,6 +337,12 @@ export default {
             shareAuthorFontSize: 10,
             shareAuthorAvatarSize: 16,
             shareVideoBadgeSize: 20,
+			
+            inputBottomOffset: 0,
+            inputFocused: false,
+            keyboardVisible: false,
+            keyboardHeight: 0,
+            inputBlurTimer: null,
 
             messageAction: {
                 visible: false,
@@ -383,16 +396,24 @@ export default {
         },
 
         chatMessagesStyle() {
+            const bottom = this.inputBarHeight + this.inputBottomOffset;
+        
             return [
                 'top:' + this.headerHeight + 'px',
-                'bottom:' + this.inputBarHeight + 'px',
+                'bottom:' + bottom + 'px',
                 'padding:' + Math.max(8, Math.floor(this.messageGap * 0.9)) + 'px ' + this.messageSidePadding + 'px ' + Math.max(10, this.messageGap) + 'px'
             ].join(';') + ';';
         },
 
         inputBarStyle() {
-            return 'height:' + this.inputBarHeight + 'px;padding-bottom:' + this.bottomSafeHeight + 'px;';
+            return [
+                'height:' + this.inputBarHeight + 'px',
+                'padding-top:1px',
+                'padding-bottom:' + this.bottomSafeHeight + 'px',
+                'bottom:' + this.inputBottomOffset + 'px'
+            ].join(';') + ';';
         },
+
 
         inputWrapperStyle() {
             return 'border-radius:' + Math.floor(this.inputContentHeight / 2) + 'px;';
@@ -555,7 +576,6 @@ export default {
                 this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
             }
-
             if (this.conIndex <= this.conversation.min_index) {
                 this.hasMore = false;
             } else if (this.messages.length < 20) {
@@ -682,9 +702,75 @@ export default {
         if (this.commandListener) {
             uni.$off('command', this.commandListener);
         }
+        if (this.inputBlurTimer) {
+            clearTimeout(this.inputBlurTimer);
+            this.inputBlurTimer = null;
+        }
     },
 
     methods: {
+        noop() {},
+
+        hideKeyboardOnly() {
+            try {
+                uni.hideKeyboard();
+            } catch (err) {}
+        },
+
+        onChatScrollTouchStart() {
+            if (!this.inputFocused && !this.keyboardVisible) return;
+
+            this.hideMessageActions();
+            this.hideKeyboardOnly();
+        },
+
+        handleInputFocus() {
+            if (this.inputBlurTimer) {
+                clearTimeout(this.inputBlurTimer);
+                this.inputBlurTimer = null;
+            }
+
+            this.hideMessageActions();
+            this.inputFocused = true;
+        },
+
+        handleInputBlur() {
+            if (this.inputBlurTimer) {
+                clearTimeout(this.inputBlurTimer);
+            }
+
+            this.inputBlurTimer = setTimeout(() => {
+                if (!this.keyboardVisible) {
+                    this.inputFocused = false;
+                }
+
+                this.inputBlurTimer = null;
+            }, 180);
+        },
+
+        handleKeyboardHeightChange(e) {
+            const height = Number(e?.detail?.height || 0);
+
+            if (this.inputBlurTimer) {
+                clearTimeout(this.inputBlurTimer);
+                this.inputBlurTimer = null;
+            }
+
+            this.keyboardHeight = height;
+
+            if (height > 0) {
+                this.keyboardVisible = true;
+                this.inputFocused = true;
+                return;
+            }
+
+            setTimeout(() => {
+                this.keyboardVisible = false;
+                this.keyboardHeight = 0;
+                this.inputFocused = false;
+            }, 80);
+        },
+
         initResponsiveLayout() {
             try {
                 const sys = uni.getSystemInfoSync();
@@ -694,23 +780,28 @@ export default {
                 const safeInsets = sys.safeAreaInsets || {};
                 const bottomSafeHeight = Number(safeInsets.bottom || 0);
                 const compact = windowWidth <= 360 || windowHeight <= 640;
+                
+                const inputBottomOffset = bottomSafeHeight > 0
+                    ? 0
+                    : clamp(Math.floor(windowWidth * 0.02), 7, 10);
 
                 this.windowWidth = windowWidth;
                 this.windowHeight = windowHeight;
                 this.statusBarHeight = statusBarHeight;
                 this.bottomSafeHeight = bottomSafeHeight;
+                this.inputBottomOffset = inputBottomOffset;
 
                 this.messageSidePadding = clamp(Math.floor(windowWidth * 0.03), 10, 14);
 
-                this.headerContentHeight = clamp(Math.floor(windowWidth * 0.118), 42, 50);
+                this.headerContentHeight = 42;
                 this.headerHeight = statusBarHeight + this.headerContentHeight;
-                this.headerButtonSize = clamp(Math.floor(this.headerContentHeight * 0.82), 34, 40);
-                this.headerTitleFontSize = clamp(Math.floor(windowWidth * 0.041), 15, 17);
-                this.backIconSize = clamp(Math.floor(windowWidth * 0.052), 18, 21);
-                this.settingsIconSize = clamp(Math.floor(windowWidth * 0.058), 20, 23);
+                this.headerButtonSize = 30;
+                this.headerTitleFontSize = 16;
+                this.backIconSize = 19;
+                this.settingsIconSize = 20;
 
-                this.inputContentHeight = clamp(Math.floor(windowWidth * 0.102), 36, 42);
-                this.inputBarHeight = this.inputContentHeight + bottomSafeHeight + clamp(Math.floor(windowWidth * 0.034), 12, 16);
+                this.inputContentHeight = clamp(Math.floor(windowWidth * 0.108), 38, 44);
+                this.inputBarHeight = this.inputContentHeight + bottomSafeHeight + 5;
 
                 this.inputFontSize = clamp(Math.floor(windowWidth * 0.038), 14, 16);
                 this.sendButtonHeight = clamp(Math.floor(this.inputContentHeight * 0.92), 33, 39);
@@ -751,14 +842,15 @@ export default {
                 this.windowWidth = 375;
                 this.statusBarHeight = 0;
                 this.bottomSafeHeight = 0;
-                this.headerContentHeight = 44;
-                this.headerHeight = 44;
-                this.headerButtonSize = 36;
-                this.headerTitleFontSize = 15;
-                this.backIconSize = 18;
+				this.inputBottomOffset = 8;
+                this.headerContentHeight = 42;
+                this.headerHeight = 42;
+                this.headerButtonSize = 30;
+                this.headerTitleFontSize = 16;
+                this.backIconSize = 19;
                 this.settingsIconSize = 20;
                 this.inputContentHeight = 38;
-                this.inputBarHeight = 52;
+                this.inputBarHeight = 50;
                 this.inputFontSize = 14;
                 this.sendButtonHeight = 35;
                 this.sendButtonWidth = 54;
@@ -1356,35 +1448,48 @@ export default {
             }, 80);
         },
 
-        showMessageActions(e, message) {
-            if (!message) return;
-            if (Number(message.sender_type) === 3 || Number(message.send_type) === 3) return;
-            if (this.messageTouch.moved) return;
+		showMessageActions(e, message) {
+			if (!message) return;
+			if (Number(message.sender_type) === 3 || Number(message.send_type) === 3) return;
+			if (this.messageTouch.moved) return;
 
-            const canCopy = this.canCopyMessage(message);
-            const canRecall = this.canRecallMessage(message);
+			const canCopy = this.canCopyMessage(message);
+			const canRecall = this.canRecallMessage(message);
 
-            if (!canCopy && !canRecall) return;
+			if (!canCopy && !canRecall) return;
 
-            const point = this.getLongPressPoint(e);
-            const menuWidth = canCopy && canRecall ? 112 : 58;
-            const menuHeight = 34;
-            const sys = uni.getSystemInfoSync();
+			const point = this.getLongPressPoint(e);
+			const menuWidth = canCopy && canRecall ? 112 : 58;
+			const menuHeight = 34;
+			const sys = uni.getSystemInfoSync();
 
-            let left = point.x - menuWidth / 2;
-            let top = point.y - menuHeight - 8;
+			const safeTop = this.headerHeight + 8;
+			const safeBottom = Number(this.bottomSafeHeight || 0) + 12;
 
-            left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
-            if (top < this.headerHeight) top = point.y + 8;
-            top = Math.max(8, Math.min(top, sys.windowHeight - menuHeight - 8));
+			// X 轴跟随手指，只做屏幕边界限制
+			let left = point.x - menuWidth / 2;
+			left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
 
-            this.messageAction = {
-                visible: true,
-                left,
-                top,
-                message
-            };
-        },
+			// Y 轴避开手指：优先在手指上方 40px
+			let top = point.y - menuHeight - 40;
+
+			// 上方空间不够时，放到手指下方 40px
+			if (top < safeTop) {
+				top = point.y + 40;
+			}
+
+			top = Math.max(
+				safeTop,
+				Math.min(top, sys.windowHeight - safeBottom - menuHeight)
+			);
+
+			this.messageAction = {
+				visible: true,
+				left,
+				top,
+				message
+			};
+		},
 
         getLongPressPoint(e) {
             const touch =
@@ -1878,6 +1983,7 @@ export default {
     font-weight: 400;
 }
 
+
 .message-action-mask {
     position: fixed;
     left: 0;
@@ -1931,8 +2037,9 @@ export default {
     right: 0;
     bottom: 0;
     display: flex;
-    align-items: center;
-    padding: 6px 10px 6px;
+    align-items: flex-start;
+    padding-left: 10px;
+    padding-right: 10px;
     background: #fdfdfd;
     border-top: none;
     gap: 8px;
@@ -1948,7 +2055,8 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 10px;
+    padding-left: 10px;
+    padding-right: 10px;
     background: #fdfdfd;
     border-top: none;
     box-sizing: border-box;

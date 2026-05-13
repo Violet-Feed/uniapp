@@ -171,7 +171,7 @@
 <script>
 import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
-import { getNoitceCount, updateConversationSetting, markRead } from '@/request/im.js';
+import { getNoitceCounts, updateConversationSetting, markRead } from '@/request/im.js';
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 import { enqueueProfileRefresh } from '@/utils/im-cache.js';
 
@@ -198,16 +198,16 @@ export default {
             statusBarHeight: 0,
             safeBottom: 0,
 
-            headerHeight: 56,
-            noticeRowHeight: 84,
-            conversationItemHeight: 70,
-            avatarSize: 46,
-            noticeAvatarSize: 44,
-            actionButtonSize: 32,
-            tabbarSpacerHeight: 64,
-
-            headerTitleFontSize: 16,
-            actionIconFontSize: 23,
+            headerHeight: 60,
+            noticeRowHeight: 88,
+            conversationItemHeight: 72,
+            avatarSize: 48,
+            noticeAvatarSize: 46,
+            actionButtonSize: 36,
+            tabbarSpacerHeight: 66,
+            
+            headerTitleFontSize: 18,
+            actionIconFontSize: 25,
 
             conversationNameFontSize: 16,
             lastMessageFontSize: 13,
@@ -271,7 +271,7 @@ export default {
         },
 
         dropdownMenuStyle() {
-            return 'top:' + (this.headerHeight + 2) + 'px;';
+            return 'top:' + (this.headerHeight + 6) + 'px;';
         },
 
         noticeRowStyle() {
@@ -501,6 +501,16 @@ export default {
     },
 
     methods: {
+		closeAppSplash() {
+		    // #ifdef APP-PLUS
+		    setTimeout(() => {
+		      try {
+		        plus.navigator.closeSplashscreen()
+		      } catch (err) {}
+		    }, 80)
+		    // #endif
+		},
+		  
         initResponsiveLayout() {
             try {
                 const sys = uni.getSystemInfoSync();
@@ -520,102 +530,102 @@ export default {
                 const tinyScreenBoost = layoutWidth <= 330 ? 1 : 0;
                 
                 const tabbarBaseHeight = Math.max(
-                    48,
-                    Math.min(52, Math.floor(layoutWidth * 0.134))
+                    52,
+                    Math.min(58, Math.floor(layoutWidth * 0.146))
                 );
                 
                 this.tabbarSpacerHeight = tabbarBaseHeight + this.safeBottom + 10;
                 
                 const headerContentHeight = Math.max(
-                    38,
-                    Math.min(42, Math.floor(layoutWidth * 0.108))
+                    42,
+                    Math.min(48, Math.floor(layoutWidth * 0.122))
                 );
                 
                 this.headerHeight = statusBarHeight + headerContentHeight;
                 
                 this.conversationItemHeight = Math.max(
-                    66,
-                    Math.min(72, Math.floor(layoutWidth * 0.176))
+                    68,
+                    Math.min(74, Math.floor(layoutWidth * 0.185))
                 );
                 
                 this.noticeRowHeight = Math.max(
-                    78,
-                    Math.min(86, Math.floor(layoutWidth * 0.222))
+                    84,
+                    Math.min(94, Math.floor(layoutWidth * 0.238))
                 );
                 
                 this.avatarSize = Math.max(
-                    44,
-                    Math.min(48, Math.floor(this.conversationItemHeight * 0.67))
+                    46,
+                    Math.min(50, Math.floor(this.conversationItemHeight * 0.68))
                 );
                 
                 this.noticeAvatarSize = Math.max(
-                    42,
-                    Math.min(46, Math.floor(this.noticeRowHeight * 0.53))
+                    44,
+                    Math.min(50, Math.floor(this.noticeRowHeight * 0.535))
                 );
                 
                 this.actionButtonSize = Math.max(
-                    30,
-                    Math.min(32, Math.floor(headerContentHeight * 0.74))
+                    34,
+                    Math.min(38, Math.floor(headerContentHeight * 0.78))
                 );
                 
                 this.headerTitleFontSize = Math.max(
-                    16,
-                    Math.min(17, Math.floor(headerContentHeight * 0.38) + smallScreenBoost)
+                    17,
+                    Math.min(19, Math.floor(headerContentHeight * 0.4) + smallScreenBoost)
                 );
                 
                 this.actionIconFontSize = Math.max(
-                    22,
-                    Math.min(24, Math.floor(headerContentHeight * 0.54) + smallScreenBoost)
+                    24,
+                    Math.min(27, Math.floor(headerContentHeight * 0.56) + smallScreenBoost)
                 );
                 
                 this.conversationNameFontSize = Math.max(
                     16,
-                    Math.min(17, Math.floor(this.conversationItemHeight * 0.235) + smallScreenBoost + tinyScreenBoost)
+                    Math.min(18, Math.floor(this.conversationItemHeight * 0.238) + smallScreenBoost + tinyScreenBoost)
                 );
                 
                 this.lastMessageFontSize = Math.max(
-                    12,
-                    Math.min(13, Math.floor(this.conversationItemHeight * 0.172) + smallScreenBoost)
+                    13,
+                    Math.min(14, Math.floor(this.conversationItemHeight * 0.18) + smallScreenBoost)
                 );
                 
                 this.conversationTimeFontSize = Math.max(
-                    10,
-                    Math.min(11, Math.floor(this.conversationItemHeight * 0.148) + smallScreenBoost)
+                    11,
+                    Math.min(12, Math.floor(this.conversationItemHeight * 0.152) + smallScreenBoost)
                 );
                 
                 this.unreadBadgeFontSize = Math.max(
-                    9,
-                    Math.min(10, Math.floor(this.conversationItemHeight * 0.14) + smallScreenBoost)
+                    10,
+                    Math.min(11, Math.floor(this.conversationItemHeight * 0.145) + smallScreenBoost)
                 );
                 
                 this.unreadBadgeHeight = Math.max(
-                    16,
-                    Math.min(17, Math.floor(this.conversationItemHeight * 0.235))
+                    17,
+                    Math.min(19, Math.floor(this.conversationItemHeight * 0.245))
                 );
                 
                 this.unreadBadgeMinWidth = Math.max(
-                    18,
-                    Math.min(20, Math.floor(this.conversationItemHeight * 0.29))
+                    20,
+                    Math.min(22, Math.floor(this.conversationItemHeight * 0.3))
                 );
                 
                 this.noticeNameFontSize = Math.max(
-                    12,
-                    Math.min(13, Math.floor(this.noticeRowHeight * 0.148) + smallScreenBoost)
+                    13,
+                    Math.min(14, Math.floor(this.noticeRowHeight * 0.15) + smallScreenBoost)
                 );
                 
                 this.noticeIconFontSize = Math.max(
-                    20,
-                    Math.min(22, Math.floor(this.noticeAvatarSize * 0.48) + smallScreenBoost)
+                    22,
+                    Math.min(25, Math.floor(this.noticeAvatarSize * 0.5) + smallScreenBoost)
                 );
                 
                 this.systemIconFontSize = Math.max(
-                    22,
-                    Math.min(24, Math.floor(this.noticeAvatarSize * 0.52) + smallScreenBoost)
+                    24,
+                    Math.min(27, Math.floor(this.noticeAvatarSize * 0.54) + smallScreenBoost)
                 );
                 
                 this.conversationSideWidth = Math.max(
-                    48,
-                    Math.min(52, Math.floor(layoutWidth * 0.13))
+                    52,
+                    Math.min(58, Math.floor(layoutWidth * 0.145))
                 );
             } catch (err) {
                 this.windowHeight = 667;
@@ -816,26 +826,26 @@ export default {
         },
 
         async loadNoticeCounts() {
-            let payload = { group: this.NOTICE_GROUP.SYSTEM };
-            const systemRes = await getNoitceCount(payload);
-            this.systemNoticeCount =
-                systemRes && typeof systemRes.notice_count === 'number'
-                    ? systemRes.notice_count
-                    : 0;
-
-            payload = { group: this.NOTICE_GROUP.FOLLOW };
-            const followRes = await getNoitceCount(payload);
-            this.followNoticeCount =
-                followRes && typeof followRes.notice_count === 'number'
-                    ? followRes.notice_count
-                    : 0;
-
-            payload = { group: this.NOTICE_GROUP.ACTION };
-            const actionRes = await getNoitceCount(payload);
-            this.actionNoticeCount =
-                actionRes && typeof actionRes.notice_count === 'number'
-                    ? actionRes.notice_count
-                    : 0;
+            try {
+                const groups = [
+                    this.NOTICE_GROUP.SYSTEM,
+                    this.NOTICE_GROUP.FOLLOW,
+                    this.NOTICE_GROUP.ACTION
+                ];
+        
+                const res = await getNoitceCounts({ groups });
+                const countMap = res?.notice_count || {};
+        
+                this.systemNoticeCount = Number(countMap?.[this.NOTICE_GROUP.SYSTEM] || 0);
+                this.followNoticeCount = Number(countMap?.[this.NOTICE_GROUP.FOLLOW] || 0);
+                this.actionNoticeCount = Number(countMap?.[this.NOTICE_GROUP.ACTION] || 0);
+            } catch (err) {
+                console.error('loadNoticeCounts failed', err);
+        
+                this.systemNoticeCount = 0;
+                this.followNoticeCount = 0;
+                this.actionNoticeCount = 0;
+            }
         },
 
         openNotice(group) {
@@ -897,21 +907,32 @@ export default {
         showDeleteConversationAction(e, conversation) {
             if (this.conversationTouch.moved) return;
             if (!conversation?.con_short_id || this.deletingConId) return;
-
+        
             const point = this.getLongPressPoint(e);
-            const menuWidth = 56;
-            const menuHeight = 34;
+            const menuWidth = 68;
+            const menuHeight = 36;
             const sys = uni.getSystemInfoSync();
-
+        
+            const safeTop = this.headerHeight + 8;
+            const safeBottom = Number(this.safeBottom || 0) + 12;
+        
+            // X 轴跟随手指，只做屏幕边界限制
             let left = point.x - menuWidth / 2;
-            let top = point.y - menuHeight - 8;
-
             left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
-
-            const minTop = this.statusBarHeight + 8;
-            if (top < minTop) top = point.y + 8;
-            top = Math.max(minTop, Math.min(top, sys.windowHeight - menuHeight - 8));
-
+        
+            // Y 轴只向上偏移一点，避免被手指挡住，但不要离太远
+            let top = point.y - menuHeight - 40;
+        
+            // 上方空间不够时，放到手指下方一点点
+            if (top < safeTop) {
+                top = point.y + 40;
+            }
+        
+            top = Math.max(
+                safeTop,
+                Math.min(top, sys.windowHeight - safeBottom - menuHeight)
+            );
+        
             this.conversationAction = {
                 visible: true,
                 left,
@@ -1141,15 +1162,15 @@ export default {
 
 .dropdown-menu {
     position: absolute;
-    right: 6px;
+    right: 8px;
     background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 7px 20px rgba(0, 0, 0, 0.10);
+    border-radius: 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
     overflow: hidden;
     animation: slideDown 0.2s ease;
-    padding: 3px 0;
+    padding: 6px 0;
     box-sizing: border-box;
-    min-width: 122px;
+    min-width: 154px;
 }
 
 @keyframes slideDown {
@@ -1164,12 +1185,12 @@ export default {
 }
 
 .dropdown-item {
-    height: 36px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 0 9px;
-    gap: 6px;
+    padding: 0 14px;
+    gap: 10px;
     transition: background 0.2s;
     box-sizing: border-box;
 }
@@ -1179,13 +1200,13 @@ export default {
 }
 
 .item-icon {
-    font-size: 15px;
+    font-size: 20px;
     color: #777;
     line-height: 1;
 }
 
 .item-text {
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 400;
     color: #333;
     white-space: nowrap;
@@ -1433,23 +1454,23 @@ export default {
 
 .conversation-action-menu {
     position: fixed;
-    height: 34px;
+    height: 40px;
     background: #ffffff;
-    border-radius: 7px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     overflow: hidden;
-    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
 }
 
 .conversation-action-item {
-    min-width: 56px;
-    height: 34px;
-    padding: 0 8px;
+    min-width: 76px;
+    height: 40px;
+    padding: 0 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 14px;
     color: #333333;
     box-sizing: border-box;
 }

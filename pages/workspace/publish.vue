@@ -74,6 +74,7 @@
 						v-model="title"
 						placeholder="请输入标题"
 						placeholder-class="input-placeholder"
+						:adjust-position="false"
 						maxlength="50"
 					/>
 				</view>
@@ -93,6 +94,7 @@
 						v-model="content"
 						placeholder="写点说明、心情或者创作故事..."
 						placeholder-class="input-placeholder"
+						:adjust-position="false"
 						maxlength="500"
 					/>
 				</view>

@@ -27,7 +27,9 @@ export const httpRequestBackData = async (url, data) => {
 			if (res.code === 1000) {
 				return res.data;
 			}
-
+			if (res.code === 1008) {
+				return undefined;
+			}
 			uni.showToast({
 				title: '服务器错误',
 				icon: 'none'
@@ -86,7 +88,9 @@ export const httpRequestBackBool = async (url, data) => {
 			if (res.code === 1000) {
 				return true;
 			}
-
+			if (res.code === 1008) {
+				return false;
+			}
 			uni.showToast({
 				title: '服务器错误',
 				icon: 'none'
