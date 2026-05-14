@@ -3,7 +3,7 @@
     "appid" : "__UNI__1A73A33",
     "description" : "",
     "versionName" : "1.0.0",
-    "versionCode" : "100",
+    "versionCode" : 1,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -45,20 +45,12 @@
             },
             /* ios打包配置 */
             "ios" : {
-                "urltypes" : "violet"
+                "urltypes" : "violet",
+                "dSYMs" : true
             },
             /* SDK配置 */
             "sdkConfigs" : {
-                "share" : {
-                    "weixin" : {
-                        "appid" : "",
-                        "UniversalLinks" : ""
-                    },
-                    "qq" : {
-                        "appid" : "",
-                        "UniversalLinks" : ""
-                    }
-                }
+                "share" : {}
             },
             "icons" : {
                 "android" : {
@@ -99,7 +91,7 @@
                     "xhdpi" : "unpackage/res/start/720x1242.png",
                     "xxhdpi" : "unpackage/res/start/1080x1882.png"
                 },
-                "iosStyle" : "default"
+                "iosStyle" : "common"
             }
         }
     },
@@ -134,5 +126,7 @@
             "https" : false,
             "port" : ""
         }
-    }
+    },
+    "locale" : "zh-Hans",
+    "fallbackLocale" : "zh-Hans"
 }
