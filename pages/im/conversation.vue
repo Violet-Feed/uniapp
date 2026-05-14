@@ -210,6 +210,14 @@
             </view>
         </scroll-view>
 
+		<view
+            v-if="floatingUnreadCount > 0"
+            class="new-message-float"
+            :style="newMessageFloatStyle"
+            @click="jumpToFirstFloatingUnread"
+        >
+            <text class="new-message-float-text">{{ floatingUnreadCount }} 条新消息</text>
+        </view>
 
         <view class="message-action-mask" v-if="messageAction.visible" @click="hideMessageActions">
             <view
@@ -224,19 +232,22 @@
 
         <view class="input-bar" :style="inputBarStyle" v-if="canSendMessage">
             <view class="input-wrapper" :style="inputWrapperStyle">
-                <input
+                <textarea
                     class="input-field"
                     :style="inputFieldStyle"
                     v-model="inputText"
                     placeholder="说点什么..."
                     placeholder-class="input-placeholder"
                     :adjust-position="false"
+                    :focus="inputFocused"
                     cursor-spacing="0"
-                    confirm-type="send"
+                    :maxlength="-1"
+                    :show-confirm-bar="false"
+                    :disable-default-padding="true"
                     @focus="handleInputFocus"
                     @blur="handleInputBlur"
                     @keyboardheightchange="handleKeyboardHeightChange"
-                    @confirm="sendMessage"
+                    @linechange="handleInputLineChange"
                 />
             </view>
 
@@ -244,7 +255,9 @@
                 class="send-btn"
                 :class="{ 'send-btn-active': inputText.trim() }"
                 :style="sendButtonStyle"
-                @click="sendMessage"
+                @touchstart.prevent.stop="handleSendTouchStart"
+                @touchend.prevent.stop="handleSendTouchEnd"
+                @touchcancel.prevent.stop="handleSendTouchCancel"
             >
                 <text class="send-text" :style="sendTextStyle">发送</text>
             </view>
@@ -282,6 +295,18 @@ export default {
             scrollIntoViewId: '',
             hasMore: true,
             isLoading: false,
+			
+			isAtBottom: true,
+			chatScrollTop: 0,
+			bottomThreshold: 80,
+			
+			floatingUnreadIds: [],
+			floatingUnreadMap: {},
+			firstFloatingUnreadId: '',
+			
+			checkFloatingUnreadTimer: null,
+			checkingFloatingUnreadVisible: false,
+			
             normalListener: null,
             commandListener: null,
             chatName: '',
@@ -303,11 +328,25 @@ export default {
             backIconSize: 19,
             settingsIconSize: 20,
 
-            inputBarHeight: 56,
-            inputContentHeight: 36,
+            inputBarHeight: 44,
+            baseInputBarHeight: 44,
+
+            inputContentHeight: 34,
+            baseInputContentHeight: 34,
+            maxInputContentHeight: 94,
+
+            textareaLineHeight: 20,
+            textareaPaddingTop: 7,
+            textareaPaddingBottom: 7,
+            textareaPaddingLeft: 13,
+            textareaPaddingRight: 22,
+
+            inputBarTopGap: 4,
+            inputBarBottomGap: 4,
+
             inputFontSize: 14,
             sendButtonHeight: 34,
-            sendButtonWidth: 54,
+            sendButtonWidth: 52,
             sendTextFontSize: 13,
 
             messageUnitHeight: 46,
@@ -343,6 +382,15 @@ export default {
             keyboardVisible: false,
             keyboardHeight: 0,
             inputBlurTimer: null,
+            sendingByTouch: false,
+            sendingMessage: false,
+
+            readMarkBaseIndex: '0',
+            readMarkBaseBadgeCount: 0,
+            pendingReadIndexEnd: '',
+            pendingReadBadgeCount: 0,
+            pendingReadMsgMap: {},
+            readMarkFlushed: false,
 
             messageAction: {
                 visible: false,
@@ -408,23 +456,55 @@ export default {
         inputBarStyle() {
             return [
                 'height:' + this.inputBarHeight + 'px',
-                'padding-top:1px',
-                'padding-bottom:' + this.bottomSafeHeight + 'px',
-                'bottom:' + this.inputBottomOffset + 'px'
+                'padding-top:' + this.inputBarTopGap + 'px',
+                'padding-bottom:' + (this.bottomSafeHeight + this.inputBarBottomGap) + 'px',
+                'bottom:' + this.inputBottomOffset + 'px',
+                'box-sizing:border-box',
+                'align-items:flex-end'
             ].join(';') + ';';
         },
 
 
         inputWrapperStyle() {
-            return 'border-radius:' + Math.floor(this.inputContentHeight / 2) + 'px;';
+            const radiusBase = this.baseInputContentHeight || 34;
+
+            return [
+                'height:' + this.inputContentHeight + 'px',
+                'border-radius:' + Math.floor(radiusBase / 2) + 'px',
+                'align-self:flex-end',
+                'box-sizing:border-box'
+            ].join(';') + ';';
         },
 
         inputFieldStyle() {
-            return 'height:' + this.inputContentHeight + 'px;font-size:' + this.inputFontSize + 'px;padding-left:' + Math.floor(this.inputContentHeight * 0.38) + 'px;padding-right:' + Math.floor(this.inputContentHeight * 0.38) + 'px;';
+            return [
+                'height:' + this.inputContentHeight + 'px',
+                'min-height:' + this.baseInputContentHeight + 'px',
+                'max-height:' + this.maxInputContentHeight + 'px',
+                'font-size:' + this.inputFontSize + 'px',
+                'line-height:' + this.textareaLineHeight + 'px',
+                'padding-top:' + this.textareaPaddingTop + 'px',
+                'padding-bottom:' + this.textareaPaddingBottom + 'px',
+                'padding-left:' + this.textareaPaddingLeft + 'px',
+                'padding-right:' + this.textareaPaddingRight + 'px',
+                'box-sizing:border-box',
+                'overflow-y:auto'
+            ].join(';') + ';';
         },
 
         sendButtonStyle() {
-            return 'width:' + this.sendButtonWidth + 'px;height:' + this.sendButtonHeight + 'px;border-radius:' + Math.floor(this.sendButtonHeight / 2) + 'px;';
+            const marginBottom = Math.max(
+                0,
+                Math.floor((this.baseInputContentHeight - this.sendButtonHeight) / 2)
+            );
+
+            return [
+                'width:' + this.sendButtonWidth + 'px',
+                'height:' + this.sendButtonHeight + 'px',
+                'border-radius:' + Math.floor(this.sendButtonHeight / 2) + 'px',
+                'align-self:flex-end',
+                'margin-bottom:' + marginBottom + 'px'
+            ].join(';') + ';';
         },
 
         sendTextStyle() {
@@ -549,7 +629,20 @@ export default {
 
         shareVideoBadgeIconStyle() {
             return 'font-size:' + clamp(Math.floor(this.shareVideoBadgeSize * 0.52), 10, 13) + 'px;';
-        }
+        },
+		
+		floatingUnreadCount() {
+		    return this.floatingUnreadIds.length;
+		},
+		
+		newMessageFloatStyle() {
+		    const bottom = this.inputBarHeight + this.inputBottomOffset + 12;
+		
+		    return [
+		        'bottom:' + bottom + 'px',
+		        'right:' + Math.max(12, this.messageSidePadding) + 'px'
+		    ].join(';') + ';';
+		},
     },
 
     async onLoad(options) {
@@ -599,12 +692,27 @@ export default {
 
             this.refreshFirstPageGroupProfiles();
 
+            this.initReadMarkState();
+
             if (this.conversation.badge_count - this.conversation.read_badge_count > 0 && this.messages.length > 0) {
-                markRead(
-                    this.conversation.con_short_id,
-                    this.messages[this.messages.length - 1].con_index,
-                    this.conversation.badge_count
-                );
+                const latestMessage = this.messages[this.messages.length - 1];
+
+                if (latestMessage && latestMessage.con_index) {
+                    markRead(
+                        this.conversation.con_short_id,
+                        latestMessage.con_index,
+                        this.conversation.badge_count
+                    );
+
+                    this.readMarkBaseIndex = String(latestMessage.con_index);
+                    this.readMarkBaseBadgeCount = Number(this.conversation.badge_count || 0);
+                    this.pendingReadIndexEnd = '';
+                    this.pendingReadBadgeCount = this.readMarkBaseBadgeCount;
+                    this.pendingReadMsgMap = {};
+
+                    this.conversation.read_index_end = latestMessage.con_index;
+                    this.conversation.read_badge_count = this.readMarkBaseBadgeCount;
+                }
             }
         }
 
@@ -653,8 +761,16 @@ export default {
                 return;
             }
 
+			const shouldScrollToBottom = this.isAtBottom || this.isSelfMessage(msg);
+			
             this.messages.push(msg);
-            this.scrollToBottom();
+
+            if (shouldScrollToBottom) {
+                this.recordPendingReadMessage(msg);
+                this.scrollToBottom();
+            } else {
+                this.addFloatingUnread(msg);
+            }
         };
 
         uni.$on('normal', this.normalListener);
@@ -696,6 +812,8 @@ export default {
     },
 
     onUnload() {
+        this.flushReadMarkOnExit();
+
         if (this.normalListener) {
             uni.$off('normal', this.normalListener);
         }
@@ -706,6 +824,11 @@ export default {
             clearTimeout(this.inputBlurTimer);
             this.inputBlurTimer = null;
         }
+        if (this.checkFloatingUnreadTimer) {
+            clearTimeout(this.checkFloatingUnreadTimer);
+            this.checkFloatingUnreadTimer = null;
+        }
+
     },
 
     methods: {
@@ -739,6 +862,11 @@ export default {
                 clearTimeout(this.inputBlurTimer);
             }
 
+            if (this.sendingByTouch) {
+                this.inputFocused = true;
+                return;
+            }
+
             this.inputBlurTimer = setTimeout(() => {
                 if (!this.keyboardVisible) {
                     this.inputFocused = false;
@@ -765,10 +893,148 @@ export default {
             }
 
             setTimeout(() => {
+                if (this.sendingByTouch) {
+                    this.inputFocused = true;
+                    return;
+                }
+
                 this.keyboardVisible = false;
                 this.keyboardHeight = 0;
                 this.inputFocused = false;
             }, 80);
+        },
+
+        handleInputLineChange(e) {
+            const lineCount = Math.max(1, Number(e?.detail?.lineCount || 1));
+
+            const nextContentHeight = clamp(
+                lineCount * this.textareaLineHeight +
+                    this.textareaPaddingTop +
+                    this.textareaPaddingBottom,
+                this.baseInputContentHeight,
+                this.maxInputContentHeight
+            );
+
+            if (Math.abs(nextContentHeight - this.inputContentHeight) < 1) {
+                return;
+            }
+
+            this.inputContentHeight = nextContentHeight;
+
+            const extraHeight = this.inputContentHeight - this.baseInputContentHeight;
+            this.inputBarHeight = this.baseInputBarHeight + extraHeight;
+
+            this.$nextTick(() => {
+                if (this.isAtBottom) {
+                    this.scrollToBottom();
+                }
+            });
+        },
+
+        resetInputHeight() {
+            this.inputContentHeight = this.baseInputContentHeight;
+            this.inputBarHeight = this.baseInputBarHeight;
+        },
+
+        safeBigInt(value, fallback = 0n) {
+            try {
+                if (value === null || value === undefined || value === '') return fallback;
+                return BigInt(value);
+            } catch (err) {
+                return fallback;
+            }
+        },
+
+        initReadMarkState() {
+            this.readMarkBaseIndex = String(this.conversation.read_index_end || 0);
+            this.readMarkBaseBadgeCount = Number(this.conversation.read_badge_count || 0);
+
+            if (!Number.isFinite(this.readMarkBaseBadgeCount)) {
+                this.readMarkBaseBadgeCount = 0;
+            }
+
+            this.pendingReadIndexEnd = '';
+            this.pendingReadBadgeCount = this.readMarkBaseBadgeCount;
+            this.pendingReadMsgMap = {};
+            this.readMarkFlushed = false;
+        },
+
+        isReadableIncomingMessage(message) {
+            if (!message) return false;
+            if (!message.con_index) return false;
+            if (this.isSelfMessage(message)) return false;
+
+            const senderType = Number(message.sender_type);
+            return senderType === 1 || senderType === 2;
+        },
+
+        recordPendingReadMessage(message) {
+            if (!this.isReadableIncomingMessage(message)) return;
+
+            const msgId = String(message.msg_id || '');
+            if (!msgId) return;
+
+            if (this.pendingReadMsgMap[msgId]) return;
+
+            const msgIndex = this.safeBigInt(message.con_index);
+            const baseIndex = this.safeBigInt(this.readMarkBaseIndex);
+
+            if (msgIndex <= baseIndex) return;
+
+            this.pendingReadMsgMap = {
+                ...this.pendingReadMsgMap,
+                [msgId]: true
+            };
+
+            const currentPendingIndex = this.pendingReadIndexEnd
+                ? this.safeBigInt(this.pendingReadIndexEnd)
+                : baseIndex;
+
+            if (msgIndex > currentPendingIndex) {
+                this.pendingReadIndexEnd = String(message.con_index);
+            }
+
+            const readCount = Object.keys(this.pendingReadMsgMap).length;
+            this.pendingReadBadgeCount = this.readMarkBaseBadgeCount + readCount;
+        },
+
+        recordPendingReadByMsgId(msgId) {
+            const id = String(msgId || '');
+            if (!id) return;
+
+            const message = this.messages.find(item => String(item.msg_id || '') === id);
+            this.recordPendingReadMessage(message);
+        },
+
+        recordFloatingUnreadAsRead(ids) {
+            if (!Array.isArray(ids) || ids.length === 0) return;
+
+            ids.forEach(id => {
+                this.recordPendingReadByMsgId(id);
+            });
+        },
+
+        flushReadMarkOnExit() {
+            if (this.readMarkFlushed) return;
+            this.readMarkFlushed = true;
+
+            if (!this.pendingReadIndexEnd) return;
+
+            const pendingIndex = this.safeBigInt(this.pendingReadIndexEnd);
+            const baseIndex = this.safeBigInt(this.readMarkBaseIndex);
+
+            if (pendingIndex <= baseIndex) return;
+            if (this.pendingReadBadgeCount <= this.readMarkBaseBadgeCount) return;
+            if (!this.conversation || !this.conversation.con_short_id) return;
+
+            markRead(
+                this.conversation.con_short_id,
+                this.pendingReadIndexEnd,
+                this.pendingReadBadgeCount
+            );
+
+            this.conversation.read_index_end = this.pendingReadIndexEnd;
+            this.conversation.read_badge_count = this.pendingReadBadgeCount;
         },
 
         initResponsiveLayout() {
@@ -800,12 +1066,39 @@ export default {
                 this.backIconSize = 19;
                 this.settingsIconSize = 20;
 
-                this.inputContentHeight = clamp(Math.floor(windowWidth * 0.108), 38, 44);
-                this.inputBarHeight = this.inputContentHeight + bottomSafeHeight + 5;
-
                 this.inputFontSize = clamp(Math.floor(windowWidth * 0.038), 14, 16);
-                this.sendButtonHeight = clamp(Math.floor(this.inputContentHeight * 0.92), 33, 39);
-                this.sendButtonWidth = clamp(Math.floor(this.sendButtonHeight * 1.55), 52, 62);
+                this.textareaLineHeight = clamp(Math.floor(this.inputFontSize * 1.42), 20, 23);
+
+                this.textareaPaddingTop = clamp(Math.floor(windowWidth * 0.018), 6, 7);
+                this.textareaPaddingBottom = this.textareaPaddingTop;
+                this.textareaPaddingLeft = clamp(Math.floor(windowWidth * 0.034), 12, 14);
+                this.textareaPaddingRight = clamp(Math.floor(windowWidth * 0.06), 22, 26);
+
+                this.baseInputContentHeight = clamp(
+                    this.textareaLineHeight + this.textareaPaddingTop + this.textareaPaddingBottom,
+                    34,
+                    38
+                );
+
+                this.maxInputContentHeight =
+                    this.textareaLineHeight * 4 +
+                    this.textareaPaddingTop +
+                    this.textareaPaddingBottom;
+
+                this.inputBarTopGap = 4;
+                this.inputBarBottomGap = 4;
+
+                this.baseInputBarHeight =
+                    this.baseInputContentHeight +
+                    bottomSafeHeight +
+                    this.inputBarTopGap +
+                    this.inputBarBottomGap;
+
+                this.inputContentHeight = this.baseInputContentHeight;
+                this.inputBarHeight = this.baseInputBarHeight;
+
+                this.sendButtonHeight = clamp(Math.floor(this.baseInputContentHeight * 0.95), 33, 37);
+                this.sendButtonWidth = clamp(Math.floor(this.sendButtonHeight * 1.55), 50, 56);
                 this.sendTextFontSize = clamp(Math.floor(windowWidth * 0.034), 13, 14);
 
                 this.messageUnitHeight = clamp(Math.floor(windowWidth * 0.125), 46, 56);
@@ -849,11 +1142,26 @@ export default {
                 this.headerTitleFontSize = 16;
                 this.backIconSize = 19;
                 this.settingsIconSize = 20;
-                this.inputContentHeight = 38;
-                this.inputBarHeight = 50;
                 this.inputFontSize = 14;
-                this.sendButtonHeight = 35;
-                this.sendButtonWidth = 54;
+                this.textareaLineHeight = 20;
+
+                this.textareaPaddingTop = 7;
+                this.textareaPaddingBottom = 7;
+                this.textareaPaddingLeft = 13;
+                this.textareaPaddingRight = 22;
+
+                this.baseInputContentHeight = 34;
+                this.maxInputContentHeight = 94;
+
+                this.inputBarTopGap = 4;
+                this.inputBarBottomGap = 4;
+
+                this.baseInputBarHeight = 44;
+                this.inputContentHeight = this.baseInputContentHeight;
+                this.inputBarHeight = this.baseInputBarHeight;
+
+                this.sendButtonHeight = 34;
+                this.sendButtonWidth = 52;
                 this.sendTextFontSize = 13;
                 this.messageUnitHeight = 48;
                 this.messageGap = 8;
@@ -1213,77 +1521,85 @@ export default {
         },
 
         async sendMessage() {
+            if (this.sendingMessage) return;
             if (!this.canSendMessage) return;
             if (this.inputText.trim() === '') return;
+
+            this.sendingMessage = true;
 
             const clientMsgId = getApp().globalData.randomIdGenerator.nextId();
             const sendingText = this.inputText;
 
-            const payload = {
-                conShortId: BigInt(this.conversation.con_short_id),
-                conId: this.conversation.con_id,
-                conType: this.conversation.con_type,
-                clientMsgId: clientMsgId,
-                msgType: 1,
-                msgContent: sendingText
-            };
-
-            const res = await sendMessage(payload);
-
-            if (res) {
-                const selfKey = `1:${String(this.userId)}`;
-                let selfInfo = this.senderInfoMap.get(selfKey) || {};
-
-                if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
-                    try {
-                        const infos = await getMemberInfosBySendersEnsure(
-                            this.conversation.con_id,
-                            BigInt(this.conversation.con_short_id),
-                            [{ sender_type: 1, sender_id: this.userId }]
-                        );
-
-                        if (Array.isArray(infos) && infos.length > 0) {
-                            selfInfo = {
-                                nick_name: infos[0].nick_name || '',
-                                avatar_uri: infos[0].avatar_uri || ''
-                            };
-                            this.senderInfoMap.set(selfKey, selfInfo);
-                        }
-                    } catch (err) {
-                        console.error('get self member info failed:', err);
-                    }
-                }
-
-                const optimisticMessage = {
-                    sender_id: this.userId,
-                    sender_type: 1,
-                    con_short_id: this.conversation.con_short_id,
-                    con_id: this.conversation.con_id,
-                    con_type: this.conversation.con_type,
-                    client_msg_id: clientMsgId,
-                    msg_id: res.msg_id,
-                    msg_type: 1,
-                    msg_content: sendingText,
-                    create_time: Date.now() / 1000,
-                    status: -1,
-                    nick_name: selfInfo.nick_name || '',
-                    avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
+            try {
+                const payload = {
+                    conShortId: BigInt(this.conversation.con_short_id),
+                    conId: this.conversation.con_id,
+                    conType: this.conversation.con_type,
+                    clientMsgId: clientMsgId,
+                    msgType: 1,
+                    msgContent: sendingText
                 };
 
-                this.senderInfoMap.set(selfKey, {
-                    nick_name: optimisticMessage.nick_name || '',
-                    avatar_uri: optimisticMessage.avatar_uri || ''
-                });
+                const res = await sendMessage(payload);
 
-                if (
-                    this.messages.length === 0 ||
-                    this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0
-                ) {
-                    this.messages.push(optimisticMessage);
+                if (res) {
+                    const selfKey = `1:${String(this.userId)}`;
+                    let selfInfo = this.senderInfoMap.get(selfKey) || {};
+
+                    if (!selfInfo.nick_name || !selfInfo.avatar_uri) {
+                        try {
+                            const infos = await getMemberInfosBySendersEnsure(
+                                this.conversation.con_id,
+                                BigInt(this.conversation.con_short_id),
+                                [{ sender_type: 1, sender_id: this.userId }]
+                            );
+
+                            if (Array.isArray(infos) && infos.length > 0) {
+                                selfInfo = {
+                                    nick_name: infos[0].nick_name || '',
+                                    avatar_uri: infos[0].avatar_uri || ''
+                                };
+                                this.senderInfoMap.set(selfKey, selfInfo);
+                            }
+                        } catch (err) {
+                            console.error('get self member info failed:', err);
+                        }
+                    }
+
+                    const optimisticMessage = {
+                        sender_id: this.userId,
+                        sender_type: 1,
+                        con_short_id: this.conversation.con_short_id,
+                        con_id: this.conversation.con_id,
+                        con_type: this.conversation.con_type,
+                        client_msg_id: clientMsgId,
+                        msg_id: res.msg_id,
+                        msg_type: 1,
+                        msg_content: sendingText,
+                        create_time: Date.now() / 1000,
+                        status: -1,
+                        nick_name: selfInfo.nick_name || '',
+                        avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
+                    };
+
+                    this.senderInfoMap.set(selfKey, {
+                        nick_name: optimisticMessage.nick_name || '',
+                        avatar_uri: optimisticMessage.avatar_uri || ''
+                    });
+
+                    if (
+                        this.messages.length === 0 ||
+                        this.compareBigIntLike(this.messages[this.messages.length - 1].client_msg_id, clientMsgId) < 0
+                    ) {
+                        this.messages.push(optimisticMessage);
+                    }
+
+                    this.inputText = '';
+                    this.resetInputHeight();
+                    this.scrollToBottom();
                 }
-
-                this.inputText = '';
-                this.scrollToBottom();
+            } finally {
+                this.sendingMessage = false;
             }
         },
 
@@ -1355,12 +1671,23 @@ export default {
         scrollToBottom() {
             this.$nextTick(() => {
                 if (this.messages.length > 0) {
-                    this.scrollIntoViewId = 'message-' + String(this.messages[this.messages.length - 1].msg_id);
+                    const lastMessage = this.messages[this.messages.length - 1];
+        
+                    if (!lastMessage || lastMessage.msg_id === undefined || lastMessage.msg_id === null) {
+                        return;
+                    }
+        
+                    this.setScrollIntoView('message-' + String(lastMessage.msg_id));
+                    this.isAtBottom = true;
+                    this.recordFloatingUnreadAsRead(this.floatingUnreadIds);
+                    this.clearFloatingUnread();
                 }
             });
         },
 
         async onScroll(e) {
+			this.updateBottomState(e);
+			
             if (e.detail.scrollTop == 0 && this.hasMore) {
                 this.isLoading = true;
 
@@ -1574,7 +1901,7 @@ export default {
 
             const ok = await recallMessage({
                 conShortId: this.conversation.con_short_id,
-                msg_id: msgId
+                msgId: msgId
             });
 
             if (!ok) return;
@@ -1598,6 +1925,232 @@ export default {
                 this.conversation.name = newName;
                 uni.setNavigationBarTitle({ title: newName });
             }
+        },
+		
+		getChatViewportHeight() {
+		    const height =
+		        this.windowHeight -
+		        this.headerHeight -
+		        this.inputBarHeight -
+		        this.inputBottomOffset;
+		
+		    return Math.max(0, height);
+		},
+		
+		updateBottomState(e) {
+		    const detail = e?.detail || {};
+		    const scrollTop = Number(detail.scrollTop || 0);
+		    const scrollHeight = Number(detail.scrollHeight || 0);
+		    const viewportHeight = this.getChatViewportHeight();
+		
+		    this.chatScrollTop = scrollTop;
+		
+		    if (!scrollHeight || !viewportHeight) {
+		        return;
+		    }
+		
+		    const distanceToBottom = scrollHeight - scrollTop - viewportHeight;
+		
+		    this.isAtBottom = distanceToBottom <= this.bottomThreshold;
+		
+		    if (this.isAtBottom) {
+		        this.recordFloatingUnreadAsRead(this.floatingUnreadIds);
+		        this.clearFloatingUnread();
+		        return;
+		    }
+		
+		    this.scheduleCheckFloatingUnreadVisible();
+		},
+		
+		setScrollIntoView(id) {
+		    if (!id) return;
+		
+		    this.scrollIntoViewId = '';
+		
+		    this.$nextTick(() => {
+		        this.scrollIntoViewId = id;
+		    });
+		},
+		
+
+		
+		getFloatingMessageId(message) {
+		    if (!message) return '';
+		    if (message.msg_id === undefined || message.msg_id === null) return '';
+		
+		    return String(message.msg_id);
+		},
+		
+        addFloatingUnread(message) {
+            const msgId = this.getFloatingMessageId(message);
+            if (!msgId) return;
+
+            if (this.floatingUnreadMap[msgId]) {
+                return;
+            }
+
+            this.floatingUnreadMap = {
+                ...this.floatingUnreadMap,
+                [msgId]: true
+            };
+
+            this.floatingUnreadIds = this.floatingUnreadIds.concat(msgId);
+
+            if (!this.firstFloatingUnreadId) {
+                this.firstFloatingUnreadId = msgId;
+            }
+
+            this.$nextTick(() => {
+                this.scheduleCheckFloatingUnreadVisible();
+            });
+        },
+		
+		clearFloatingUnread() {
+		    this.floatingUnreadIds = [];
+		    this.floatingUnreadMap = {};
+		    this.firstFloatingUnreadId = '';
+		},
+		
+		jumpToFirstFloatingUnread() {
+		    if (!this.firstFloatingUnreadId) {
+		        this.scrollToBottom();
+		        return;
+		    }
+		
+		    this.setScrollIntoView('message-' + String(this.firstFloatingUnreadId));
+		
+		    this.$nextTick(() => {
+		        setTimeout(() => {
+		            this.checkFloatingUnreadVisible();
+		        }, 60);
+		    });
+		},
+		
+		removeFloatingUnread(msgId) {
+		    const id = String(msgId || '');
+
+		    if (!id) return;
+		    if (!this.floatingUnreadMap[id]) return;
+
+		    this.recordPendingReadByMsgId(id);
+
+		    const nextMap = {
+		        ...this.floatingUnreadMap
+		    };
+
+		    delete nextMap[id];
+
+		    this.floatingUnreadMap = nextMap;
+
+		    this.floatingUnreadIds = this.floatingUnreadIds.filter(item => {
+		        return String(item) !== id;
+		    });
+
+		    this.firstFloatingUnreadId = this.floatingUnreadIds.length > 0
+		        ? this.floatingUnreadIds[0]
+		        : '';
+		},
+		
+        scheduleCheckFloatingUnreadVisible() {
+            if (!this.floatingUnreadIds.length) return;
+
+            if (!this.checkingFloatingUnreadVisible) {
+                this.checkFloatingUnreadVisible();
+                return;
+            }
+
+            if (this.checkFloatingUnreadTimer) {
+                clearTimeout(this.checkFloatingUnreadTimer);
+            }
+
+            this.checkFloatingUnreadTimer = setTimeout(() => {
+                this.checkFloatingUnreadTimer = null;
+                this.checkFloatingUnreadVisible();
+            }, 32);
+        },
+		
+        checkFloatingUnreadVisible() {
+            if (this.checkingFloatingUnreadVisible) return;
+            if (!this.floatingUnreadIds.length) return;
+
+            this.checkingFloatingUnreadVisible = true;
+
+            const ids = this.floatingUnreadIds.slice();
+
+            const query = uni.createSelectorQuery().in(this);
+
+            query.select('.chat-messages').boundingClientRect();
+
+            ids.forEach(id => {
+                query.select('#message-' + id).boundingClientRect();
+            });
+
+            query.exec((res) => {
+                this.checkingFloatingUnreadVisible = false;
+
+                const container = res && res[0];
+                const nodes = res ? res.slice(1) : [];
+
+                if (!container || !Array.isArray(nodes)) return;
+
+                const visibleIds = [];
+
+                nodes.forEach((node, index) => {
+                    if (!node) return;
+
+                    const nodeTop = Number(node.top);
+                    const nodeBottom = Number(node.bottom);
+                    const nodeHeight = Math.max(1, Number(node.height || nodeBottom - nodeTop));
+
+                    const containerTop = Number(container.top);
+                    const containerBottom = Number(container.bottom);
+
+                    const visibleTop = Math.max(nodeTop, containerTop);
+                    const visibleBottom = Math.min(nodeBottom, containerBottom);
+                    const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+
+                    const visibleRatio = visibleHeight / nodeHeight;
+
+                    const enoughVisible = visibleRatio >= 0.55;
+
+                    const passedBottomEdge = nodeTop <= containerBottom - Math.min(48, nodeHeight * 0.45);
+
+                    if (!enoughVisible || !passedBottomEdge) return;
+
+                    const msgId = ids[index];
+
+                    if (msgId) {
+                        visibleIds.push(msgId);
+                    }
+                });
+
+                visibleIds.forEach(id => {
+                    this.removeFloatingUnread(id);
+                });
+            });
+        },
+		
+		handleSendTouchStart() {
+            if (!this.canSendMessage) return;
+            if (!this.inputText.trim()) return;
+
+            this.sendingByTouch = true;
+            this.inputFocused = true;
+        },
+
+        handleSendTouchEnd() {
+            if (!this.sendingByTouch) return;
+
+            this.sendMessage();
+
+            this.$nextTick(() => {
+                this.inputFocused = true;
+                this.sendingByTouch = false;
+            });
+        },
+
+        handleSendTouchCancel() {
+            this.sendingByTouch = false;
         },
 
         formatTime(timestamp) {
@@ -2108,5 +2661,24 @@ export default {
     font-weight: 400;
     color: #8a5a2b;
     line-height: 1;
+}
+
+.new-message-float {
+    position: fixed;
+    z-index: 40;
+    height: 32px;
+    padding: 0 13px;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.new-message-float-text {
+    font-size: 13px;
+    color: #2f80ed;
+    line-height: 32px;
 }
 </style>

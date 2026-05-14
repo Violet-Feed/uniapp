@@ -366,12 +366,9 @@ export default {
 			this.isRefreshing = true;
 			this.pullDistance = PULL_TRIGGER_DISTANCE;
 
-			try {
-				await this.refreshList();
-			} finally {
-				this.isRefreshing = false;
-				this.pullDistance = 0;
-			}
+			await this.refreshList();
+			this.isRefreshing = false;
+			this.pullDistance = 0;
 		},
 
 		initResponsiveLayout() {
@@ -445,13 +442,9 @@ export default {
 				this.agents = this.normalizeAgents(rows);
 			} catch (err) {
 				console.error('刷新智能体成员失败：', err);
-				uni.showToast({
-					title: '加载失败',
-					icon: 'none'
-				});
-			} finally {
-				this.loading = false;
 			}
+
+			this.loading = false;
 		},
 
 		normalizeAgents(list) {
@@ -515,27 +508,21 @@ export default {
 
 			this.removingAgentId = agentId;
 
-			try {
-				const res = await removeConversationAgent({
-					conShortId,
-					agentId
-				});
+			this.removingAgentId = agentId;
 
-				if (!res) return;
+			const res = await removeConversationAgent({
+				conShortId,
+				agentId
+			});
 
+			this.removingAgentId = '';
+
+			if (res) {
 				this.agents = this.agents.filter(agent => String(agent.agent_id) !== agentId);
 				uni.showToast({
 					title: '已移出',
 					icon: 'success'
 				});
-			} catch (err) {
-				console.error('移出智能体失败：', err);
-				uni.showToast({
-					title: '移出失败',
-					icon: 'none'
-				});
-			} finally {
-				this.removingAgentId = '';
 			}
 		},
 

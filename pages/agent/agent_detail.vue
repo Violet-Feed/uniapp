@@ -1,326 +1,263 @@
 <template>
-	<view class="create-page" :style="pageStyle">
+	<view class="detail-page">
 		<view class="nav-bar" :style="navBarStyle">
-			<view class="nav-left" :style="navSideStyle" @click="goBack">
-				<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
-			</view>
-
-			<view class="nav-title-wrap" :style="navTitleWrapStyle">
-				<text class="nav-title" :style="titleStyle">编辑智能体</text>
-			</view>
-
-			<view class="nav-right" :style="navSideStyle">
-				<view
-					class="nav-submit"
-					:class="{ disabled: submitting || uploadingAvatar || loading }"
-					:style="submitButtonStyle"
-					@click="submitUpdate"
-				>
-					<text class="nav-submit-text" :style="submitTextStyle">
-						{{ submitting ? '保存中' : '保存' }}
-					</text>
+			<view class="nav-content" :style="navContentStyle">
+				<view class="nav-left" @click="goBack">
+					<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
 				</view>
+
+				<view class="nav-title-wrap">
+					<text class="nav-title" :style="navTitleStyle">智能体详情</text>
+				</view>
+
+				<view class="nav-right"></view>
 			</view>
 		</view>
 
-		<scroll-view
-			v-if="!loading"
-			scroll-y
-			class="form-scroll"
-			:style="scrollStyle"
-			:show-scrollbar="false"
-		>
-			<view class="form-wrap" :style="formWrapStyle">
-				<view class="avatar-section" :style="avatarSectionStyle">
-					<view class="avatar-click" :style="avatarClickStyle" @click="chooseAvatar">
-						<image
-							class="avatar-preview"
-							:style="avatarStyle"
-							:src="form.avatarUri || defaultAvatar"
-							mode="aspectFill"
-						/>
-						<view class="avatar-mask">
-							<text class="avatar-mask-text" :style="avatarTipStyle">
-								{{ uploadingAvatar ? '上传中' : '更换头像' }}
-							</text>
-						</view>
+		<view class="page-body" :style="pageBodyStyle">
+			<view class="state-box" v-if="loading">
+				<text class="state-text" :style="stateTextStyle">加载中...</text>
+			</view>
+
+			<view class="state-box" v-else-if="!agent">
+				<text class="state-text" :style="stateTextStyle">未找到该智能体</text>
+			</view>
+
+			<view v-else>
+				<view class="profile-card" :style="cardStyle">
+					<image
+						class="avatar"
+						:style="avatarStyle"
+						:src="agent.local_avatar_uri || agent.avatar_uri || defaultAgentAvatar"
+						mode="aspectFill"
+					/>
+
+					<view class="profile-main" :style="profileMainStyle">
+						<text class="agent-name" :style="agentNameStyle">
+							{{ agent.agent_name || '未命名智能体' }}
+						</text>
+						<text class="agent-time" :style="agentTimeStyle">
+							创建时间：{{ formatTime(agent.create_time) }}
+						</text>
 					</view>
 				</view>
 
-				<view class="section-card" :style="cardStyle">
-					<text class="section-title" :style="sectionTitleStyle">名称</text>
-					<input
-						class="section-input"
-						:style="inputStyle"
-						type="text"
-						:value="form.agentName"
-						@input="onAgentNameInput"
-						placeholder="请输入智能体名称"
-						placeholder-class="input-placeholder"
-						maxlength="50"
-						confirm-type="done"
-						:adjust-position="false"
-						cursor-spacing="20"
-					/>
+				<view
+					class="primary-btn"
+					:style="primaryBtnStyle"
+					@click="goPrivateChat"
+				>
+					<text class="iconfont icon-xiaoxi primary-btn-icon" :style="primaryBtnIconStyle"></text>
+					<text class="primary-btn-text" :style="primaryBtnTextStyle">私聊</text>
 				</view>
 
 				<view class="section-card" :style="cardStyle">
 					<text class="section-title" :style="sectionTitleStyle">简介</text>
-					<textarea
-						class="section-textarea"
-						:style="textareaStyle"
-						:value="form.description"
-						@input="onDescriptionInput"
-						placeholder="请输入智能体描述"
-						placeholder-class="input-placeholder"
-						maxlength="300"
-						:auto-height="false"
-						:adjust-position="false"
-						cursor-spacing="20"
-					/>
+					<text class="section-content" :style="sectionContentStyle" v-if="agent.description">
+						{{ agent.description }}
+					</text>
+					<text class="section-content section-content-empty" :style="sectionContentStyle" v-else>
+						暂无描述
+					</text>
 				</view>
 
-				<view class="section-card personality-card" :style="personalityCardStyle">
+				<view class="section-card" :style="cardStyle">
 					<text class="section-title" :style="sectionTitleStyle">人格设定</text>
-					<textarea
-						class="section-textarea"
-						:style="largeTextareaStyle"
-						:value="form.personality"
-						@input="onPersonalityInput"
-						placeholder="请输入智能体人格设定"
-						placeholder-class="input-placeholder"
-						maxlength="1000"
-						:auto-height="false"
-						:adjust-position="false"
-						cursor-spacing="20"
-					/>
+					<text class="section-content" :style="sectionContentStyle" v-if="agent.personality">
+						{{ agent.personality }}
+					</text>
+					<text class="section-content section-content-empty" :style="sectionContentStyle" v-else>
+						暂无人格设定
+					</text>
+				</view>
+
+				<view class="section-card" :style="cardStyle">
+					<text class="section-title" :style="sectionTitleStyle">创建人</text>
+					<view class="owner-row" @click="goOwnerProfile">
+						<image
+							class="owner-avatar"
+							:style="ownerAvatarStyle"
+							:src="agent.owner_avatar || defaultUserAvatar"
+							mode="aspectFill"
+						/>
+
+						<view class="owner-main" :style="ownerMainStyle">
+							<text class="owner-name" :style="ownerNameStyle">
+								{{ agent.owner_username || '用户' }}
+							</text>
+						</view>
+
+						<text class="owner-arrow" :style="ownerArrowStyle">›</text>
+					</view>
 				</view>
 			</view>
-		</scroll-view>
-
-		<view class="state-box" :style="stateBoxStyle" v-else>
-			<text class="state-text" :style="stateTextStyle">加载中...</text>
 		</view>
-
-		<avatar-cropper
-			:visible="avatarCropper.visible"
-			:src="avatarCropper.src"
-			title="裁剪智能体头像"
-			mask-shape="circle"
-			@close="closeAvatarCropper"
-			@confirm="onAgentAvatarCropped"
-		/>
 	</view>
 </template>
 
 <script>
+import { getAgentsByIds } from '@/request/agent.js';
 import DB from '@/utils/sqlite.js';
 import { enqueueEntityAvatars } from '@/utils/im-cache.js';
-import { getAgentsByIds, updateAgent } from '@/request/agent.js';
-import { uploadImage } from '@/request/common.js';
-import AvatarCropper from '@/components/avatar-cropper.vue';
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const clamp = (value, min, max) => {
+	return Math.max(min, Math.min(max, value));
+};
 
 export default {
-	components: {
-		AvatarCropper
-	},
-
 	data() {
 		return {
 			agentId: '',
 			agent: null,
 			loading: false,
-			submitting: false,
-			uploadingAvatar: false,
-			defaultAvatar: '/static/ai_avatar.png',
-			avatarCropper: {
-				visible: false,
-				src: ''
-			},
-			form: {
-				agentName: '',
-				avatarUri: '',
-				description: '',
-				personality: ''
-			},
+			defaultAgentAvatar: '/static/ai_avatar.png',
+			defaultUserAvatar: '/static/user_avatar.png',
 
 			windowWidth: 375,
-			windowHeight: 667,
 			statusBarHeight: 0,
-			safeBottom: 0,
-
-			navContentHeight: 38,
-			navSideWidth: 86,
-			titleFontSize: 17,
-			backIconSize: 20,
-			buttonHeight: 32,
-			buttonWidth: 64,
-			buttonFontSize: 13,
+			headerContentHeight: 38,
+			headerHeight: 38,
 
 			pagePadding: 14,
 			cardPadding: 14,
 			cardRadius: 14,
 			cardGap: 10,
 
-			avatarSize: 92,
-			avatarRadius: 20,
-			avatarSectionHeight: 126,
-			avatarTipFontSize: 11,
+			backIconSize: 19,
+			navTitleFontSize: 17,
+
+			avatarSize: 58,
+			avatarRadius: 14,
+			profileMainMargin: 12,
+
+			agentNameFontSize: 17,
+			agentTimeFontSize: 12,
+
+			primaryBtnHeight: 36,
+			primaryBtnFontSize: 14,
+			primaryBtnIconSize: 15,
 
 			sectionTitleFontSize: 15,
-			inputFontSize: 14,
-			inputHeight: 34,
-			textareaHeight: 104,
-			personalityCardMinHeight: 240,
-			largeTextareaMinHeight: 170
+			sectionContentFontSize: 14,
+
+			ownerAvatarSize: 24,
+			ownerNameFontSize: 14,
+			ownerArrowFontSize: 20,
+
+			stateFontSize: 13
 		};
 	},
 
 	computed: {
-		pageStyle() {
-			return `min-height:${this.windowHeight}px;`;
-		},
-
 		navBarStyle() {
-			return [
-				`height:${this.statusBarHeight + this.navContentHeight}px`,
-				`padding-top:${this.statusBarHeight}px`,
-				`padding-left:${this.pagePadding}px`,
-				`padding-right:${this.pagePadding}px`
-			].join(';') + ';';
+			return (
+				'height:' + this.headerHeight + 'px;' +
+				'padding-top:' + this.statusBarHeight + 'px;'
+			);
 		},
 
-		navSideStyle() {
-			return `width:${this.navSideWidth}px;height:${this.navContentHeight}px;`;
-		},
-
-		navTitleWrapStyle() {
-			return [
-				`height:${this.navContentHeight}px`,
-				`left:${this.navSideWidth + this.pagePadding}px`,
-				`right:${this.navSideWidth + this.pagePadding}px`
-			].join(';') + ';';
+		navContentStyle() {
+			return 'height:' + this.headerContentHeight + 'px;';
 		},
 
 		backIconStyle() {
-			return `font-size:${this.backIconSize}px;`;
+			return 'font-size:' + this.backIconSize + 'px;';
 		},
 
-		titleStyle() {
-			return `font-size:${this.titleFontSize}px;`;
+		navTitleStyle() {
+			return 'font-size:' + this.navTitleFontSize + 'px;';
 		},
 
-		submitButtonStyle() {
-			return [
-				`width:${this.buttonWidth}px`,
-				`height:${this.buttonHeight}px`,
-				`border-radius:${Math.floor(this.buttonHeight / 2)}px`
-			].join(';') + ';';
-		},
-
-		submitTextStyle() {
-			return `font-size:${this.buttonFontSize}px;`;
-		},
-
-		scrollStyle() {
-			const top = this.statusBarHeight + this.navContentHeight;
-			return `top:${top}px;bottom:0;`;
-		},
-
-		formWrapStyle() {
-			return [
-				`padding:${this.pagePadding}px`,
-				`padding-bottom:${this.safeBottom + 24}px`
-			].join(';') + ';';
-		},
-
-		avatarSectionStyle() {
-			return [
-				`height:${this.avatarSectionHeight}px`,
-				`margin-bottom:${this.cardGap}px`
-			].join(';') + ';';
+		pageBodyStyle() {
+			return 'padding:' + this.pagePadding + 'px;';
 		},
 
 		cardStyle() {
-			return [
-				`padding:${this.cardPadding}px`,
-				`border-radius:${this.cardRadius}px`,
-				`margin-bottom:${this.cardGap}px`
-			].join(';') + ';';
-		},
-
-		personalityCardStyle() {
-			return [
-				`padding:${this.cardPadding}px`,
-				`border-radius:${this.cardRadius}px`,
-				`margin-bottom:0`,
-				`min-height:${this.personalityCardMinHeight}px`
-			].join(';') + ';';
-		},
-
-		avatarClickStyle() {
-			return [
-				`width:${this.avatarSize}px`,
-				`height:${this.avatarSize}px`,
-				`border-radius:${this.avatarRadius}px`
-			].join(';') + ';';
+			return (
+				'padding:' + this.cardPadding + 'px;' +
+				'border-radius:' + this.cardRadius + 'px;' +
+				'margin-bottom:' + this.cardGap + 'px;'
+			);
 		},
 
 		avatarStyle() {
-			return [
-				`width:${this.avatarSize}px`,
-				`height:${this.avatarSize}px`,
-				`border-radius:${this.avatarRadius}px`
-			].join(';') + ';';
+			return (
+				'width:' + this.avatarSize + 'px;' +
+				'height:' + this.avatarSize + 'px;' +
+				'border-radius:' + this.avatarRadius + 'px;'
+			);
 		},
 
-		avatarTipStyle() {
-			return `font-size:${this.avatarTipFontSize}px;`;
+		profileMainStyle() {
+			return 'margin-left:' + this.profileMainMargin + 'px;';
+		},
+
+		agentNameStyle() {
+			return 'font-size:' + this.agentNameFontSize + 'px;';
+		},
+
+		agentTimeStyle() {
+			return 'font-size:' + this.agentTimeFontSize + 'px;';
+		},
+
+		primaryBtnStyle() {
+			return (
+				'height:' + this.primaryBtnHeight + 'px;' +
+				'border-radius:' + Math.floor(this.primaryBtnHeight / 2) + 'px;' +
+				'margin-bottom:' + this.cardGap + 'px;'
+			);
+		},
+
+		primaryBtnIconStyle() {
+			return 'font-size:' + this.primaryBtnIconSize + 'px;';
+		},
+
+		primaryBtnTextStyle() {
+			return 'font-size:' + this.primaryBtnFontSize + 'px;';
 		},
 
 		sectionTitleStyle() {
-			return `font-size:${this.sectionTitleFontSize}px;`;
+			return 'font-size:' + this.sectionTitleFontSize + 'px;';
 		},
 
-		inputStyle() {
-			return [
-				`height:${this.inputHeight}px`,
-				`font-size:${this.inputFontSize}px`,
-				`line-height:${this.inputHeight}px`
-			].join(';') + ';';
+		sectionContentStyle() {
+			return 'font-size:' + this.sectionContentFontSize + 'px;';
 		},
 
-		textareaStyle() {
-			return [
-				`height:${this.textareaHeight}px`,
-				`font-size:${this.inputFontSize}px`,
-				`line-height:${Math.floor(this.inputFontSize * 1.7)}px`
-			].join(';') + ';';
+		ownerAvatarStyle() {
+			const radius = Math.floor(this.ownerAvatarSize / 2);
+			return (
+				'width:' + this.ownerAvatarSize + 'px;' +
+				'height:' + this.ownerAvatarSize + 'px;' +
+				'border-radius:' + radius + 'px;'
+			);
 		},
 
-		largeTextareaStyle() {
-			return [
-				`height:${this.largeTextareaMinHeight}px`,
-				`font-size:${this.inputFontSize}px`,
-				`line-height:${Math.floor(this.inputFontSize * 1.7)}px`
-			].join(';') + ';';
+		ownerMainStyle() {
+			return 'margin-left:' + Math.max(8, Math.floor(this.windowWidth * 0.024)) + 'px;';
 		},
 
-		stateBoxStyle() {
-			const top = this.statusBarHeight + this.navContentHeight;
-			return `padding-top:${top + 72}px;`;
+		ownerNameStyle() {
+			return 'font-size:' + this.ownerNameFontSize + 'px;';
+		},
+
+		ownerArrowStyle() {
+			return 'font-size:' + this.ownerArrowFontSize + 'px;';
 		},
 
 		stateTextStyle() {
-			return `font-size:${clamp(Math.floor(this.windowWidth * 0.036), 13, 15)}px;`;
+			return 'font-size:' + this.stateFontSize + 'px;';
 		}
 	},
 
-	onLoad(options) {
+	onLoad(option) {
 		this.initResponsiveLayout();
-		this.agentId = options?.agentId ? decodeURIComponent(options.agentId) : '';
+
+		this.agentId = option?.agentId ? decodeURIComponent(option.agentId) : '';
+		if (!this.agentId) {
+			uni.navigateBack();
+			return;
+		}
 		this.loadDetail();
 	},
 
@@ -328,94 +265,82 @@ export default {
 		this.initResponsiveLayout();
 	},
 
-	onPullDownRefresh() {
-		this.loadDetail();
-	},
 
 	methods: {
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync();
-				const width = Number(sys.windowWidth || 375);
-				const height = Number(sys.windowHeight || 667);
+				const windowWidth = Number(sys.windowWidth || 375);
 				const statusBarHeight = Number(sys.statusBarHeight || 0);
-				const safeAreaInsets = sys.safeAreaInsets || {};
-				const safeBottom = Number(safeAreaInsets.bottom || 0);
-				const compact = width <= 360 || height <= 640;
+				const smallScreenBoost = windowWidth <= 360 ? 1 : 0;
+				const tinyScreenBoost = windowWidth <= 330 ? 1 : 0;
 
-				this.windowWidth = width;
-				this.windowHeight = height;
+				this.windowWidth = windowWidth;
 				this.statusBarHeight = statusBarHeight;
-				this.safeBottom = safeBottom;
 
-				this.navContentHeight = 38;
-				this.navSideWidth = clamp(Math.floor(width * 0.23), 78, 94);
-				this.titleFontSize = clamp(Math.floor(this.navContentHeight * 0.44) + (width <= 360 ? 1 : 0), 16, 18);
-				this.backIconSize = clamp(Math.floor(width * 0.054), 19, 22);
+				this.headerContentHeight = 38;
+				this.headerHeight = this.statusBarHeight + this.headerContentHeight;
 
-				this.buttonHeight = clamp(Math.floor(width * 0.086), 30, 34);
-				this.buttonWidth = clamp(Math.floor(width * 0.17), 60, 70);
-				this.buttonFontSize = clamp(Math.floor(width * 0.034), 12, 14);
+				this.pagePadding = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardPadding = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardRadius = clamp(Math.floor(windowWidth * 0.038), 12, 18);
+				this.cardGap = clamp(Math.floor(windowWidth * 0.028), 9, 14);
 
-				this.pagePadding = clamp(Math.floor(width * 0.038), 12, 18);
-				this.cardPadding = clamp(Math.floor(width * 0.038), 12, 18);
-				this.cardRadius = clamp(Math.floor(width * 0.038), 12, 18);
-				this.cardGap = clamp(Math.floor(width * 0.028), 9, 14);
+				this.backIconSize = clamp(Math.floor(this.headerContentHeight * 0.5), 18, 21);
+				this.navTitleFontSize = clamp(Math.floor(this.headerContentHeight * 0.44) + smallScreenBoost, 16, 18);
 
-				this.avatarSize = clamp(Math.floor(width * 0.245), compact ? 82 : 88, 100);
-				this.avatarRadius = clamp(Math.floor(this.avatarSize * 0.22), 16, 22);
-				this.avatarTipFontSize = clamp(Math.floor(width * 0.03), 10, 12);
-				this.avatarSectionHeight = this.avatarSize + clamp(Math.floor(width * 0.07), 24, 34);
+				this.avatarSize = clamp(Math.floor(windowWidth * 0.155), 54, 66);
+				this.avatarRadius = clamp(Math.floor(this.avatarSize * 0.24), 12, 16);
+				this.profileMainMargin = clamp(Math.floor(windowWidth * 0.032), 10, 14);
 
-				this.sectionTitleFontSize = clamp(Math.floor(width * 0.04), 14, 16);
-				this.inputFontSize = clamp(Math.floor(width * 0.037), 13, 15);
-				this.inputHeight = clamp(Math.floor(width * 0.092), 32, 38);
-				this.textareaHeight = clamp(Math.floor(height * 0.155), 94, 120);
+				this.agentNameFontSize = clamp(Math.floor(windowWidth * 0.046) + smallScreenBoost + tinyScreenBoost, 16, 18);
+				this.agentTimeFontSize = clamp(Math.floor(windowWidth * 0.032) + smallScreenBoost, 12, 13);
 
-				const navHeight = this.statusBarHeight + this.navContentHeight;
-				const formVerticalPadding = this.pagePadding * 2 + this.safeBottom + 24;
+				this.primaryBtnHeight = clamp(Math.floor(windowWidth * 0.092), 34, 38);
+				this.primaryBtnFontSize = clamp(Math.floor(windowWidth * 0.038) + smallScreenBoost, 14, 15);
+				this.primaryBtnIconSize = clamp(Math.floor(windowWidth * 0.04) + smallScreenBoost, 14, 16);
 
-				const titleLineHeight = clamp(Math.floor(this.sectionTitleFontSize * 1.4), 20, 24);
+				this.sectionTitleFontSize = clamp(Math.floor(windowWidth * 0.04) + smallScreenBoost, 14, 16);
+				this.sectionContentFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 13, 15);
 
-				const nameCardHeight =
-					this.cardPadding * 2 +
-					this.inputHeight +
-					titleLineHeight +
-					10;
+				this.ownerAvatarSize = clamp(Math.floor(windowWidth * 0.064), 22, 26);
+				this.ownerNameFontSize = clamp(Math.floor(windowWidth * 0.037) + smallScreenBoost, 13, 15);
+				this.ownerArrowFontSize = clamp(Math.floor(windowWidth * 0.054), 18, 22);
 
-				const descCardHeight =
-					this.cardPadding * 2 +
-					this.textareaHeight +
-					titleLineHeight +
-					10;
-
-				const fixedHeights =
-					this.avatarSectionHeight +
-					this.cardGap +
-					nameCardHeight +
-					this.cardGap +
-					descCardHeight +
-					this.cardGap;
-
-				const remainHeight = height - navHeight - formVerticalPadding - fixedHeights;
-
-				this.personalityCardMinHeight = Math.max(
-					clamp(Math.floor(height * 0.34), 220, 320),
-					remainHeight
-				);
-
-				this.largeTextareaMinHeight = Math.max(
-					150,
-					this.personalityCardMinHeight -
-						this.cardPadding * 2 -
-						titleLineHeight -
-						10
-				);
+				this.stateFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
 			} catch (err) {
 				this.windowWidth = 375;
-				this.windowHeight = 667;
 				this.statusBarHeight = 0;
-				this.safeBottom = 0;
+				this.headerContentHeight = 38;
+				this.headerHeight = 38;
+
+				this.pagePadding = 14;
+				this.cardPadding = 14;
+				this.cardRadius = 14;
+				this.cardGap = 10;
+
+				this.backIconSize = 19;
+				this.navTitleFontSize = 17;
+
+				this.avatarSize = 58;
+				this.avatarRadius = 14;
+				this.profileMainMargin = 12;
+
+				this.agentNameFontSize = 17;
+				this.agentTimeFontSize = 12;
+
+				this.primaryBtnHeight = 36;
+				this.primaryBtnFontSize = 14;
+				this.primaryBtnIconSize = 15;
+
+				this.sectionTitleFontSize = 15;
+				this.sectionContentFontSize = 14;
+
+				this.ownerAvatarSize = 24;
+				this.ownerNameFontSize = 14;
+				this.ownerArrowFontSize = 20;
+
+				this.stateFontSize = 13;
 			}
 		},
 
@@ -425,7 +350,6 @@ export default {
 
 		async loadDetail() {
 			if (!this.agentId || this.loading) {
-				uni.stopPullDownRefresh();
 				return;
 			}
 
@@ -437,216 +361,160 @@ export default {
 				});
 
 				if (res === undefined) {
+					uni.showToast({
+						title: '网络错误',
+						icon: 'none'
+					});
+					await this.loadDetailFromDb();
 					return;
 				}
 
 				const list = Array.isArray(res?.agents) ? res.agents : [];
-
 				if (list.length === 0) {
-					this.agent = null;
-					uni.showToast({
-						title: '智能体不存在',
-						icon: 'none'
-					});
+					await this.loadDetailFromDb();
 					return;
 				}
 
 				const item = list[0];
+				const remoteAgent = this.normalizeRemoteAgent(item);
 
-				this.agent = {
-					agent_id: item?.agent_id ? String(item.agent_id) : '',
-					agent_name: item?.agent_name || '',
-					avatar_uri: item?.avatar_uri || '',
-					description: item?.description || '',
-					personality: item?.personality || '',
-					owner_id: item?.owner_id ? String(item.owner_id) : '',
-					owner_avatar: item?.owner_avatar || '',
-					owner_username: item?.owner_username || '',
-					create_time: item?.create_time || 0
-				};
+				this.agent = remoteAgent;
 
-				this.form.agentName = this.agent.agent_name || '';
-				this.form.avatarUri = this.agent.avatar_uri || '';
-				this.form.description = this.agent.description || '';
-				this.form.personality = this.agent.personality || '';
-			} catch (e) {
-				console.error('加载智能体详情失败：', e);
-				uni.showToast({
-					title: '加载失败',
-					icon: 'none'
+				const rows = await DB.getAgentsByIds([this.agentId]);
+				const oldAgent = rows?.[0] || null;
+
+				if (!oldAgent) return;
+
+				const avatarUri = remoteAgent.avatar_uri || this.defaultAgentAvatar;
+				const oldAvatarUri = oldAgent.avatar_uri || this.defaultAgentAvatar;
+				const oldLocalAvatarUri = oldAgent.local_avatar_uri || '';
+				const avatarChanged = avatarUri !== oldAvatarUri;
+
+				const localAvatarUri = avatarUri.startsWith('/static/')
+					? avatarUri
+					: avatarChanged
+						? ''
+						: oldLocalAvatarUri;
+
+				await DB.updateAgent(this.agentId, {
+					agent_name: remoteAgent.agent_name || 'AI',
+					avatar_uri: avatarUri,
+					local_avatar_uri: localAvatarUri,
+					description: remoteAgent.description || '',
+					owner_id: remoteAgent.owner_id || 0n,
+					modify_time: Date.now()
 				});
+
+				if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
+					enqueueEntityAvatars('agent', [this.agentId]);
+				}
+			} catch (err) {
+				console.error('加载智能体详情失败:', err);
+				await this.loadDetailFromDb();
 			} finally {
 				this.loading = false;
-				uni.stopPullDownRefresh();
 			}
 		},
 
-		onAgentNameInput(e) {
-			this.form.agentName = e?.detail?.value || '';
-		},
-
-		onDescriptionInput(e) {
-			this.form.description = e?.detail?.value || '';
-		},
-
-		onPersonalityInput(e) {
-			this.form.personality = e?.detail?.value || '';
-		},
-
-		chooseAvatar() {
-			if (this.uploadingAvatar || this.submitting || this.loading) return;
-
-			uni.chooseImage({
-				count: 1,
-				sizeType: ['compressed'],
-				sourceType: ['album', 'camera'],
-				success: (res) => {
-					const filePath = res?.tempFilePaths?.[0];
-					if (!filePath) return;
-
-					this.avatarCropper = {
-						visible: true,
-						src: filePath
-					};
-				}
-			});
-		},
-
-		closeAvatarCropper() {
-			this.avatarCropper = {
-				visible: false,
-				src: ''
-			};
-		},
-
-		async onAgentAvatarCropped(filePath) {
-			this.closeAvatarCropper();
-			await this.uploadAgentAvatar(filePath);
-		},
-
-		async uploadAgentAvatar(filePath) {
-			if (!filePath || this.uploadingAvatar || this.submitting || this.loading) return;
-
-			this.uploadingAvatar = true;
-
+		async loadDetailFromDb() {
 			try {
-				const uploadRes = await uploadImage(filePath, 'agent_avatar');
-				if (uploadRes === undefined) return;
+				const rows = await DB.getAgentsByIds([this.agentId]);
+				const agent = rows?.[0] || null;
 
-				const avatarUri = this.parseAvatarUri(uploadRes);
-
-				if (!avatarUri) {
-					uni.showToast({
-						title: '上传失败',
-						icon: 'none'
-					});
+				if (!agent) {
+					this.agent = null;
 					return;
 				}
 
-				this.form.avatarUri = avatarUri;
-			} catch (e) {
-				console.error('上传头像失败：', e);
-				uni.showToast({
-					title: '上传失败',
-					icon: 'none'
-				});
-			} finally {
-				this.uploadingAvatar = false;
+				this.agent = {
+					agent_id: agent.agent_id ? String(agent.agent_id) : this.agentId,
+					agent_name: agent.agent_name || '',
+					avatar_uri: agent.avatar_uri || this.defaultAgentAvatar,
+					local_avatar_uri: agent.local_avatar_uri || '',
+					description: agent.description || '',
+					personality: agent.personality || '加载中',
+					owner_id: agent.owner_id ? String(agent.owner_id) : '',
+					owner_avatar: agent.owner_avatar || '',
+					owner_username: agent.owner_username || '',
+					create_time: agent.create_time || 0
+				};
+			} catch (err) {
+				console.error('读取本地智能体详情失败:', err);
+				this.agent = null;
 			}
 		},
 
-		parseAvatarUri(uploadRes) {
-			if (!uploadRes) return '';
-			if (typeof uploadRes === 'string') return uploadRes;
+		normalizeRemoteAgent(item) {
+			const avatarUri = item?.avatar_uri || this.defaultAgentAvatar;
 
-			if (typeof uploadRes === 'object') {
-				return (
-					uploadRes.source_url ||
-					uploadRes.sourceUrl ||
-					uploadRes.url ||
-					uploadRes?.data?.source_url ||
-					''
-				);
-			}
-
-			return '';
+			return {
+				agent_id: item?.agent_id ? String(item.agent_id) : this.agentId,
+				agent_name: item?.agent_name || '',
+				avatar_uri: avatarUri,
+				local_avatar_uri: '',
+				description: item?.description || '',
+				personality: item?.personality || '',
+				owner_id: item?.owner_id ? String(item.owner_id) : '',
+				owner_avatar: item?.owner_avatar || '',
+				owner_username: item?.owner_username || '',
+				create_time: item?.create_time || 0
+			};
 		},
 
-		async submitUpdate() {
-			if (this.submitting || this.uploadingAvatar || this.loading) return;
+		getCurrentUserId() {
+			const globalData = getApp().globalData || {};
+			return String(globalData.userId || '');
+		},
 
-			const agentName = (this.form.agentName || '').trim();
+		goPrivateChat() {
+			const currentUserId = this.getCurrentUserId();
+			const agentId = this.agent?.agent_id ? String(this.agent.agent_id) : '';
+			const agentName = this.agent?.agent_name || '';
 
-			if (!this.agentId) {
-				uni.showToast({
-					title: '缺少智能体ID',
-					icon: 'none'
+			if (!currentUserId || !agentId) return;
+
+			const conId = `ai:${currentUserId}:${agentId}`;
+
+			uni.navigateTo({
+				url: `/pages/im/conversation?conShortId=0&conId=${conId}&conType=4&name=${agentName}`
+			});
+		},
+
+		goOwnerProfile() {
+			const ownerId = this.agent?.owner_id ? String(this.agent.owner_id) : '';
+			if (!ownerId) return;
+
+			const currentUserId = this.getCurrentUserId();
+
+			if (currentUserId && currentUserId === ownerId) {
+				uni.navigateTo({
+					url: '/pages/user/my_profile_copy'
 				});
 				return;
 			}
 
-			if (!agentName) {
-				uni.showToast({
-					title: '请输入智能体名称',
-					icon: 'none'
-				});
-				return;
-			}
+			uni.navigateTo({
+				url: `/pages/user/user_profile?userId=${encodeURIComponent(ownerId)}`
+			});
+		},
 
-			this.submitting = true;
+		formatTime(timestamp) {
+			if (!timestamp) return '-';
 
-			try {
-				const ok = await updateAgent({
-					agentId: this.agentId,
-					agentName,
-					avatarUri: this.form.avatarUri || '',
-					description: (this.form.description || '').trim(),
-					personality: (this.form.personality || '').trim()
-				});
+			let value = Number(timestamp);
+			if (!Number.isFinite(value)) return '-';
+			if (value < 1e12) value *= 1000;
 
-				if (!ok) {
-					throw new Error('updateAgent 返回失败');
-				}
+			const date = new Date(value);
+			if (Number.isNaN(date.getTime())) return '-';
 
-				const avatarUri = this.form.avatarUri || '/static/ai_avatar.png';
-				const oldRows = await DB.getAgentsByIds([this.agentId]);
-				const oldAgent = oldRows?.[0] || null;
+			const y = date.getFullYear();
+			const m = String(date.getMonth() + 1).padStart(2, '0');
+			const d = String(date.getDate()).padStart(2, '0');
+			const hh = String(date.getHours()).padStart(2, '0');
+			const mm = String(date.getMinutes()).padStart(2, '0');
 
-				if (oldAgent) {
-					const oldAvatarUri = oldAgent.avatar_uri || '/static/ai_avatar.png';
-					const oldLocalAvatarUri = oldAgent.local_avatar_uri || '';
-					const avatarChanged = avatarUri !== oldAvatarUri;
-
-					await DB.updateAgent(this.agentId, {
-						agent_name: agentName,
-						avatar_uri: avatarUri,
-						local_avatar_uri: avatarChanged ? '' : oldLocalAvatarUri,
-						description: (this.form.description || '').trim(),
-						modify_time: Date.now()
-					});
-
-					if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
-						enqueueEntityAvatars('agent', [this.agentId]);
-					}
-				}
-
-				uni.showToast({
-					title: '保存成功',
-					icon: 'success'
-				});
-
-				setTimeout(() => {
-					uni.navigateBack();
-				}, 500);
-			} catch (e) {
-				console.error('更新智能体失败：', e);
-				uni.showToast({
-					title: '保存失败',
-					icon: 'none'
-				});
-			} finally {
-				this.submitting = false;
-			}
+			return `${y}-${m}-${d} ${hh}:${mm}`;
 		}
 	}
 };
@@ -657,29 +525,39 @@ export default {
 </style>
 
 <style scoped>
-.create-page {
-	position: relative;
+.detail-page {
+	min-height: 100vh;
 	background: #f7f8fa;
-	overflow: hidden;
+	font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+	box-sizing: border-box;
 }
 
 .nav-bar {
-	position: fixed;
-	left: 0;
-	right: 0;
-	top: 0;
-	z-index: 20;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
+	width: 100%;
 	background: #ffffff;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.nav-content {
+	width: 100%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	padding-left: 8px;
+	padding-right: 8px;
+	padding-bottom: 4px;
 	box-sizing: border-box;
 }
 
 .nav-left,
 .nav-right {
+	width: 76px;
+	height: 30px;
 	display: flex;
 	align-items: center;
+	flex-shrink: 0;
+	box-sizing: border-box;
 }
 
 .nav-left {
@@ -690,140 +568,157 @@ export default {
 	justify-content: flex-end;
 }
 
+.back-icon {
+	line-height: 1;
+	color: #222;
+	font-weight: 400;
+}
+
 .nav-title-wrap {
-	position: absolute;
-	bottom: 0;
+	flex: 1;
+	height: 30px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	pointer-events: none;
+	min-width: 0;
+	box-sizing: border-box;
 }
 
 .nav-title {
-	color: #1f2329;
-	font-weight: 400;
-	line-height: 1;
-	text-align: center;
-}
-
-.back-icon {
-	color: #333333;
+	color: #222;
 	font-weight: 400;
 	line-height: 1;
 }
 
-.nav-submit {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	background: rgba(253, 231, 209, 1);
-	box-shadow: none;
-}
-
-.nav-submit.disabled {
-	opacity: 0.55;
-}
-
-.nav-submit-text {
-	color: #8a5a2b;
-	font-weight: 400;
-	line-height: 1;
-}
-
-.form-scroll {
-	position: fixed;
-	left: 0;
-	right: 0;
-	background: #f7f8fa;
+.page-body {
 	box-sizing: border-box;
 }
 
-.form-wrap {
-	box-sizing: border-box;
-}
-
-.avatar-section {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	box-sizing: border-box;
-}
-
-.avatar-click {
-	position: relative;
-	overflow: hidden;
-	background: #eef1f6;
-}
-
-.avatar-preview {
-	background: #eef1f6;
-	display: block;
-}
-
-.avatar-mask {
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	height: 30%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	background: rgba(0, 0, 0, 0.32);
-}
-
-.avatar-mask-text {
-	color: #ffffff;
-	font-weight: 400;
-	line-height: 1;
-}
-
+.profile-card,
 .section-card {
 	background: #ffffff;
 	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
 	box-sizing: border-box;
 }
 
-.personality-card {
+.profile-card {
+	display: flex;
+	align-items: center;
+}
+
+.avatar {
+	background: #eef1f6;
+	flex-shrink: 0;
+}
+
+.profile-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+.agent-name {
+	font-weight: 400;
+	color: #1f2329;
+	line-height: 1.4;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-bottom: 5px;
+}
+
+.agent-time {
+	font-weight: 400;
+	line-height: 1.5;
+	color: #7a8599;
+}
+
+.primary-btn {
+	width: 100%;
+	background: rgba(253, 231, 209, 1);
+	color: #8a5a2b;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
 	box-sizing: border-box;
+	box-shadow: none;
+}
+
+.primary-btn:active {
+	opacity: 0.82;
+}
+
+.primary-btn-icon {
+	color: #8a5a2b;
+	line-height: 1;
+	font-weight: 400;
+}
+
+.primary-btn-text {
+	color: #8a5a2b;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .section-title {
 	display: block;
-	color: #1f2329;
 	font-weight: 400;
+	color: #1f2329;
 	line-height: 1.4;
 	margin-bottom: 10px;
 }
 
-.section-input,
-.section-textarea {
-	width: 100%;
-	color: #4e5969;
-	font-weight: 400;
-	background: transparent;
-	padding: 0;
-	box-sizing: border-box;
-}
-
-.section-input {
-	line-height: 1;
-}
-
-.section-textarea {
+.section-content {
 	display: block;
+	font-weight: 400;
 	line-height: 1.75;
+	color: #4e5969;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
-.input-placeholder {
+.section-content-empty {
 	color: #a0a7b4;
+}
+
+.owner-row {
+	display: flex;
+	align-items: center;
+}
+
+.owner-avatar {
+	background: #eef1f6;
+	flex-shrink: 0;
+}
+
+.owner-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.owner-name {
 	font-weight: 400;
+	color: #1f2329;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.owner-arrow {
+	color: #a0a7b4;
+	margin-left: 12rpx;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .state-box {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	padding: 48rpx 0;
 }
 
 .state-text {

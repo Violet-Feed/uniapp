@@ -1,6 +1,5 @@
 <template>
 	<view class="create-group-container">
-		<!-- 顶部栏 -->
 		<view class="nav-bar" :style="navBarStyle">
 			<view class="nav-content" :style="navContentStyle">
 				<view class="nav-left" @click="goBack">
@@ -8,7 +7,7 @@
 				</view>
 
 				<view class="nav-title-wrap">
-					<text class="nav-title" :style="navTitleStyle">选择好友</text>
+					<text class="nav-title" :style="navTitleStyle">创建群聊</text>
 				</view>
 
 				<view class="nav-right">
@@ -29,6 +28,26 @@
 			</view>
 		</view>
 
+		<view class="member-filter-bar" :style="memberFilterBarStyle">
+			<view
+				class="filter-item"
+				:class="{ active: activeMemberType === 'friend' }"
+				@click="changeMemberType('friend')"
+			>
+				<text class="filter-text">朋友</text>
+				<view v-if="activeMemberType === 'friend'" class="filter-indicator"></view>
+			</view>
+
+			<view
+				class="filter-item"
+				:class="{ active: activeMemberType === 'agent' }"
+				@click="changeMemberType('agent')"
+			>
+				<text class="filter-text">智能体</text>
+				<view v-if="activeMemberType === 'agent'" class="filter-indicator"></view>
+			</view>
+		</view>
+
 		<view
 			v-if="pullDistance > 0 || isRefreshing"
 			class="refresh-overlay"
@@ -38,57 +57,112 @@
 			<text class="refresh-overlay-text">{{ refresherText }}</text>
 		</view>
 
-		<!-- 好友列表 -->
 		<scroll-view
-			class="friend-scroll"
+			class="member-scroll"
 			scroll-y
 			:lower-threshold="120"
 			@scroll="onListScroll"
-			@scrolltolower="loadMore"
+			@scrolltolower="loadMoreCurrent"
 			@touchstart="onScrollTouchStart"
 			@touchmove="onScrollTouchMove"
 			@touchend="onScrollTouchEnd"
 			@touchcancel="onScrollTouchEnd"
 		>
 			<view class="scroll-content" :style="scrollContentStyle">
-			<view class="friend-list" :style="friendListStyle">
-				<view
-					class="friend-item"
-					:style="friendItemStyle"
-					v-for="(user, index) in userList"
-					:key="String(user.user_id || index)"
-					@click="toggleUserSelection(index)"
-				>
-					<text
-						class="iconfont select-icon"
-						:class="user.selected ? 'icon-gouxuan' : 'icon-gouxuan1'"
-						:style="selectIconStyle(user)"
-					></text>
-
-					<image
-						class="avatar"
-						:style="avatarStyle"
-						:src="user.avatar"
-						mode="aspectFill"
-					></image>
-
-					<view class="user-info" :style="userInfoStyle">
-						<text class="user-name" :style="userNameStyle">{{ user.username }}</text>
-						<text class="user-bio" :style="userBioStyle" v-if="user.bio">{{ user.bio }}</text>
+				<view class="member-list" :style="memberListStyle">
+					<view v-if="currentInitialLoading" class="state-box">
+						<view class="loading-spinner"></view>
+						<text class="state-text" :style="stateTextStyle">加载中...</text>
 					</view>
-				</view>
 
-				<view v-if="!loading && userList.length === 0" class="empty-state">
-					<text class="empty-icon" :style="emptyIconStyle">👥</text>
-					<text class="empty-text" :style="emptyTextStyle">暂无好友</text>
-					<text class="empty-hint" :style="emptyHintStyle">快去添加好友吧！</text>
-				</view>
+					<template v-else>
+						<template v-if="activeMemberType === 'friend'">
+							<view
+								class="member-item"
+								:style="memberItemStyle"
+								v-for="(user, index) in userList"
+								:key="'friend-' + String(user.user_id || index)"
+								@click="toggleUserSelection(index)"
+							>
+								<text
+									class="iconfont select-icon"
+									:class="user.selected ? 'icon-gouxuan' : 'icon-gouxuan1'"
+									:style="selectIconStyle(user)"
+								></text>
 
-				<view v-if="userList.length > 0" class="bottom-status">
-					<text class="bottom-text" :style="bottomTextStyle" v-if="loadingMore">正在加载更多...</text>
-					<text class="bottom-text" :style="bottomTextStyle" v-else-if="hasMore">上拉加载更多</text>
+								<image
+									class="avatar"
+									:style="avatarStyle"
+									:src="user.avatar"
+									mode="aspectFill"
+								></image>
+
+								<view class="member-info" :style="memberInfoStyle">
+									<text class="member-name" :style="memberNameStyle">{{ user.username }}</text>
+									<text class="member-desc" :style="memberDescStyle" v-if="user.bio">{{ user.bio }}</text>
+								</view>
+							</view>
+						</template>
+
+						<template v-else>
+							<view
+								class="member-item"
+								:style="memberItemStyle"
+								v-for="(agent, index) in agentList"
+								:key="'agent-' + String(agent.agent_id || index)"
+								@click="toggleAgentSelection(index)"
+							>
+								<text
+									class="iconfont select-icon"
+									:class="agent.selected ? 'icon-gouxuan' : 'icon-gouxuan1'"
+									:style="selectIconStyle(agent)"
+								></text>
+
+								<image
+									class="avatar agent-avatar"
+									:style="agentAvatarStyle"
+									:src="agent.avatar_uri || defaultAgentAvatar"
+									mode="aspectFill"
+								></image>
+
+								<view class="member-info" :style="memberInfoStyle">
+									<text class="member-name" :style="memberNameStyle">
+										{{ agent.agent_name || '未命名智能体' }}
+									</text>
+									<text class="member-desc" :style="memberDescStyle">
+										{{ agent.description || '暂无描述' }}
+									</text>
+								</view>
+							</view>
+						</template>
+
+						<view v-if="currentListLength === 0" class="empty-state">
+							<text
+								class="iconfont empty-icon"
+								:class="activeMemberType === 'friend' ? 'icon-wode' : 'icon-zhinengti'"
+								:style="emptyIconStyle"
+							></text>
+							<text class="empty-text" :style="emptyTextStyle">
+								{{ activeMemberType === 'friend' ? '暂无好友' : '暂无智能体' }}
+							</text>
+							<text class="empty-hint" :style="emptyHintStyle">
+								{{ activeMemberType === 'friend' ? '快去添加好友吧！' : '快去创建智能体吧！' }}
+							</text>
+						</view>
+
+						<view v-if="currentListLength > 0" class="bottom-status">
+							<text class="bottom-text" :style="bottomTextStyle" v-if="currentLoadingMore">
+								正在加载更多...
+							</text>
+							<text class="bottom-text" :style="bottomTextStyle" v-else-if="currentHasMore">
+								上拉加载更多
+							</text>
+							<text class="bottom-text" :style="bottomTextStyle" v-else>
+								没有更多了
+							</text>
+						</view>
+					</template>
 				</view>
-			</view>
 			</view>
 		</scroll-view>
 	</view>
@@ -97,28 +171,40 @@
 <script>
 import { getFriendList } from '@/request/action.js';
 import { createConversation } from '@/request/im';
+import { getAgentsByUser } from '@/request/agent.js';
 
 const clamp = (value, min, max) => {
 	return Math.max(min, Math.min(max, value));
 };
 
-
-const PULL_TRIGGER_DISTANCE = 64
-const PULL_MAX_DISTANCE = 92
-const PULL_MOVE_RATIO = 0.62
-const REFRESH_HOLD_OFFSET = 42
+const PULL_TRIGGER_DISTANCE = 64;
+const PULL_MAX_DISTANCE = 92;
+const PULL_MOVE_RATIO = 0.62;
+const REFRESH_HOLD_OFFSET = 42;
 
 export default {
 	data() {
 		return {
+			activeMemberType: 'friend',
+
 			userList: [],
+			agentList: [],
 
-			page: 1,
-			hasMore: true,
-			pageSize: 20,
+			friendPage: 1,
+			agentPage: 1,
 
-			loading: false,
-			loadingMore: false,
+			friendHasMore: true,
+			agentHasMore: true,
+
+			friendPageSize: 20,
+			agentPageSize: 20,
+
+			friendLoading: false,
+			agentLoading: false,
+
+			friendLoadingMore: false,
+			agentLoadingMore: false,
+
 			isRefreshing: false,
 
 			scrollTop: 0,
@@ -127,10 +213,14 @@ export default {
 			pullDistance: 0,
 			creating: false,
 
+			defaultUserAvatar: '/static/user_avatar.png',
+			defaultAgentAvatar: '/static/ai_avatar.png',
+
 			windowWidth: 375,
 			statusBarHeight: 0,
 			headerContentHeight: 38,
 			headerHeight: 38,
+			filterBarHeight: 38,
 
 			pagePadding: 14,
 			cardPaddingX: 14,
@@ -139,17 +229,18 @@ export default {
 			cardGap: 10,
 
 			avatarSize: 48,
+			agentAvatarRadius: 12,
 			selectIconSize: 22,
 			backIconSize: 19,
 			titleFontSize: 17,
 
 			createBtnHeight: 30,
-			createBtnMinWidth: 62,
+			createBtnMinWidth: 76,
 			createBtnFontSize: 14,
 
-			userNameFontSize: 16,
-			userBioFontSize: 13,
-			userInfoMargin: 10,
+			memberNameFontSize: 16,
+			memberDescFontSize: 13,
+			memberInfoMargin: 10,
 
 			emptyIconFontSize: 56,
 			emptyTextFontSize: 16,
@@ -159,8 +250,42 @@ export default {
 	},
 
 	computed: {
-		selectedCount() {
+		selectedFriendCount() {
 			return this.userList.filter(user => user.selected).length;
+		},
+
+		selectedAgentCount() {
+			return this.agentList.filter(agent => agent.selected).length;
+		},
+
+		selectedCount() {
+			return this.selectedFriendCount + this.selectedAgentCount;
+		},
+
+		currentInitialLoading() {
+			if (this.activeMemberType === 'friend') {
+				return this.friendLoading && this.userList.length === 0;
+			}
+
+			return this.agentLoading && this.agentList.length === 0;
+		},
+
+		currentLoadingMore() {
+			return this.activeMemberType === 'friend'
+				? this.friendLoadingMore
+				: this.agentLoadingMore;
+		},
+
+		currentHasMore() {
+			return this.activeMemberType === 'friend'
+				? this.friendHasMore
+				: this.agentHasMore;
+		},
+
+		currentListLength() {
+			return this.activeMemberType === 'friend'
+				? this.userList.length
+				: this.agentList.length;
 		},
 
 		navBarStyle() {
@@ -192,11 +317,15 @@ export default {
 			);
 		},
 
-		friendListStyle() {
+		memberFilterBarStyle() {
+			return 'height:' + this.filterBarHeight + 'px;';
+		},
+
+		memberListStyle() {
 			return 'padding:' + this.pagePadding + 'px;';
 		},
 
-		friendItemStyle() {
+		memberItemStyle() {
 			return (
 				'padding:' + this.cardPaddingY + 'px ' + this.cardPaddingX + 'px;' +
 				'margin-bottom:' + this.cardGap + 'px;' +
@@ -206,6 +335,7 @@ export default {
 
 		avatarStyle() {
 			const radius = Math.floor(this.avatarSize / 2);
+
 			return (
 				'width:' + this.avatarSize + 'px;' +
 				'height:' + this.avatarSize + 'px;' +
@@ -213,16 +343,24 @@ export default {
 			);
 		},
 
-		userInfoStyle() {
-			return 'margin-left:' + this.userInfoMargin + 'px;';
+		agentAvatarStyle() {
+			return (
+				'width:' + this.avatarSize + 'px;' +
+				'height:' + this.avatarSize + 'px;' +
+				'border-radius:' + this.agentAvatarRadius + 'px;'
+			);
 		},
 
-		userNameStyle() {
-			return 'font-size:' + this.userNameFontSize + 'px;';
+		memberInfoStyle() {
+			return 'margin-left:' + this.memberInfoMargin + 'px;';
 		},
 
-		userBioStyle() {
-			return 'font-size:' + this.userBioFontSize + 'px;';
+		memberNameStyle() {
+			return 'font-size:' + this.memberNameFontSize + 'px;';
+		},
+
+		memberDescStyle() {
+			return 'font-size:' + this.memberDescFontSize + 'px;';
 		},
 
 		emptyIconStyle() {
@@ -242,48 +380,48 @@ export default {
 		},
 
 		pullVisualOffset() {
-			if (this.isRefreshing) return REFRESH_HOLD_OFFSET
+			if (this.isRefreshing) return REFRESH_HOLD_OFFSET;
 
 			return Math.min(
 				REFRESH_HOLD_OFFSET,
 				Math.round(this.pullDistance * PULL_MOVE_RATIO)
-			)
+			);
 		},
 
 		scrollContentStyle() {
-			const transition = this.pulling ? 'none' : 'transform 0.16s ease'
+			const transition = this.pulling ? 'none' : 'transform 0.16s ease';
 
 			return [
 				'transform: translateY(' + this.pullVisualOffset + 'px)',
 				'transition:' + transition
-			].join(';')
+			].join(';');
 		},
 
 		refreshOverlayStyle() {
-			const top = this.headerHeight
-			const active = this.isRefreshing
+			const top = this.headerHeight + this.filterBarHeight;
+			const active = this.isRefreshing;
 
 			const height = active
 				? 34
-				: Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)))
+				: Math.min(34, Math.max(0, Math.round(this.pullDistance * 0.48)));
 
 			const opacity = active
 				? 1
-				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE)
+				: Math.min(1, this.pullDistance / PULL_TRIGGER_DISTANCE);
 
 			return [
 				'top:' + top + 'px',
 				'height:' + height + 'px',
 				'opacity:' + opacity
-			].join(';')
+			].join(';');
 		},
 
 		refresherText() {
-			if (this.isRefreshing) return '正在刷新...'
-			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新'
-			if (this.pullDistance > 0) return '下拉刷新'
-			return ''
-		},
+			if (this.isRefreshing) return '正在刷新...';
+			if (this.pullDistance >= PULL_TRIGGER_DISTANCE) return '松开刷新';
+			if (this.pullDistance > 0) return '下拉刷新';
+			return '';
+		}
 	},
 
 	onLoad() {
@@ -296,60 +434,60 @@ export default {
 	},
 
 	methods: {
-
 		onListScroll(e) {
-			this.scrollTop = Number(e?.detail?.scrollTop || 0)
+			this.scrollTop = Number(e?.detail?.scrollTop || 0);
 		},
 
 		getTouchY(e) {
-			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {}
-			return Number(touch.clientY ?? touch.pageY ?? 0)
+			const touch = e?.touches?.[0] || e?.changedTouches?.[0] || {};
+			return Number(touch.clientY ?? touch.pageY ?? 0);
 		},
 
 		onScrollTouchStart(e) {
-			if (this.loading || this.loadingMore || this.isRefreshing) return
+			if (this.isCurrentBusy()) return;
 
-			this.pullStartY = this.getTouchY(e)
-			this.pulling = this.scrollTop <= 2
-			this.pullDistance = 0
+			this.pullStartY = this.getTouchY(e);
+			this.pulling = this.scrollTop <= 2;
+			this.pullDistance = 0;
 		},
 
 		onScrollTouchMove(e) {
-			if (!this.pulling || this.loading || this.loadingMore || this.isRefreshing) return
+			if (!this.pulling || this.isCurrentBusy()) return;
 
 			if (this.scrollTop > 2) {
-				this.pulling = false
-				this.pullDistance = 0
-				return
+				this.pulling = false;
+				this.pullDistance = 0;
+				return;
 			}
 
-			const currentY = this.getTouchY(e)
-			const deltaY = currentY - this.pullStartY
+			const currentY = this.getTouchY(e);
+			const deltaY = currentY - this.pullStartY;
 
 			if (deltaY <= 0) {
-				this.pullDistance = 0
-				return
+				this.pullDistance = 0;
+				return;
 			}
 
 			this.pullDistance = Math.min(
 				PULL_MAX_DISTANCE,
 				Math.floor(deltaY * 0.38)
-			)
+			);
 		},
 
 		async onScrollTouchEnd() {
-			if (!this.pulling) return
+			if (!this.pulling) return;
 
-			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE
-			this.pulling = false
+			const shouldRefresh = this.pullDistance >= PULL_TRIGGER_DISTANCE;
+			this.pulling = false;
 
 			if (!shouldRefresh) {
-				this.pullDistance = 0
-				return
+				this.pullDistance = 0;
+				return;
 			}
 
-			await this.onRefresh()
+			await this.onRefresh();
 		},
+
 		initResponsiveLayout() {
 			try {
 				const sys = uni.getSystemInfoSync();
@@ -363,6 +501,7 @@ export default {
 
 				this.headerContentHeight = 38;
 				this.headerHeight = this.statusBarHeight + this.headerContentHeight;
+				this.filterBarHeight = clamp(Math.floor(windowWidth * 0.1), 36, 42);
 
 				this.pagePadding = clamp(Math.floor(windowWidth * 0.038), 12, 18);
 				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18);
@@ -371,21 +510,22 @@ export default {
 				this.cardGap = clamp(Math.floor(windowWidth * 0.028), 9, 14);
 
 				this.avatarSize = clamp(Math.floor(windowWidth * 0.128), 44, 54);
+				this.agentAvatarRadius = clamp(Math.floor(this.avatarSize * 0.24), 10, 14);
 				this.selectIconSize = clamp(Math.floor(windowWidth * 0.058), 20, 24);
 				this.backIconSize = clamp(Math.floor(this.headerContentHeight * 0.5), 18, 21);
 				this.titleFontSize = clamp(Math.floor(this.headerContentHeight * 0.44) + smallScreenBoost, 16, 18);
 
 				this.createBtnHeight = clamp(Math.floor(this.headerContentHeight * 0.74), 28, 32);
-				this.createBtnMinWidth = clamp(Math.floor(windowWidth * 0.165), 60, 74);
+				this.createBtnMinWidth = clamp(Math.floor(windowWidth * 0.2), 76, 88);
 				this.createBtnFontSize = clamp(Math.floor(windowWidth * 0.036) + smallScreenBoost, 13, 15);
 
-				this.userNameFontSize = clamp(
+				this.memberNameFontSize = clamp(
 					Math.floor(windowWidth * 0.043) + smallScreenBoost + tinyScreenBoost,
 					16,
 					18
 				);
-				this.userBioFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
-				this.userInfoMargin = clamp(Math.floor(windowWidth * 0.03), 10, 14);
+				this.memberDescFontSize = clamp(Math.floor(windowWidth * 0.034) + smallScreenBoost, 12, 14);
+				this.memberInfoMargin = clamp(Math.floor(windowWidth * 0.03), 10, 14);
 
 				this.emptyIconFontSize = clamp(Math.floor(windowWidth * 0.15), 52, 64);
 				this.emptyTextFontSize = clamp(Math.floor(windowWidth * 0.04) + smallScreenBoost, 15, 17);
@@ -396,6 +536,7 @@ export default {
 				this.statusBarHeight = 0;
 				this.headerContentHeight = 38;
 				this.headerHeight = 38;
+				this.filterBarHeight = 38;
 
 				this.pagePadding = 14;
 				this.cardPaddingX = 14;
@@ -404,17 +545,18 @@ export default {
 				this.cardGap = 10;
 
 				this.avatarSize = 48;
+				this.agentAvatarRadius = 12;
 				this.selectIconSize = 22;
 				this.backIconSize = 19;
 				this.titleFontSize = 17;
 
 				this.createBtnHeight = 30;
-				this.createBtnMinWidth = 62;
+				this.createBtnMinWidth = 76;
 				this.createBtnFontSize = 14;
 
-				this.userNameFontSize = 16;
-				this.userBioFontSize = 13;
-				this.userInfoMargin = 10;
+				this.memberNameFontSize = 16;
+				this.memberDescFontSize = 13;
+				this.memberInfoMargin = 10;
 
 				this.emptyIconFontSize = 56;
 				this.emptyTextFontSize = 16;
@@ -427,8 +569,29 @@ export default {
 			uni.navigateBack();
 		},
 
-		selectIconStyle(user) {
-			const color = user && user.selected ? '#22c55e' : '#c9ced6';
+		changeMemberType(type) {
+			if (this.activeMemberType === type) return;
+
+			this.activeMemberType = type;
+			this.scrollTop = 0;
+			this.pullDistance = 0;
+			this.pulling = false;
+
+			if (type === 'friend') {
+				if (this.userList.length === 0 && !this.friendLoading) {
+					this.loadFriendList(true);
+				}
+				return;
+			}
+
+			if (this.agentList.length === 0 && !this.agentLoading) {
+				this.loadAgentList(true);
+			}
+		},
+
+		selectIconStyle(item) {
+			const color = item && item.selected ? '#22c55e' : '#c9ced6';
+
 			return (
 				'font-size:' + this.selectIconSize + 'px;' +
 				'color:' + color + ';'
@@ -436,12 +599,37 @@ export default {
 		},
 
 		toggleUserSelection(index) {
-			if (!this.userList[index]) return;
-			this.userList[index].selected = !this.userList[index].selected;
+			const user = this.userList[index];
+			if (!user) return;
+
+			this.userList.splice(index, 1, {
+				...user,
+				selected: !user.selected
+			});
+		},
+
+		toggleAgentSelection(index) {
+			const agent = this.agentList[index];
+			if (!agent) return;
+
+			this.agentList.splice(index, 1, {
+				...agent,
+				selected: !agent.selected
+			});
+		},
+
+		isCurrentBusy() {
+			if (this.isRefreshing) return true;
+
+			if (this.activeMemberType === 'friend') {
+				return this.friendLoading || this.friendLoadingMore;
+			}
+
+			return this.agentLoading || this.agentLoadingMore;
 		},
 
 		async onRefresh() {
-			if (this.loading || this.loadingMore || this.isRefreshing) {
+			if (this.isCurrentBusy()) {
 				this.pullDistance = 0;
 				return;
 			}
@@ -450,49 +638,57 @@ export default {
 			this.pullDistance = PULL_TRIGGER_DISTANCE;
 
 			try {
-				await this.loadFriendList(true);
+				if (this.activeMemberType === 'friend') {
+					await this.loadFriendList(true);
+				} else {
+					await this.loadAgentList(true);
+				}
 			} finally {
 				this.isRefreshing = false;
 				this.pullDistance = 0;
 			}
 		},
 
-		loadMore() {
-			this.loadFriendList(false);
+		loadMoreCurrent() {
+			if (this.activeMemberType === 'friend') {
+				this.loadFriendList(false);
+				return;
+			}
+
+			this.loadAgentList(false);
 		},
 
 		async loadFriendList(reset = false) {
-			if (this.loading || this.loadingMore) return;
-			if (!reset && !this.hasMore) return;
+			if (this.friendLoading || this.friendLoadingMore) return;
+			if (!reset && !this.friendHasMore) return;
 
 			if (reset) {
-				this.page = 1;
-				this.hasMore = true;
-				this.loading = true;
+				this.friendPage = 1;
+				this.friendHasMore = true;
+				this.friendLoading = true;
 			} else {
-				this.loadingMore = true;
+				this.friendLoadingMore = true;
 			}
+
+			const selectedMap = new Map(
+				this.userList.map(user => [String(user.user_id || ''), !!user.selected])
+			);
 
 			const payload = {
 				userId: String(getApp().globalData.userId || ''),
-				page: this.page
+				page: this.friendPage
 			};
 
-			let res;
-			try {
-				res = await getFriendList(payload);
-			} catch (e) {
-				res = undefined;
-			}
+			let res = await getFriendList(payload);
 
 			const list = res && Array.isArray(res.user_infos) ? res.user_infos : [];
 
 			if (reset) this.userList = [];
 
 			if (list.length === 0) {
-				this.hasMore = false;
-				this.loading = false;
-				this.loadingMore = false;
+				this.friendHasMore = false;
+				this.friendLoading = false;
+				this.friendLoadingMore = false;
 				this.isRefreshing = false;
 				return;
 			}
@@ -500,22 +696,85 @@ export default {
 			const exist = new Set(this.userList.map(u => String(u.user_id || u.userId || '')));
 
 			const mapped = list
-				.map(u => ({
-					user_id: String(u.user_id || u.userId || ''),
-					username: u.username || '未知用户',
-					avatar: u.avatar && u.avatar !== '' ? u.avatar : '/static/user_avatar.png',
-					bio: u.bio,
-					selected: false
-				}))
+				.map(u => {
+					const userId = String(u.user_id || u.userId || '');
+
+					return {
+						user_id: userId,
+						username: u.username || '未知用户',
+						avatar: u.avatar && u.avatar !== '' ? u.avatar : this.defaultUserAvatar,
+						bio: u.bio,
+						selected: selectedMap.has(userId) ? selectedMap.get(userId) : false
+					};
+				})
 				.filter(u => u.user_id && !exist.has(u.user_id));
 
 			this.userList = this.userList.concat(mapped);
 
-			this.hasMore = list.length >= this.pageSize;
-			this.page += 1;
+			this.friendHasMore = list.length >= this.friendPageSize;
+			this.friendPage += 1;
 
-			this.loading = false;
-			this.loadingMore = false;
+			this.friendLoading = false;
+			this.friendLoadingMore = false;
+			this.isRefreshing = false;
+		},
+
+		async loadAgentList(reset = false) {
+			if (this.agentLoading || this.agentLoadingMore) return;
+			if (!reset && !this.agentHasMore) return;
+
+			if (reset) {
+				this.agentPage = 1;
+				this.agentHasMore = true;
+				this.agentLoading = true;
+			} else {
+				this.agentLoadingMore = true;
+			}
+
+			const selectedMap = new Map(
+				this.agentList.map(agent => [String(agent.agent_id || ''), !!agent.selected])
+			);
+
+			let res = await getAgentsByUser({
+					page: this.agentPage
+				});
+
+			const list = res && Array.isArray(res.agents) ? res.agents : [];
+
+			if (reset) this.agentList = [];
+
+			if (list.length === 0) {
+				this.agentHasMore = false;
+				this.agentLoading = false;
+				this.agentLoadingMore = false;
+				this.isRefreshing = false;
+				return;
+			}
+
+			const exist = new Set(this.agentList.map(agent => String(agent.agent_id || '')));
+
+			const mapped = list
+				.map(item => {
+					const agentId = item?.agent_id ? String(item.agent_id) : '';
+
+					return {
+						agent_id: agentId,
+						agent_name: item?.agent_name || '',
+						avatar_uri: item?.avatar_uri || '',
+						description: item?.description || '',
+						personality: item?.personality || '',
+						selected: selectedMap.has(agentId) ? selectedMap.get(agentId) : false
+					};
+				})
+				.filter(item => item.agent_id && !exist.has(item.agent_id));
+
+			this.agentList = this.agentList.concat(mapped);
+
+			this.agentHasMore = list.length >= this.agentPageSize;
+			this.agentPage += 1;
+
+			this.agentLoading = false;
+			this.agentLoadingMore = false;
 			this.isRefreshing = false;
 		},
 
@@ -526,9 +785,13 @@ export default {
 				.filter(user => user.selected)
 				.map(user => user.user_id);
 
-			if (selectedUserIds.length === 0) {
+			const selectedAgentIds = this.agentList
+				.filter(agent => agent.selected)
+				.map(agent => agent.agent_id);
+
+			if (selectedUserIds.length === 0 && selectedAgentIds.length === 0) {
 				uni.showToast({
-					title: '请至少选择一位好友',
+					title: '请选择成员',
 					icon: 'none'
 				});
 				return;
@@ -538,7 +801,8 @@ export default {
 
 			try {
 				const res = await createConversation({
-					members: selectedUserIds
+					members: selectedUserIds,
+					agentMembers: selectedAgentIds
 				});
 
 				if (!res) return;
@@ -550,7 +814,7 @@ export default {
 
 				setTimeout(() => {
 					uni.redirectTo({
-						url: `/pages/im/conversation?conId=${res.con_id}&name=群聊&conType=${res.con_type}`
+						url: `/pages/im/conversation?conId=${res.con_id}&name=群聊&conType=${res.con_type || 2}`
 					});
 				}, 200);
 			} finally {
@@ -612,6 +876,96 @@ export default {
 	justify-content: flex-end;
 }
 
+.back-icon {
+	line-height: 1;
+	color: #222;
+	font-weight: 400;
+}
+
+.nav-title-wrap {
+	flex: 1;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.nav-title {
+	color: #222;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.create-btn {
+	margin: 0;
+	padding: 0 13px;
+	color: #8a5a2b;
+	background: rgba(253, 231, 209, 1);
+	font-weight: 400;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	gap: 2px;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.create-btn::after {
+	border: none;
+}
+
+.create-btn-disabled {
+	opacity: 0.62;
+}
+
+.create-btn-text {
+	color: #8a5a2b;
+	font-weight: 400;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.member-filter-bar {
+	width: 100%;
+	display: flex;
+	background: #ffffff;
+	flex-shrink: 0;
+	box-sizing: border-box;
+}
+
+.filter-item {
+	flex: 1;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.filter-text {
+	font-size: 14px;
+	color: #666666;
+	font-weight: 400;
+}
+
+.filter-item.active .filter-text {
+	color: #8a5a2b;
+	font-weight: 500;
+}
+
+.filter-indicator {
+	position: absolute;
+	bottom: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 24px;
+	height: 3px;
+	background: rgba(253, 231, 209, 1);
+	border-radius: 2px 2px 0 0;
+}
 
 .refresh-overlay {
 	position: fixed;
@@ -661,67 +1015,17 @@ export default {
 	}
 }
 
-.back-icon {
-	line-height: 1;
-	color: #222;
-	font-weight: 400;
-}
-
-.nav-title-wrap {
-	flex: 1;
-	height: 30px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 0;
-	box-sizing: border-box;
-}
-
-.nav-title {
-	color: #222;
-	font-weight: 400;
-	line-height: 1;
-}
-
-.create-btn {
-	margin: 0;
-	padding: 0 13px;
-	color: #8a5a2b;
-	background: rgba(253, 231, 209, 1);
-	font-weight: 400;
-	border: none;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	box-sizing: border-box;
-	gap: 2px;
-}
-
-.create-btn::after {
-	border: none;
-}
-
-.create-btn-disabled {
-	opacity: 0.62;
-}
-
-.create-btn-text {
-	color: #8a5a2b;
-	font-weight: 400;
-	line-height: 1;
-}
-
-.friend-scroll {
+.member-scroll {
 	flex: 1;
 	overflow: hidden;
 	background: #f7f8fa;
 }
 
-.friend-list {
+.member-list {
 	box-sizing: border-box;
 }
 
-.friend-item {
+.member-item {
 	display: flex;
 	align-items: center;
 	background: #ffffff;
@@ -729,7 +1033,7 @@ export default {
 	box-sizing: border-box;
 }
 
-.friend-item:active {
+.member-item:active {
 	background: #f8f8f8;
 }
 
@@ -750,7 +1054,12 @@ export default {
 	flex-shrink: 0;
 }
 
-.user-info {
+.agent-avatar {
+	border: 1px solid #eef1f6;
+	box-sizing: border-box;
+}
+
+.member-info {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
@@ -759,7 +1068,7 @@ export default {
 	min-width: 0;
 }
 
-.user-name {
+.member-name {
 	font-weight: 400;
 	color: #1f2329;
 	line-height: 1.4;
@@ -768,13 +1077,28 @@ export default {
 	white-space: nowrap;
 }
 
-.user-bio {
+.member-desc {
 	font-weight: 400;
 	color: #999;
 	line-height: 1.35;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.state-box {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 90px 20px;
+	box-sizing: border-box;
+	gap: 12px;
+}
+
+.state-text {
+	color: #999999;
+	font-weight: 400;
 }
 
 .empty-state {
@@ -786,9 +1110,10 @@ export default {
 	box-sizing: border-box;
 }
 
-.empty-icon {
+.iconfont.empty-icon {
 	line-height: 1;
 	margin-bottom: 14px;
+	color: #d8a25d !important;
 }
 
 .empty-text {

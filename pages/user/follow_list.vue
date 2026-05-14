@@ -250,7 +250,7 @@ export default {
 		emptyIconClass() {
 			if (this.activeTab === 'following') return 'icon-wode'
 			if (this.activeTab === 'follower') return 'icon-wode'
-			return 'icon-qunliao'
+			return 'icon-qunliaox'
 		},
 
 		emptyText() {
@@ -548,55 +548,50 @@ export default {
 				this.loadingMore = true
 			}
 
-			try {
-				const payload = {
-					userId: this.userId,
-					page: this.page
-				}
+			const payload = {
+				userId: this.userId,
+				page: this.page
+			}
 
-				let res = null
+			let res = null
 
-				if (this.activeTab === 'following') {
-					res = await getFollowingList(payload)
-				} else if (this.activeTab === 'follower') {
-					res = await getFollowerList(payload)
-				} else {
-					res = await getFriendList(payload)
-				}
+			if (this.activeTab === 'following') {
+				res = await getFollowingList(payload)
+			} else if (this.activeTab === 'follower') {
+				res = await getFollowerList(payload)
+			} else {
+				res = await getFriendList(payload)
+			}
 
-				const list = res && Array.isArray(res.user_infos) ? res.user_infos : []
+			const list = res && Array.isArray(res.user_infos) ? res.user_infos : []
 
-				if (list.length === 0) {
-					if (reset) {
-						this.userList = []
-						this.page = 1
-					}
-
-					this.hasMore = false
-					return
-				}
-
-				const mapped = list.map(user => this.normalizeUser(user))
-
+			if (list.length === 0) {
 				if (reset) {
-					this.userList = mapped
-				} else {
-					this.userList = this.userList.concat(mapped)
+					this.userList = []
+					this.page = 1
 				}
 
-				this.hasMore = list.length >= this.pageSize
-				this.page += 1
-			} catch (err) {
-				console.error('加载关系列表失败:', err)
-				uni.showToast({
-					title: '加载失败',
-					icon: 'none'
-				})
-			} finally {
+				this.hasMore = false
 				this.loading = false
 				this.loadingMore = false
 				this.isRefreshing = false
+				return
 			}
+
+			const mapped = list.map(user => this.normalizeUser(user))
+
+			if (reset) {
+				this.userList = mapped
+			} else {
+				this.userList = this.userList.concat(mapped)
+			}
+
+			this.hasMore = list.length >= this.pageSize
+			this.page += 1
+
+			this.loading = false
+			this.loadingMore = false
+			this.isRefreshing = false
 		},
 
 		loadMore() {
@@ -683,23 +678,11 @@ export default {
 		},
 
 		async followUser(user) {
-			try {
-				const me = getApp().globalData.userId
-				const ok = await follow(me, user.user_id)
+			const me = getApp().globalData.userId
+			const ok = await follow(me, user.user_id)
 
-				if (ok) {
-					user.is_following = true
-					uni.showToast({
-						title: '关注成功',
-						icon: 'success'
-					})
-				}
-			} catch (err) {
-				console.error('关注失败:', err)
-				uni.showToast({
-					title: '操作失败',
-					icon: 'none'
-				})
+			if (ok) {
+				user.is_following = true
 			}
 		},
 
@@ -716,23 +699,11 @@ export default {
 		},
 
 		async unfollowUser(user) {
-			try {
-				const me = getApp().globalData.userId
-				const ok = await unfollow(me, user.user_id)
+			const me = getApp().globalData.userId
+			const ok = await unfollow(me, user.user_id)
 
-				if (ok) {
-					user.is_following = false
-					uni.showToast({
-						title: '已取消关注',
-						icon: 'success'
-					})
-				}
-			} catch (err) {
-				console.error('取消关注失败:', err)
-				uni.showToast({
-					title: '操作失败',
-					icon: 'none'
-				})
+			if (ok) {
+				user.is_following = false
 			}
 		},
 

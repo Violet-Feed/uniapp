@@ -13,7 +13,7 @@
           mode="aspectFill"
         ></image>
         <view class="author-details">
-          <text class="author-name">{{ creation.author.username || '匿名用户' }}</text>
+          <text class="author-name">{{ creation.author.username || '用户' }}</text>
           <text class="author-desc">{{ formatNumber(creation.author.followerCount) }} 粉丝</text>
         </view>
       </view>
@@ -284,7 +284,7 @@
 
     <!-- 单一常驻底栏 -->
     <view class="bottom-bar">
-      <view class="comment-input-wrapper" @click.stop="startNewComment">
+      <view class="comment-input-wrapper" :style="commentInputWrapperStyle" @click.stop="startNewComment">
         <input
           class="bottom-comment-input"
           v-model="commentText"
@@ -300,7 +300,7 @@
         />
       </view>
 
-      <view class="bottom-right-slot">
+      <view class="bottom-right-slot" :style="bottomRightSlotStyle">
         <view
           class="send-btn"
           v-if="showCommentInput"
@@ -539,6 +539,20 @@ export default {
       if (!this.currentUserId || !this.creation.author.user_id) return false
       return String(this.currentUserId) === String(this.creation.author.user_id)
     },
+
+    commentInputWrapperStyle() {
+      if (this.showCommentInput) {
+        return 'flex:1;'
+      }
+      return 'flex:0 1 56%;'
+    },
+
+    bottomRightSlotStyle() {
+      if (this.showCommentInput) {
+        return 'min-width:0;'
+      }
+      return ''
+    },
   },
 
   onLoad(options) {
@@ -567,18 +581,12 @@ export default {
 
   methods: {
     async initPage() {
-      uni.showLoading({ title: '加载中...' })
 
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
       const ok3 = await this.fetchActionInfo()
       const ok4 = await this.fetchComments(true)
 
-      if (!ok1 || !ok3 || !ok4) {
-        uni.showToast({ title: '加载失败', icon: 'none' })
-      }
-
-      uni.hideLoading()
     },
 
     async fetchCreationDetail() {
@@ -659,7 +667,6 @@ export default {
 
       const res = await getCommentList(payload)
       if (!res) {
-        uni.showToast({ title: '评论加载失败', icon: 'none' })
         this.commentLoading = false
         return false
       }
@@ -784,7 +791,6 @@ export default {
 
       const res = await getReplyList(payload)
       if (!res) {
-        uni.showToast({ title: '回复加载失败', icon: 'none' })
         comment.replyLoading = false
         return
       }
@@ -835,7 +841,10 @@ export default {
 
     goToUserPage(userId) {
       const targetId = userId || this.creation.author.user_id
-      if (!targetId) return
+      if (!targetId) {
+        uni.showToast({ title: '网络错误', icon: 'none' })
+        return
+      }
 
       const currentUserId = getApp().globalData.userId
 
@@ -1086,28 +1095,25 @@ export default {
     },
 
     async toggleLike() {
-      if (this.likeLoading || !this.creation.creationId) return
+      const entityId = this.creation.creationId || this.creationId
+      if (this.likeLoading || !entityId) return
 
       this.likeLoading = true
 
       let ok = false
 
       if (this.isLiked) {
-        ok = await cancelDigg('creation', this.creation.creationId)
+        ok = await cancelDigg('creation', entityId)
         if (ok) {
           this.isLiked = false
           this.creation.likes = Math.max(0, this.creation.likes - 1)
         }
       } else {
-        ok = await digg('creation', this.creation.creationId)
+        ok = await digg('creation', entityId)
         if (ok) {
           this.isLiked = true
           this.creation.likes += 1
         }
-      }
-
-      if (!ok) {
-        uni.showToast({ title: '操作失败', icon: 'none' })
       }
 
       this.likeLoading = false
@@ -1117,7 +1123,10 @@ export default {
       const currentUserId = this.currentUserId
       const targetUserId = this.creation.author.user_id
 
-      if (!currentUserId || !targetUserId) return
+      if (!currentUserId || !targetUserId) {
+        uni.showToast({ title: '网络错误', icon: 'none' })
+        return
+      }
 
       let ok = false
 
@@ -1135,15 +1144,6 @@ export default {
           this.isFollowed = true
           this.creation.author.followerCount += 1
         }
-      }
-
-      if (!ok) {
-        uni.showToast({ title: '操作失败', icon: 'none' })
-      } else {
-        uni.showToast({
-          title: this.isFollowed ? '关注成功' : '取消关注',
-          icon: 'none'
-        })
       }
     },
 
@@ -1171,11 +1171,6 @@ export default {
           comment.likes += 1
         }
       }
-
-      if (!ok) {
-        uni.showToast({ title: '操作失败', icon: 'none' })
-      }
-
       comment._loading = false
     },
 
@@ -1347,7 +1342,6 @@ export default {
       }
 
       if (!res || !res.comment_id) {
-        uni.showToast({ title: '发送失败', icon: 'none' })
         return
       }
 
@@ -1419,8 +1413,6 @@ export default {
       }
 
       this.creation.comments += 1
-
-      uni.showToast({ title: '发送成功', icon: 'success' })
 
       this.commentText = ''
       this.commentPlaceholder = '说点什么...'
@@ -1523,33 +1515,30 @@ export default {
 
       this.commentAction.deleting = true
 
-      try {
-        let ok = false
+      let ok = false
 
-        if (type === 'reply') {
-          ok = await deleteReply({
-            replyId: target.id
-          })
-        } else {
-          ok = await deleteComment({
-            commentId: target.id
-          })
-        }
-
-        if (!ok) throw new Error('delete comment returned false')
-
-        if (type === 'reply') {
-          this.removeReplyFromList(parent, target)
-        } else {
-          this.removeCommentFromList(target)
-        }
-
-        this.resetCommentAction()
-      } catch (err) {
-        console.error('deleteSelectedComment failed', err)
-        this.commentAction.deleting = false
-        uni.showToast({ title: '删除失败', icon: 'none' })
+      if (type === 'reply') {
+        ok = await deleteReply({
+          replyId: target.id
+        })
+      } else {
+        ok = await deleteComment({
+          commentId: target.id
+        })
       }
+
+      if (!ok) {
+        this.commentAction.deleting = false
+        return
+      }
+
+      if (type === 'reply') {
+        this.removeReplyFromList(parent, target)
+      } else {
+        this.removeCommentFromList(target)
+      }
+
+      this.resetCommentAction()
     },
 
     removeReplyFromList(parent, reply) {

@@ -304,7 +304,7 @@ export default {
 
       footerReserveHeight: 26,
       emptyTopPadding: 128,
-      emptyIconSize: 52,
+      emptyIconSize: 58,
 
       materialTouch: {
         startX: 0,
@@ -504,7 +504,7 @@ export default {
     canReCreateAction() {
       const material = this.materialAction.material
       if (!material) return false
-      return Number(material.status) !== 1 && material.uiStatus !== 'generating'
+      return Number(material.status) === 3 || material.uiStatus === 'failed'
     }
   },
 
@@ -604,11 +604,8 @@ export default {
           150
         )
 
-        this.emptyIconSize = clamp(
-          Math.floor(windowWidth * 0.14),
-          46,
-          58
-        )
+        this.emptyIconSize = 58
+
       } catch (e) {
         this.statusBarHeight = 0
         this.safeBottom = 0
@@ -638,7 +635,7 @@ export default {
 
         this.footerReserveHeight = 26
         this.emptyTopPadding = 128
-        this.emptyIconSize = 52
+        this.emptyIconSize = 58
       }
     },
 
@@ -850,49 +847,49 @@ export default {
         this.isLoadingMore = true
       }
 
-      try {
-        const res = await getMaterialByUser(this.page)
-        const list = Array.isArray(res)
-          ? res
-          : (res && Array.isArray(res.material) ? res.material : [])
-
-        if (!list || list.length === 0) {
-          this.hasMore = false
-          return
-        }
-
-        const mapped = list.map(item => {
-          const createTime = item.create_time || Date.now()
-          const status = item.status != null ? item.status : 1
-          const prompt = item.prompt || ''
-
-          return {
-            ...item,
-            status,
-            uiStatus: this.mapStatusToUi(status),
-            displayTitle: prompt || '未命名作品',
-            create_time: createTime,
-            displayTime: this.formatRelativeTime(createTime)
-          }
-        })
-
-        if (reset) {
-          this.materials = mapped
-        } else {
-          this.materials = this.materials.concat(mapped)
-        }
-
-        this.page += 1
-      } catch (err) {
-        console.error('加载素材失败：', err)
-        uni.showToast({
-          title: '加载失败',
-          icon: 'none'
-        })
-      } finally {
+      const res = await getMaterialByUser(this.page)
+      if (!res) {
         this.loading = false
         this.isLoadingMore = false
+        return
       }
+
+      const list = Array.isArray(res)
+        ? res
+        : (res && Array.isArray(res.material) ? res.material : [])
+
+      if (!list || list.length === 0) {
+        this.hasMore = false
+        this.loading = false
+        this.isLoadingMore = false
+        return
+      }
+
+      const mapped = list.map(item => {
+        const createTime = item.create_time || Date.now()
+        const status = item.status != null ? item.status : 1
+        const prompt = item.prompt || ''
+
+        return {
+          ...item,
+          status,
+          uiStatus: this.mapStatusToUi(status),
+          displayTitle: prompt || '未命名作品',
+          create_time: createTime,
+          displayTime: this.formatRelativeTime(createTime)
+        }
+      })
+
+      if (reset) {
+        this.materials = mapped
+      } else {
+        this.materials = this.materials.concat(mapped)
+      }
+
+      this.page += 1
+
+      this.loading = false
+      this.isLoadingMore = false
     },
 
     formatRelativeTime(msTimestamp) {
@@ -995,28 +992,13 @@ export default {
 
           uni.showLoading({ title: '上传中...' })
 
-          try {
-            const uploadRes = await uploadImage(localPath, 'material_source')
-            if (!uploadRes || !uploadRes.source_url) {
-              this.uploadedImage = ''
-              uni.showToast({
-                title: '上传失败',
-                icon: 'none'
-              })
-              return
-            }
-
-            this.uploadedSourceUrl = uploadRes.source_url
-          } catch (e) {
-            console.error('图片上传失败', e)
-            this.uploadedImage = ''
-            uni.showToast({
-              title: '上传失败',
-              icon: 'none'
-            })
-          } finally {
-            uni.hideLoading()
-          }
+			const uploadRes = await uploadImage(localPath, 'material_source')
+			if (!uploadRes || !uploadRes.source_url) {
+			  this.uploadedImage = ''
+			  return
+			}
+			this.uploadedSourceUrl = uploadRes.source_url
+			uni.hideLoading()
         },
         fail: (err) => {
           console.error('选择图片失败：', err)
@@ -1078,9 +1060,9 @@ export default {
 
       if (!material) return
 
-      if (Number(material.status) === 1 || material.uiStatus === 'generating') {
+      if (Number(material.status) !== 3 && material.uiStatus !== 'failed') {
         uni.showToast({
-          title: '素材生成中，暂时不能重新生成',
+          title: '只有生成失败的素材可以重新生成',
           icon: 'none'
         })
         this.resetMaterialAction()
@@ -1089,7 +1071,7 @@ export default {
 
       if (!material.material_id) {
         uni.showToast({
-          title: '素材ID无效',
+          title: '无效素材',
           icon: 'none'
         })
         this.resetMaterialAction()
@@ -1098,29 +1080,32 @@ export default {
 
       this.materialAction.reCreating = true
 
-      try {
-        const ok = await reCreateMaterial({
-          materialId: material.material_id
-        })
+      const ok = await reCreateMaterial({
+        materialId: material.material_id
+      })
 
-        if (!ok) throw new Error('reCreateMaterial 返回失败')
-
+      if (ok) {
         const recreated = this.buildReCreatingMaterial(material)
-        this.removeMaterialFromList(material, index)
+        const materialId = String(material.material_id || '')
+        const targetIndex = this.materials.findIndex(
+          item => String(item.material_id) === materialId
+        )
+        const removeIndex = targetIndex !== -1 ? targetIndex : index
+
+        if (removeIndex >= 0 && removeIndex < this.materials.length) {
+          this.materials.splice(removeIndex, 1)
+        }
+
         this.materials.unshift(recreated)
+
         this.resetMaterialAction()
 
         uni.showToast({
           title: '开始重新生成',
           icon: 'success'
         })
-      } catch (err) {
-        console.error('重新生成素材失败：', err)
+      } else {
         this.materialAction.reCreating = false
-        uni.showToast({
-          title: '重新生成失败',
-          icon: 'none'
-        })
       }
     },
 
@@ -1168,7 +1153,7 @@ export default {
 
       if (status === 1) {
         uni.showToast({
-          title: '素材生成中，暂时不能删除',
+          title: '素材生成中，请稍后',
           icon: 'none'
         })
         this.resetMaterialAction()
@@ -1177,7 +1162,7 @@ export default {
 
       if (!material.material_id) {
         uni.showToast({
-          title: '素材ID无效',
+          title: '无效素材',
           icon: 'none'
         })
         this.resetMaterialAction()
@@ -1194,13 +1179,11 @@ export default {
 
           this.materialAction.deleting = true
 
-          try {
-            const ok = await deleteMaterial({
-              materialId: material.material_id
-            })
+          const ok = await deleteMaterial({
+            materialId: material.material_id
+          })
 
-            if (!ok) throw new Error('deleteMaterial 返回失败')
-
+          if (ok) {
             this.materials.splice(index, 1)
             this.resetMaterialAction()
 
@@ -1208,13 +1191,8 @@ export default {
               title: '删除成功',
               icon: 'success'
             })
-          } catch (err) {
-            console.error('删除素材失败：', err)
+          } else {
             this.materialAction.deleting = false
-            uni.showToast({
-              title: '删除失败',
-              icon: 'none'
-            })
           }
         }
       })
@@ -1233,93 +1211,67 @@ export default {
 
       if (this.uploadedImage && !this.uploadedSourceUrl) {
         uni.showToast({
-          title: '图片上传中，请稍后重试',
+          title: '图片上传中，请稍后',
           icon: 'none'
         })
         return
       }
 
       this.generating = true
-      const now = Date.now()
-      const localId = `local-${now}`
-      const currentPrompt = this.prompt.trim()
 
-      const localMaterial = {
-        material_id: localId,
-        material_type: this.generationType === 'video' ? 2 : 1,
+      const currentPrompt = this.prompt.trim()
+      const materialType = this.generationType === 'video' ? 2 : 1
+      const sourceUrl = this.uploadedSourceUrl || ''
+      const previewUrl = this.uploadedImage || '/static/images/placeholder.png'
+
+      const payload = {
+        materialType,
         prompt: currentPrompt,
-        source_url: this.uploadedSourceUrl || '',
-        material_url: this.uploadedImage || '/static/images/placeholder.png',
-        cover_url: this.uploadedImage || '/static/images/placeholder.png',
-        model: '',
-        create_time: now,
-        status: 1,
-        uiStatus: 'generating',
-        displayTitle: currentPrompt || '未命名作品',
-        displayTime: this.formatRelativeTime(now)
+        sourceUrl
       }
 
-      this.materials.unshift(localMaterial)
+      const data = await createMaterial(payload)
 
-      try {
-        const payload = {
-          materialType: this.generationType === 'video' ? 2 : 1,
-          prompt: currentPrompt,
-          sourceUrl: this.uploadedSourceUrl || ''
+      if (data && data.material_id) {
+        let createTime = data.create_time || Date.now()
+        if (typeof createTime === 'bigint') {
+          createTime = Number(createTime)
         }
 
-        const data = await createMaterial(payload)
+        const status = data.status != null ? data.status : 1
+        const prompt = data.prompt != null ? data.prompt : currentPrompt
+        const materialUrl = data.material_url || previewUrl
+        const coverUrl = data.cover_url || materialUrl || previewUrl
 
-        if (data && data.material_id) {
-          const idx = this.materials.findIndex(m => m.material_id === localId)
-          if (idx !== -1) {
-            const createTime = this.materials[idx].create_time || now
-            const status = data.status != null ? data.status : 1
-            const updated = {
-              ...this.materials[idx],
-              material_id: String(data.material_id),
-              material_type: data.material_type != null
-                ? data.material_type
-                : this.materials[idx].material_type,
-              material_url: data.material_url || this.materials[idx].material_url,
-              cover_url: data.cover_url || this.materials[idx].cover_url,
-              status,
-              uiStatus: this.mapStatusToUi(status),
-              create_time: createTime,
-              displayTime: this.formatRelativeTime(createTime)
-            }
-
-            this.$set(this.materials, idx, updated)
-          }
+        const material = {
+          ...data,
+          material_id: String(data.material_id),
+          material_type: data.material_type != null ? data.material_type : materialType,
+          prompt,
+          source_url: data.source_url != null ? data.source_url : sourceUrl,
+          material_url: materialUrl,
+          cover_url: coverUrl,
+          model: data.model || '',
+          create_time: createTime,
+          status,
+          uiStatus: this.mapStatusToUi(status),
+          displayTitle: prompt || '未命名作品',
+          displayTime: this.formatRelativeTime(createTime)
         }
+
+        this.materials.unshift(material)
 
         uni.showToast({
           title: '开始生成',
           icon: 'success'
         })
-      } catch (err) {
-        console.error('生成素材失败：', err)
-        uni.showToast({
-          title: '生成失败',
-          icon: 'none'
-        })
 
-        const idx = this.materials.findIndex(m => m.material_id === localId)
-        if (idx !== -1) {
-          const failed = {
-            ...this.materials[idx],
-            status: 3,
-            uiStatus: 'failed',
-            displayTime: this.formatRelativeTime(this.materials[idx].create_time)
-          }
-          this.$set(this.materials, idx, failed)
-        }
-      } finally {
-        this.generating = false
         this.prompt = ''
         this.uploadedImage = ''
         this.uploadedSourceUrl = ''
       }
+
+      this.generating = false
     },
 
     handleImageError(material) {
@@ -1341,7 +1293,7 @@ export default {
 
       if (status === 1 || uiStatus === 'generating') {
         uni.showToast({
-          title: '素材生成中，暂时不能查看',
+          title: '素材生成中，请稍后',
           icon: 'none'
         })
         return
@@ -1365,7 +1317,7 @@ export default {
 
       if (!materialId) {
         uni.showToast({
-          title: '素材ID无效',
+          title: '无效素材',
           icon: 'none'
         })
         return
@@ -1406,7 +1358,7 @@ export default {
   left: 0;
   right: 0;
   z-index: 120;
-  background-color: #f5f5f7;
+  background-color: #fefefe;
 }
 
 .refresh-overlay {
@@ -1472,7 +1424,7 @@ export default {
   color: #d8a25d !important;
   line-height: 1;
   margin-bottom: 16rpx;
-  font-weight: 400;
+  font-size: 58px;
 }
 
 .empty-text {

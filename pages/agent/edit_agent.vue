@@ -425,60 +425,56 @@ export default {
 
 		async loadDetail() {
 			if (!this.agentId || this.loading) {
-				uni.stopPullDownRefresh();
 				return;
 			}
 
 			this.loading = true;
 
-			try {
-				const res = await getAgentsByIds({
-					agentIds: [this.agentId]
-				});
+			const res = await getAgentsByIds({
+				agentIds: [this.agentId]
+			});
 
-				if (res === undefined) {
-					return;
-				}
-
-				const list = Array.isArray(res?.agents) ? res.agents : [];
-
-				if (list.length === 0) {
-					this.agent = null;
-					uni.showToast({
-						title: '智能体不存在',
-						icon: 'none'
-					});
-					return;
-				}
-
-				const item = list[0];
-
-				this.agent = {
-					agent_id: item?.agent_id ? String(item.agent_id) : '',
-					agent_name: item?.agent_name || '',
-					avatar_uri: item?.avatar_uri || '',
-					description: item?.description || '',
-					personality: item?.personality || '',
-					owner_id: item?.owner_id ? String(item.owner_id) : '',
-					owner_avatar: item?.owner_avatar || '',
-					owner_username: item?.owner_username || '',
-					create_time: item?.create_time || 0
-				};
-
-				this.form.agentName = this.agent.agent_name || '';
-				this.form.avatarUri = this.agent.avatar_uri || '';
-				this.form.description = this.agent.description || '';
-				this.form.personality = this.agent.personality || '';
-			} catch (e) {
-				console.error('加载智能体详情失败：', e);
+			if (res === undefined) {
+				this.loading = false;
 				uni.showToast({
-					title: '加载失败',
+					title: '网络错误',
 					icon: 'none'
 				});
-			} finally {
-				this.loading = false;
-				uni.stopPullDownRefresh();
+				return;
 			}
+
+			const list = Array.isArray(res?.agents) ? res.agents : [];
+
+			if (list.length === 0) {
+				this.agent = null;
+				uni.showToast({
+					title: '智能体不存在',
+					icon: 'none'
+				});
+				this.loading = false;
+				return;
+			}
+
+			const item = list[0];
+
+			this.agent = {
+				agent_id: item?.agent_id ? String(item.agent_id) : '',
+				agent_name: item?.agent_name || '',
+				avatar_uri: item?.avatar_uri || '',
+				description: item?.description || '',
+				personality: item?.personality || '',
+				owner_id: item?.owner_id ? String(item.owner_id) : '',
+				owner_avatar: item?.owner_avatar || '',
+				owner_username: item?.owner_username || '',
+				create_time: item?.create_time || 0
+			};
+
+			this.form.agentName = this.agent.agent_name || '';
+			this.form.avatarUri = this.agent.avatar_uri || '';
+			this.form.description = this.agent.description || '';
+			this.form.personality = this.agent.personality || '';
+
+			this.loading = false;
 		},
 
 		onAgentNameInput(e) {
@@ -529,30 +525,17 @@ export default {
 
 			this.uploadingAvatar = true;
 
-			try {
-				const uploadRes = await uploadImage(filePath, 'agent_avatar');
-				if (uploadRes === undefined) return;
+			const uploadRes = await uploadImage(filePath, 'agent_avatar');
+			if (uploadRes === undefined) return;
 
-				const avatarUri = this.parseAvatarUri(uploadRes);
+			const avatarUri = this.parseAvatarUri(uploadRes);
 
-				if (!avatarUri) {
-					uni.showToast({
-						title: '上传失败',
-						icon: 'none'
-					});
-					return;
-				}
-
-				this.form.avatarUri = avatarUri;
-			} catch (e) {
-				console.error('上传头像失败：', e);
-				uni.showToast({
-					title: '上传失败',
-					icon: 'none'
-				});
-			} finally {
-				this.uploadingAvatar = false;
+			if (!avatarUri) {
+				return;
 			}
+
+			this.form.avatarUri = avatarUri;
+			this.uploadingAvatar = false;
 		},
 
 		parseAvatarUri(uploadRes) {
@@ -579,7 +562,7 @@ export default {
 
 			if (!this.agentId) {
 				uni.showToast({
-					title: '缺少智能体ID',
+					title: '智能体不存在',
 					icon: 'none'
 				});
 				return;
@@ -595,39 +578,40 @@ export default {
 
 			this.submitting = true;
 
-			try {
-				const ok = await updateAgent({
-					agentId: this.agentId,
-					agentName,
-					avatarUri: this.form.avatarUri || '',
-					description: (this.form.description || '').trim(),
-					personality: (this.form.personality || '').trim()
-				});
+			const ok = await updateAgent({
+				agentId: this.agentId,
+				agentName,
+				avatarUri: this.form.avatarUri || '',
+				description: (this.form.description || '').trim(),
+				personality: (this.form.personality || '').trim()
+			});
 
-				if (!ok) {
-					throw new Error('updateAgent 返回失败');
-				}
-
+			if (ok) {
 				const avatarUri = this.form.avatarUri || '/static/ai_avatar.png';
-				const oldRows = await DB.getAgentsByIds([this.agentId]);
-				const oldAgent = oldRows?.[0] || null;
 
-				if (oldAgent) {
-					const oldAvatarUri = oldAgent.avatar_uri || '/static/ai_avatar.png';
-					const oldLocalAvatarUri = oldAgent.local_avatar_uri || '';
-					const avatarChanged = avatarUri !== oldAvatarUri;
+				try {
+					const oldRows = await DB.getAgentsByIds([this.agentId]);
+					const oldAgent = oldRows?.[0] || null;
 
-					await DB.updateAgent(this.agentId, {
-						agent_name: agentName,
-						avatar_uri: avatarUri,
-						local_avatar_uri: avatarChanged ? '' : oldLocalAvatarUri,
-						description: (this.form.description || '').trim(),
-						modify_time: Date.now()
-					});
+					if (oldAgent) {
+						const oldAvatarUri = oldAgent.avatar_uri || '/static/ai_avatar.png';
+						const oldLocalAvatarUri = oldAgent.local_avatar_uri || '';
+						const avatarChanged = avatarUri !== oldAvatarUri;
 
-					if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
-						enqueueEntityAvatars('agent', [this.agentId]);
+						await DB.updateAgent(this.agentId, {
+							agent_name: agentName,
+							avatar_uri: avatarUri,
+							local_avatar_uri: avatarChanged ? '' : oldLocalAvatarUri,
+							description: (this.form.description || '').trim(),
+							modify_time: Date.now()
+						});
+
+						if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
+							enqueueEntityAvatars('agent', [this.agentId]);
+						}
 					}
+				} catch (e) {
+					console.error('更新本地智能体缓存失败：', e)
 				}
 
 				uni.showToast({
@@ -638,15 +622,9 @@ export default {
 				setTimeout(() => {
 					uni.navigateBack();
 				}, 500);
-			} catch (e) {
-				console.error('更新智能体失败：', e);
-				uni.showToast({
-					title: '保存失败',
-					icon: 'none'
-				});
-			} finally {
-				this.submitting = false;
 			}
+
+			this.submitting = false;
 		}
 	}
 };

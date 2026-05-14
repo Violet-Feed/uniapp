@@ -206,7 +206,7 @@ export const markRead = async (conShortId, readIndex, readCount) => {
 export const recallMessage = async (payload) => {
 	const data={
 		con_short_id: payload.conShortId,
-		msg_id: payload.msg_id
+		msg_id: payload.msgId
 	}
 	return httpRequestBackBool("/im/recall_message",data);
 };
@@ -216,7 +216,8 @@ export const createConversation = async (payload) => {
   const members = [...payload.members, userId];
   const res = await httpRequestBackData("/im/create_conversation", {
     con_type: 2,
-    members
+    members,
+	agent_members: payload.agentMembers
   });
   if (!res) return undefined;
   const {

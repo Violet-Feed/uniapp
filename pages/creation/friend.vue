@@ -370,16 +370,15 @@ export default {
 			this.currentPage = 1
 			this.hasMore = true
 
-			try {
-				const list = await this.fetchPage(this.currentPage)
-				this.creations = list
-				this.hasMore = list.length > 0
-			} catch (err) {
-				console.error('初始数据加载失败：', err)
-				uni.showToast({ title: '加载失败，请重试', icon: 'none' })
-			} finally {
+			const list = await this.fetchPage(this.currentPage)
+			if (!list) {
 				this.loading = false
+				return
 			}
+
+			this.creations = list
+			this.hasMore = list.length > 0
+			this.loading = false
 		},
 
 		async loadMore() {
@@ -388,21 +387,20 @@ export default {
 			this.loading = true
 			const nextPage = this.currentPage + 1
 
-			try {
-				const list = await this.fetchPage(nextPage)
-
-				if (!list.length) {
-					this.hasMore = false
-				} else {
-					this.creations = this.creations.concat(list)
-					this.currentPage = nextPage
-				}
-			} catch (err) {
-				console.error('加载更多失败：', err)
-				uni.showToast({ title: '加载更多失败', icon: 'none' })
-			} finally {
+			const list = await this.fetchPage(nextPage)
+			if (!list) {
 				this.loading = false
+				return
 			}
+
+			if (!list.length) {
+				this.hasMore = false
+			} else {
+				this.creations = this.creations.concat(list)
+				this.currentPage = nextPage
+			}
+
+			this.loading = false
 		},
 
 		async fetchPage(page) {
@@ -460,28 +458,24 @@ export default {
 			if (!creation || creation._digging) return
 			creation._digging = true
 
-			try {
-				if (creation.is_digg) {
-					await cancelDigg('creation', creation.creation_id)
+			if (creation.is_digg) {
+				const ok = await cancelDigg('creation', creation.creation_id)
+				if (ok) {
 					this.creations[index].is_digg = false
 
 					if (this.creations[index].likes > 0) {
 						this.creations[index].likes -= 1
 					}
-				} else {
-					await digg('creation', creation.creation_id)
+				}
+			} else {
+				const ok = await digg('creation', creation.creation_id)
+				if (ok) {
 					this.creations[index].is_digg = true
 					this.creations[index].likes += 1
 				}
-			} catch (err) {
-				console.error('点赞操作失败:', err)
-				uni.showToast({
-					title: '操作失败，请稍后重试',
-					icon: 'none'
-				})
-			} finally {
-				creation._digging = false
 			}
+
+			creation._digging = false
 		},
 
 		formatNumber(num) {

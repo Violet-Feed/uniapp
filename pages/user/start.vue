@@ -185,8 +185,12 @@ export default {
 				app.globalData.platform = systemInfo.platform
 				app.globalData.appReadyForDeepLink = false
 
-				if (systemInfo.platform !== 'android') {
+				if (systemInfo.platform !== 'android' && this.platform !== 'ios') {
 					console.log('暂不支持该平台')
+					uni.showToast({
+						title: '目前仅支持Android/IOS',
+						icon: 'none'
+					});
 					this.goLogin()
 					return
 				}

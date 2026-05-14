@@ -370,34 +370,30 @@ export default {
 		},
 
 		async loadUserProfile() {
-			try {
-				const res = await getUserProfile(this.userId, false, false)
-				const info = res?.user_info || {}
-
+			const res = await getUserProfile(this.userId, false, false)
+			if (res) {
+				const info = res.user_info || {}
 				this.username = info.username || getApp().globalData.username || ''
 				this.avatar = info.avatar || getApp().globalData.avatar || this.defaultAvatar
-
 				getApp().globalData.username = this.username
 				getApp().globalData.avatar = this.avatar
-			} catch (e) {
-				console.error('获取用户资料失败：', e)
-
-				try {
-					const rows = await DB.getUsersByIds([this.userId])
-					const user = rows?.[0] || null
-
-					if (user) {
-						this.username = user.username || getApp().globalData.username || ''
-						this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
-						return
-					}
-				} catch (dbErr) {
-					console.error('读取本地用户资料失败：', dbErr)
-				}
-
-				this.username = getApp().globalData.username || ''
-				this.avatar = getApp().globalData.avatar || this.defaultAvatar
+				return
 			}
+
+			try {
+				const rows = await DB.getUsersByIds([this.userId])
+				const user = rows?.[0] || null
+				if (user) {
+					this.username = user.username || getApp().globalData.username || ''
+					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					return
+				}
+			} catch (e) {
+				console.error('读取本地用户资料失败：', e)
+			}
+
+			this.username = getApp().globalData.username || ''
+			this.avatar = getApp().globalData.avatar || this.defaultAvatar
 		},
 
 		closePopup() {
@@ -436,23 +432,23 @@ export default {
 
 			this.submitting = true
 
-			try {
-				const ok = await updateUserInfo({
-					type: 'username',
-					value: newUsername
-				})
+			const ok = await updateUserInfo({
+				type: 'username',
+				value: newUsername
+			})
 
-				if (!ok) {
-					throw new Error('updateUserInfo username 返回失败')
-				}
-
+			if (ok) {
 				this.username = newUsername
 				getApp().globalData.username = newUsername
 
-				await DB.updateUser(this.userId, {
-					username: newUsername,
-					modify_time: Date.now()
-				})
+				try {
+					await DB.updateUser(this.userId, {
+						username: newUsername,
+						modify_time: Date.now()
+					})
+				} catch (e) {
+					console.error('更新本地用户名失败：', e)
+				}
 
 				this.closePopup()
 
@@ -460,16 +456,8 @@ export default {
 					title: '用户名已更新',
 					icon: 'success'
 				})
-			} catch (e) {
-				console.error('修改用户名失败：', e)
-
-				uni.showToast({
-					title: '修改失败',
-					icon: 'none'
-				})
-			} finally {
-				this.submitting = false
 			}
+			this.submitting = false
 		},
 
 		async submitPassword() {
@@ -491,32 +479,20 @@ export default {
 
 			this.submitting = true
 
-			try {
-				const ok = await updateUserInfo({
-					type: 'password',
-					value: this.tempPassword
-				})
+			const ok = await updateUserInfo({
+				type: 'password',
+				value: this.tempPassword
+			})
 
-				if (!ok) {
-					throw new Error('updateUserInfo password 返回失败')
-				}
-
+			if (ok) {
 				this.closePopup()
 
 				uni.showToast({
 					title: '密码已更新',
 					icon: 'success'
 				})
-			} catch (e) {
-				console.error('修改密码失败：', e)
-
-				uni.showToast({
-					title: '修改失败',
-					icon: 'none'
-				})
-			} finally {
-				this.submitting = false
 			}
+			this.submitting = false
 		},
 
 		handleEditAvatar() {
@@ -565,34 +541,31 @@ export default {
 
 			this.submitting = true
 
-			try {
-				const uploadRes = await uploadImage(filePath, 'user_avatar')
-				const sourceUrl =
-					uploadRes?.source_url ||
-					uploadRes?.data?.source_url ||
-					''
+			const uploadRes = await uploadImage(filePath, 'user_avatar')
+			if (!uploadRes) {
+				this.submitting = false
+				return
+			}
+			const url = uploadRes.source_url || uploadRes.data?.source_url || ''
 
-				if (!sourceUrl) {
-					throw new Error('上传头像未返回 source_url')
+			const ok = await updateUserInfo({
+				type: 'avatar',
+				value: url
+			})
+
+			if (ok) {
+				this.avatar = url
+				getApp().globalData.avatar = url
+
+				try {
+					await DB.updateUser(this.userId, {
+						avatar_uri: url,
+						local_avatar_uri: '',
+						modify_time: Date.now()
+					})
+				} catch (e) {
+					console.error('更新本地头像失败：', e)
 				}
-
-				const ok = await updateUserInfo({
-					type: 'avatar',
-					value: sourceUrl
-				})
-
-				if (!ok) {
-					throw new Error('updateUserInfo avatar 返回失败')
-				}
-
-				this.avatar = sourceUrl
-				getApp().globalData.avatar = sourceUrl
-
-				await DB.updateUser(this.userId, {
-					avatar_uri: sourceUrl,
-					local_avatar_uri: '',
-					modify_time: Date.now()
-				})
 
 				enqueueEntityAvatars('user', [this.userId])
 
@@ -600,16 +573,8 @@ export default {
 					title: '头像已更新',
 					icon: 'success'
 				})
-			} catch (e) {
-				console.error('修改头像失败：', e)
-
-				uni.showToast({
-					title: '修改失败',
-					icon: 'none'
-				})
-			} finally {
-				this.submitting = false
 			}
+			this.submitting = false
 		}
 	}
 }

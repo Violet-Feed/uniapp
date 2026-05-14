@@ -55,8 +55,10 @@ export const init = async () => {
 
 		const res = await getUserProfile(userId, false, false);
 
-		if (res === undefined || !res) {
+		if (res && Object.keys(res).length === 0) {
 			return false;
+		} else if (!res) {
+			return true;
 		}
 		
 		await Promise.resolve(DB.openSqlite())
@@ -127,6 +129,6 @@ export const init = async () => {
 		return true;
 	} catch (err) {
 		console.error('init failed:', err);
-		return false;
+		return true;
 	}
 };

@@ -825,7 +825,7 @@ export default {
 					return
 				}
 			} catch (e) {
-				console.error('读取本地用户资料失败:', e)
+				console.error('读取本地用户资料失败：', e)
 			}
 
 			this.username = ''
@@ -841,52 +841,48 @@ export default {
 			if (!reset && !this.worksHasMore) return
 
 			this.loading = true
-			try {
-				const pageToLoad = reset ? 1 : this.worksPage + 1
-				const res = await getCreationsByUser(String(this.userId), pageToLoad)
-				const list = Array.isArray(res)
-					? res
-					: res && Array.isArray(res.creations)
-						? res.creations
-						: []
+			const pageToLoad = reset ? 1 : this.worksPage + 1
+			const res = await getCreationsByUser(String(this.userId), pageToLoad)
+			if (!res) { this.loading = false; return }
+			const list = Array.isArray(res)
+				? res
+				: res && Array.isArray(res.creations)
+					? res.creations
+					: []
 
-				if (!list || list.length === 0) {
-					if (reset) {
-						this.worksList = []
-						this.worksPage = 1
-					}
-					this.worksHasMore = false
-					return
-				}
-
-				const mapped = list.map((item) => ({
-					creation_id: item.creation_id,
-					cover: item.cover_url || item.material_url || this.defaultImage,
-					title: item.title || '未命名作品',
-					user_id: item.user_id,
-					username: this.username || item.username || '未知作者',
-					avatar: this.avatar || item.avatar || this.defaultAvatar,
-					digg_count: item.digg_count || 0,
-					is_digg: !!item.is_digg,
-					material_type: item.material_type,
-					raw: item
-				}))
-
+			if (!list || list.length === 0) {
 				if (reset) {
-					this.worksList = mapped
+					this.worksList = []
 					this.worksPage = 1
-				} else {
-					this.worksList = this.worksList.concat(mapped)
-					this.worksPage = pageToLoad
 				}
-
-				this.worksHasMore = list.length >= 20
-			} catch (err) {
-				console.error('加载用户作品失败:', err)
-				uni.showToast({ title: '加载作品失败', icon: 'none' })
-			} finally {
+				this.worksHasMore = false
 				this.loading = false
+				return
 			}
+
+			const mapped = list.map((item) => ({
+				creation_id: item.creation_id,
+				cover: item.cover_url || item.material_url || this.defaultImage,
+				title: item.title || '未命名作品',
+				user_id: item.user_id,
+				username: this.username || item.username || '未知作者',
+				avatar: this.avatar || item.avatar || this.defaultAvatar,
+				digg_count: item.digg_count || 0,
+				is_digg: !!item.is_digg,
+				material_type: item.material_type,
+				raw: item
+			}))
+
+			if (reset) {
+				this.worksList = mapped
+				this.worksPage = 1
+			} else {
+				this.worksList = this.worksList.concat(mapped)
+				this.worksPage = pageToLoad
+			}
+
+			this.worksHasMore = list.length >= 20
+			this.loading = false
 		},
 
 		async loadUserLikes(reset = false) {
@@ -894,54 +890,50 @@ export default {
 			if (!reset && !this.likesHasMore) return
 
 			this.loading = true
-			try {
-				const pageToLoad = reset ? 1 : this.likesPage + 1
-				const res = await getCreationsByDigg(String(this.userId), pageToLoad)
-				const list = Array.isArray(res)
-					? res
-					: res && Array.isArray(res.creations)
-						? res.creations
-						: []
+			const pageToLoad = reset ? 1 : this.likesPage + 1
+			const res = await getCreationsByDigg(String(this.userId), pageToLoad)
+			if (!res) { this.loading = false; return }
+			const list = Array.isArray(res)
+				? res
+				: res && Array.isArray(res.creations)
+					? res.creations
+					: []
 
-				if (!list || list.length === 0) {
-					if (reset) {
-						this.likesList = []
-						this.likesPage = 1
-					}
-					this.likesHasMore = false
-					this.likesLoaded = true
-					return
-				}
-
-				const mapped = list.map((item) => ({
-					creation_id: item.creation_id,
-					cover: item.cover_url || item.material_url || this.defaultImage,
-					title: item.title || '未命名作品',
-					user_id: item.user_id,
-					username: item.username || '未知作者',
-					avatar: item.avatar || this.defaultAvatar,
-					digg_count: item.digg_count || 0,
-					is_digg: !!item.is_digg,
-					material_type: item.material_type,
-					raw: item
-				}))
-
+			if (!list || list.length === 0) {
 				if (reset) {
-					this.likesList = mapped
+					this.likesList = []
 					this.likesPage = 1
-				} else {
-					this.likesList = this.likesList.concat(mapped)
-					this.likesPage = pageToLoad
 				}
-
-				this.likesHasMore = list.length >= 20
+				this.likesHasMore = false
 				this.likesLoaded = true
-			} catch (err) {
-				console.error('加载点赞作品失败:', err)
-				uni.showToast({ title: '加载点赞失败', icon: 'none' })
-			} finally {
 				this.loading = false
+				return
 			}
+
+			const mapped = list.map((item) => ({
+				creation_id: item.creation_id,
+				cover: item.cover_url || item.material_url || this.defaultImage,
+				title: item.title || '未命名作品',
+				user_id: item.user_id,
+				username: item.username || '未知作者',
+				avatar: item.avatar || this.defaultAvatar,
+				digg_count: item.digg_count || 0,
+				is_digg: !!item.is_digg,
+				material_type: item.material_type,
+				raw: item
+			}))
+
+			if (reset) {
+				this.likesList = mapped
+				this.likesPage = 1
+			} else {
+				this.likesList = this.likesList.concat(mapped)
+				this.likesPage = pageToLoad
+			}
+
+			this.likesHasMore = list.length >= 20
+			this.likesLoaded = true
+			this.loading = false
 		},
 
 		switchTab(tab) {
@@ -1004,21 +996,22 @@ export default {
 			if (!item || item._digging) return
 
 			item._digging = true
-			try {
-				if (item.is_digg) {
-					await cancelDigg('creation', item.creation_id)
+
+			if (item.is_digg) {
+				const ok = await cancelDigg('creation', item.creation_id)
+				if (ok) {
 					item.is_digg = false
 					if (item.digg_count > 0) item.digg_count -= 1
-				} else {
-					await digg('creation', item.creation_id)
+				}
+			} else {
+				const ok = await digg('creation', item.creation_id)
+				if (ok) {
 					item.is_digg = true
 					item.digg_count += 1
 				}
-			} catch (err) {
-				console.error('点赞操作失败:', err)
-			} finally {
-				item._digging = false
 			}
+
+			item._digging = false
 		},
 
 		async toggleFollow() {
@@ -1030,7 +1023,6 @@ export default {
 				if (res) {
 					this.isFollowing = false
 					if (this.followerCount > 0) this.followerCount -= 1
-					uni.showToast({ title: '已取消关注', icon: 'success' })
 				}
 				return
 			}
@@ -1039,7 +1031,6 @@ export default {
 			if (res) {
 				this.isFollowing = true
 				this.followerCount += 1
-				uni.showToast({ title: '关注成功', icon: 'success' })
 			}
 		},
 

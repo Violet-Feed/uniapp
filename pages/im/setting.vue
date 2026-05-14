@@ -385,46 +385,38 @@ export default {
 
 			this.updating = true;
 
-			try {
-				const uploadRes = await uploadImage(filePath, 'conv_avatar');
-				const sourceUrl =
-					uploadRes?.source_url ||
-					uploadRes?.sourceUrl ||
-					uploadRes?.url ||
-					uploadRes?.data?.source_url ||
-					'';
+			const uploadRes = await uploadImage(filePath, 'conv_avatar');
+			const sourceUrl =
+				uploadRes?.source_url ||
+				uploadRes?.sourceUrl ||
+				uploadRes?.url ||
+				uploadRes?.data?.source_url ||
+				'';
 
-				if (!sourceUrl) {
-					uni.showToast({
-						title: '上传失败',
-						icon: 'none'
-					});
-					return;
-				}
-
-				const ok = await updateConversationCore({
-					conShortId: this.conShortId,
-					type: 'avatarUri',
-					value: sourceUrl
-				});
-
-				if (!ok) return;
-
-				this.groupAvatar = sourceUrl;
-
-				uni.showToast({
-					title: '修改成功',
-					icon: 'success'
-				});
-			} catch (err) {
-				console.error('updateGroupAvatar failed:', err);
-				uni.showToast({
-					title: '修改失败',
-					icon: 'none'
-				});
-			} finally {
+			if (!sourceUrl) {
 				this.updating = false;
+				return;
 			}
+
+			const ok = await updateConversationCore({
+				conShortId: this.conShortId,
+				type: 'avatarUri',
+				value: sourceUrl
+			});
+
+			if (!ok) {
+				this.updating = false;
+				return;
+			}
+
+			this.groupAvatar = sourceUrl;
+
+			uni.showToast({
+				title: '修改成功',
+				icon: 'success'
+			});
+
+			this.updating = false;
 		},
 
 		openDescriptionViewer() {
@@ -483,65 +475,60 @@ export default {
 
 			this.updating = true;
 
-			try {
-				let ok = false;
+			let ok = false;
 
-				if (this.editField === 'name') {
-					ok = await updateConversationCore({
-						conShortId: this.conShortId,
-						type: 'name',
-						value
-					});
+			if (this.editField === 'name') {
+				ok = await updateConversationCore({
+					conShortId: this.conShortId,
+					type: 'name',
+					value
+				});
 
-					if (ok) {
-						this.groupName = value;
-					}
-				} else if (this.editField === 'description') {
-					ok = await updateConversationCore({
-						conShortId: this.conShortId,
-						type: 'description',
-						value
-					});
-
-					if (ok) {
-						this.groupDescription = value;
-					}
-				} else if (this.editField === 'selfNickName') {
-					ok = await updateConversationMember({
-						conShortId: this.conShortId,
-						type: 'nickname',
-						value
-					});
-
-					if (ok) {
-						this.selfNickName = value;
-						this.members = this.members.map(member => {
-							const userId = getApp().globalData.userId;
-							if (String(member.user_id) === String(userId)) {
-								return { ...member, nick_name: value };
-							}
-							return member;
-						});
-					}
+				if (ok) {
+					this.groupName = value;
 				}
-
-				if (!ok) return;
-
-				this.closeEditPopup();
-
-				uni.showToast({
-					title: '修改成功',
-					icon: 'success'
+			} else if (this.editField === 'description') {
+				ok = await updateConversationCore({
+					conShortId: this.conShortId,
+					type: 'description',
+					value
 				});
-			} catch (err) {
-				console.error('confirmEdit failed:', err);
-				uni.showToast({
-					title: '修改失败',
-					icon: 'none'
+
+				if (ok) {
+					this.groupDescription = value;
+				}
+			} else if (this.editField === 'selfNickName') {
+				ok = await updateConversationMember({
+					conShortId: this.conShortId,
+					type: 'nickname',
+					value
 				});
-			} finally {
-				this.updating = false;
+
+				if (ok) {
+					this.selfNickName = value;
+					this.members = this.members.map(member => {
+						const userId = getApp().globalData.userId;
+						if (String(member.user_id) === String(userId)) {
+							return { ...member, nick_name: value };
+						}
+						return member;
+					});
+				}
 			}
+
+			if (!ok) {
+				this.updating = false;
+				return;
+			}
+
+			this.closeEditPopup();
+
+			uni.showToast({
+				title: '修改成功',
+				icon: 'success'
+			});
+
+			this.updating = false;
 		},
 
 		goToAiMember() {
@@ -579,33 +566,28 @@ export default {
 
 			this.updating = true;
 
-			try {
-				const ok = await removeConversationMember({
-					conShortId: this.conShortId,
-					member: userId
-				});
+			const ok = await removeConversationMember({
+				conShortId: this.conShortId,
+				member: userId
+			});
 
-				if (!ok) return;
-
-				uni.showToast({
-					title: '已退出群聊',
-					icon: 'success'
-				});
-
-				setTimeout(() => {
-					uni.navigateBack({
-						delta: 2
-					});
-				}, 300);
-			} catch (err) {
-				console.error('performQuitGroup failed:', err);
-				uni.showToast({
-					title: '退出失败',
-					icon: 'none'
-				});
-			} finally {
+			if (!ok) {
 				this.updating = false;
+				return;
 			}
+
+			uni.showToast({
+				title: '已退出群聊',
+				icon: 'success'
+			});
+
+			setTimeout(() => {
+				uni.navigateBack({
+					delta: 2
+				});
+			}, 300);
+
+			this.updating = false;
 		}
 	}
 };

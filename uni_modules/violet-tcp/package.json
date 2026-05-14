@@ -1,0 +1,15 @@
+{
+  "id": "violet-tcp",
+  "displayName": "Violet TCP",
+  "version": "1.0.0",
+  "description": "iOS TCP client for Violet",
+  "uni_modules": {
+    "dependencies": [],
+    "encrypt": [],
+    "platforms": {
+      "app": {
+        "ios": "12.0"
+      }
+    }
+  }
+}

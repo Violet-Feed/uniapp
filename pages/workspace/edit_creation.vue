@@ -505,41 +505,32 @@ export default {
 		},
 
 		async fetchCreationDetail() {
-			try {
-				const res = await getCreationById(this.creationId)
-				if (!res || !res.creation) {
-					uni.showToast({
-						title: '获取作品失败',
-						icon: 'none'
-					})
-					return false
-				}
-
-				const materialType = res.creation.material_type
-				const isVideo = materialType === 2
-
-				this.creation.creationId = res.creation.creation_id || this.creationId
-				this.creation.userId = res.creation.user_id || this.authorId
-				this.creation.type = isVideo ? 'video' : 'image'
-				this.creation.title = res.creation.title || ''
-				this.creation.detail = res.creation.content || ''
-				this.creation.category = res.creation.category || ''
-				this.creation.time = res.creation.create_time || ''
-
-				const cover = res.creation.material_url || res.creation.cover_url || ''
-				this.creation.coverImage = cover
-				this.creation.images = cover ? [cover] : []
-
-				this.syncCategoryIndex(this.creation.category)
-				return true
-			} catch (e) {
-				console.error('获取作品详情失败：', e)
+			const res = await getCreationById(this.creationId)
+			if (!res || !res.creation) {
 				uni.showToast({
-					title: '获取作品失败',
+					title: '网络错误',
 					icon: 'none'
 				})
 				return false
 			}
+
+			const materialType = res.creation.material_type
+			const isVideo = materialType === 2
+
+			this.creation.creationId = res.creation.creation_id || this.creationId
+			this.creation.userId = res.creation.user_id || this.authorId
+			this.creation.type = isVideo ? 'video' : 'image'
+			this.creation.title = res.creation.title || ''
+			this.creation.detail = res.creation.content || ''
+			this.creation.category = res.creation.category || ''
+			this.creation.time = res.creation.create_time || ''
+
+			const cover = res.creation.material_url || res.creation.cover_url || ''
+			this.creation.coverImage = cover
+			this.creation.images = cover ? [cover] : []
+
+			this.syncCategoryIndex(this.creation.category)
+			return true
 		},
 
 		async handleSubmit() {
@@ -555,50 +546,28 @@ export default {
 
 			this.submitting = true
 
-			try {
-				const ok = await updateCreation({
-					creationId: this.creation.creationId,
-					title: this.creation.title.trim(),
-					content: this.creation.detail.trim(),
-					category: this.selectedCategory ? this.selectedCategory.value : ''
-				})
+			const ok = await updateCreation({
+				creationId: this.creation.creationId,
+				title: this.creation.title.trim(),
+				content: this.creation.detail.trim(),
+				category: this.selectedCategory ? this.selectedCategory.value : ''
+			})
 
-				if (!ok) {
-					throw new Error('updateCreation 返回失败')
-				}
-
-				uni.showToast({
-					title: '保存成功',
-					icon: 'success'
-				})
-
-				setTimeout(() => {
-					uni.navigateBack()
-				}, 600)
-			} catch (e) {
-				console.error('更新作品失败：', e)
-				uni.showToast({
-					title: '保存失败',
-					icon: 'none'
-				})
-			} finally {
+			if (!ok) {
 				this.submitting = false
+				return
 			}
-		},
 
-		onMediaError() {
 			uni.showToast({
-				title: '素材加载失败',
-				icon: 'none'
+				title: '保存成功',
+				icon: 'success'
 			})
-		},
 
-		onVideoError(err) {
-			console.error('视频加载失败：', err)
-			uni.showToast({
-				title: '视频加载失败',
-				icon: 'none'
-			})
+			setTimeout(() => {
+				uni.navigateBack()
+			}, 600)
+
+			this.submitting = false
 		}
 	}
 }

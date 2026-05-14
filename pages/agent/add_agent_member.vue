@@ -356,12 +356,9 @@ export default {
 			this.isRefreshing = true;
 			this.pullDistance = PULL_TRIGGER_DISTANCE;
 
-			try {
-				await this.refreshList();
-			} finally {
-				this.isRefreshing = false;
-				this.pullDistance = 0;
-			}
+			await this.refreshList();
+			this.isRefreshing = false;
+			this.pullDistance = 0;
 		},
 
 		initResponsiveLayout() {

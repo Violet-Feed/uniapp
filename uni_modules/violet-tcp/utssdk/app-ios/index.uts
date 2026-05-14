@@ -1,0 +1,77 @@
+type TcpVoidCallback = () => void
+type TcpErrorCallback = (message: string) => void
+type TcpPacketCallback = (packetType: number, data: ArrayBuffer) => void
+
+export type TcpStartOptions = {
+	host: string
+	port: number
+	onOpen?: TcpVoidCallback
+	onClose?: TcpVoidCallback
+	onError?: TcpErrorCallback
+	onPacket?: TcpPacketCallback
+}
+
+let client = VioletTcpClient.shared
+
+function dataToArrayBuffer(data: Data): ArrayBuffer {
+	const count = data.count
+	const buffer = new ArrayBuffer(count)
+	const bytes = new Uint8Array(buffer)
+
+	for (let i = 0; i < count; i++) {
+		let range = NSMakeRange(i, 1)
+		let sub = data.subdata(in: range)
+		let arr = [UInt8](sub)
+		bytes[i] = Number(arr[0])
+	}
+
+	return buffer
+}
+
+function arrayBufferToData(buffer: ArrayBuffer): Data {
+	const bytes = new Uint8Array(buffer)
+	let data = Data()
+
+	for (let i = 0; i < bytes.length; i++) {
+		var b = UInt8(bytes[i])
+		data.append(&b, count: 1)
+	}
+
+	return data
+}
+
+export function startTcp(options: TcpStartOptions) {
+	client.onOpen = () => {
+		if (options.onOpen != null) {
+			options.onOpen!()
+		}
+	}
+
+	client.onClose = () => {
+		if (options.onClose != null) {
+			options.onClose!()
+		}
+	}
+
+	client.onError = (message: string) => {
+		if (options.onError != null) {
+			options.onError!(message)
+		}
+	}
+
+	client.onPacket = (packetType: Int, data: Data) => {
+		if (options.onPacket != null) {
+			options.onPacket!(Number(packetType), dataToArrayBuffer(data))
+		}
+	}
+
+	client.start(host: options.host, port: Int(options.port))
+}
+
+export function stopTcp() {
+	client.stop()
+}
+
+export function sendTcpPacket(packetType: number, body: ArrayBuffer) {
+	client.sendPacket(packetType: Int(packetType), body: arrayBufferToData(body))
+}

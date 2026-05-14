@@ -442,29 +442,24 @@ export default {
 
 			this.removingUserId = userId;
 
-			try {
-				const ok = await removeConversationMember({
-					conShortId: this.conShortId,
-					member: userId
-				});
+			const ok = await removeConversationMember({
+				conShortId: this.conShortId,
+				member: userId
+			});
 
-				if (!ok) return;
-
-				this.members = this.members.filter(member => String(member.user_id) !== userId);
-
-				uni.showToast({
-					title: '移出成功',
-					icon: 'success'
-				});
-			} catch (err) {
-				console.error('removeMember failed:', err);
-				uni.showToast({
-					title: '移出失败',
-					icon: 'none'
-				});
-			} finally {
+			if (!ok) {
 				this.removingUserId = '';
+				return;
 			}
+
+			this.members = this.members.filter(member => String(member.user_id) !== userId);
+
+			uni.showToast({
+				title: '移出成功',
+				icon: 'success'
+			});
+
+			this.removingUserId = '';
 		},
 
 		goBack() {

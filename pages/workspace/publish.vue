@@ -521,24 +521,18 @@ export default {
 				category: this.selectedCategory ? this.selectedCategory.value : ''
 			}
 
-			try {
-				await createCreation(payload)
+			const ok = await createCreation(payload)
 
-				uni.showToast({
-					title: '发布成功',
-					icon: 'success'
-				})
+			if (!ok) return
 
-				setTimeout(() => {
-					uni.navigateBack()
-				}, 800)
-			} catch (err) {
-				console.error('发布失败：', err)
-				uni.showToast({
-					title: '发布失败，请稍后重试',
-					icon: 'none'
-				})
-			}
+			uni.showToast({
+				title: '发布成功',
+				icon: 'success'
+			})
+
+			setTimeout(() => {
+				uni.navigateBack()
+			}, 800)
 		},
 
 		onMediaError() {

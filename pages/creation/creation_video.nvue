@@ -107,7 +107,7 @@
     >
       <view class="author-row" @click="goToUserPage(creation.author.user_id)">
         <text class="author-name" :style="authorNameStyle">
-          @{{ creation.author.username || '匿名用户' }}
+          @{{ creation.author.username || '用户' }}
         </text>
       </view>
 
@@ -771,13 +771,6 @@ export default {
         arr.push(`# ${this.categoryLabel}`)
       }
 
-      if (Array.isArray(this.creation.tags)) {
-        for (const tag of this.creation.tags) {
-          if (tag) arr.push(`# ${tag}`)
-        }
-      }
-
-      return arr.join(' ')
     },
 
     detailDisplayText() {
@@ -1271,22 +1264,22 @@ export default {
     },
 
     async initPage() {
-      uni.showLoading({ title: '加载中...' })
 
       const ok1 = await this.fetchCreationDetail()
       const ok2 = await this.fetchAuthorInfo()
       const ok3 = await this.fetchActionInfo()
 
-      if (!ok1 || !ok2 || !ok3) {
-        uni.showToast({ title: '加载失败', icon: 'none' })
-      }
-
-      uni.hideLoading()
     },
 
     async fetchCreationDetail() {
       const res = await getCreationById(this.creationId)
-      if (!res || !res.creation) return false
+      if (!res || !res.creation) {
+		  uni.showToast({
+		  	title: '网络错误',
+		  	icon: 'none'
+		  })
+		  return false
+	  }
 
       const c = res.creation
       const isVideo = Number(c.material_type) === 2
@@ -1609,28 +1602,25 @@ export default {
     },
 
     async toggleLike() {
-      if (this.likeLoading || !this.creation.creationId) return
+      const entityId = this.creation.creationId || this.creationId
+      if (this.likeLoading || !entityId) return
 
       this.likeLoading = true
 
       let ok = false
 
       if (this.isLiked) {
-        ok = await cancelDigg('creation', this.creation.creationId)
+        ok = await cancelDigg('creation', entityId)
         if (ok) {
           this.isLiked = false
           this.creation.likes = Math.max(0, Number(this.creation.likes || 0) - 1)
         }
       } else {
-        ok = await digg('creation', this.creation.creationId)
+        ok = await digg('creation', entityId)
         if (ok) {
           this.isLiked = true
           this.creation.likes = Number(this.creation.likes || 0) + 1
         }
-      }
-
-      if (!ok) {
-        uni.showToast({ title: '操作失败', icon: 'none' })
       }
 
       this.likeLoading = false
@@ -1639,17 +1629,18 @@ export default {
     async handleFollowClick() {
       const currentUserId = this.currentUserId
       const targetUserId = this.creation.author.user_id
-      if (!currentUserId || !targetUserId) return
+      if (!currentUserId || !targetUserId) {
+        uni.showToast({ title: '网络错误', icon: 'none' })
+        return
+      }
 
       const ok = await follow(currentUserId, targetUserId)
       if (!ok) {
-        uni.showToast({ title: '操作失败', icon: 'none' })
         return
       }
 
       this.isFollowed = true
       this.creation.author.followerCount = Number(this.creation.author.followerCount || 0) + 1
-      uni.showToast({ title: '关注成功', icon: 'none' })
     },
 
     toggleDetail() {
@@ -1669,10 +1660,6 @@ export default {
       if (!this.commentsInitialized) {
         const ok = await this.fetchComments(true)
         this.commentsInitialized = true
-
-        if (!ok) {
-          uni.showToast({ title: '评论加载失败', icon: 'none' })
-        }
       }
     },
 
@@ -1898,7 +1885,10 @@ export default {
 
     goToUserPage(userId) {
       const targetId = userId || this.creation.author.user_id
-      if (!targetId) return
+      if (!targetId) {
+        uni.showToast({ title: '网络错误', icon: 'none' })
+        return
+      }
 
       const currentUserId = getApp().globalData.userId
 
@@ -1946,10 +1936,6 @@ export default {
           comment.isLiked = true
           comment.likes = Number(comment.likes || 0) + 1
         }
-      }
-
-      if (!ok) {
-        uni.showToast({ title: '操作失败', icon: 'none' })
       }
 
       comment._loading = false
@@ -2009,7 +1995,6 @@ export default {
       }
 
       if (!res || !res.comment_id) {
-        uni.showToast({ title: '发送失败', icon: 'none' })
         return
       }
 
@@ -2082,8 +2067,7 @@ export default {
 
       this.creation.comments = Number(this.creation.comments || 0) + 1
 
-      uni.showToast({ title: '发送成功', icon: 'success' })
-      
+      this.commentText = ''
       this.commentText = ''
       this.commentPlaceholder = '说点什么...'
       this.replyingTo = null
@@ -2211,7 +2195,6 @@ export default {
       } catch (err) {
         console.error('deleteSelectedComment failed', err)
         this.commentAction.deleting = false
-        uni.showToast({ title: '删除失败', icon: 'none' })
       }
     },
 

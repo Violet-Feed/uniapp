@@ -444,29 +444,16 @@ export default {
 
 			this.uploadingAvatar = true;
 
-			try {
-				const uploadRes = await uploadImage(filePath, 'agent_avatar');
-				if (uploadRes === undefined) return;
+			const uploadRes = await uploadImage(filePath, 'agent_avatar');
+			if (uploadRes === undefined) return;
 
-				const avatarUri = this.parseAvatarUri(uploadRes);
-				if (!avatarUri) {
-					uni.showToast({
-						title: '上传失败',
-						icon: 'none'
-					});
-					return;
-				}
-
-				this.form.avatarUri = avatarUri;
-			} catch (e) {
-				console.error('上传头像失败：', e);
-				uni.showToast({
-					title: '上传失败',
-					icon: 'none'
-				});
-			} finally {
-				this.uploadingAvatar = false;
+			const avatarUri = this.parseAvatarUri(uploadRes);
+			if (!avatarUri) {
+				return;
 			}
+
+			this.form.avatarUri = avatarUri;
+			this.uploadingAvatar = false;
 		},
 
 		parseAvatarUri(uploadRes) {
@@ -501,31 +488,23 @@ export default {
 
 			this.submitting = true;
 
-			try {
-				const res = await createAgent({
-					agentName,
-					avatarUri: this.form.avatarUri || '',
-					description: (this.form.description || '').trim(),
-					personality: (this.form.personality || '').trim()
-				});
+			const res = await createAgent({
+				agentName,
+				avatarUri: this.form.avatarUri || '',
+				description: (this.form.description || '').trim(),
+				personality: (this.form.personality || '').trim()
+			});
 
-				if (res === undefined) return;
-
+			if (res) {
 				const agentId = res?.agent_id ? String(res.agent_id) : '';
-				if (!agentId) return;
-
-				uni.redirectTo({
-					url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(agentId)}`
-				});
-			} catch (e) {
-				console.error('创建智能体失败：', e);
-				uni.showToast({
-					title: '创建失败',
-					icon: 'none'
-				});
-			} finally {
-				this.submitting = false;
+				if (agentId) {
+					uni.redirectTo({
+						url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(agentId)}`
+					});
+				}
 			}
+
+			this.submitting = false;
 		}
 	}
 };

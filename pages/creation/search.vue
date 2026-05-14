@@ -657,7 +657,7 @@ export default {
 		onSearchConfirm() {
 			const kw = this.keyword.trim()
 			if (!kw) {
-				uni.showToast({ title: '请输入搜索词', icon: 'none' })
+				uni.showToast({ title: '请输入搜索内容', icon: 'none' })
 				return
 			}
 
@@ -705,30 +705,29 @@ export default {
 				this.creationLoadingMore = true
 			}
 
-			try {
-				const res = await getCreationsBySearch(kw, this.creationPage)
-				const list = res && res.creations ? res.creations : []
-				const mapped = list.map(item => this.normalizeCreation(item))
-
-				if (reset) {
-					this.creationList = mapped
-				} else {
-					this.creationList = this.creationList.concat(mapped)
-				}
-
-				this.creationHasMore = list.length >= this.creationPageSize
-			} catch (err) {
-				console.error('搜索创作失败:', err)
-
+			const res = await getCreationsBySearch(kw, this.creationPage)
+			if (!res) {
 				if (!reset && this.creationPage > 1) {
 					this.creationPage -= 1
 				}
-
-				uni.showToast({ title: '搜索失败', icon: 'none' })
-			} finally {
 				this.creationLoading = false
 				this.creationLoadingMore = false
+				return
 			}
+
+			const list = res && res.creations ? res.creations : []
+			const mapped = list.map(item => this.normalizeCreation(item))
+
+			if (reset) {
+				this.creationList = mapped
+			} else {
+				this.creationList = this.creationList.concat(mapped)
+			}
+
+			this.creationHasMore = list.length >= this.creationPageSize
+
+			this.creationLoading = false
+			this.creationLoadingMore = false
 		},
 
 		async loadMoreCreations() {
@@ -782,25 +781,24 @@ export default {
 
 			creation._digging = true
 
-			try {
-				if (creation.is_digg) {
-					await cancelDigg('creation', creation.creation_id)
+			if (creation.is_digg) {
+				const ok = await cancelDigg('creation', creation.creation_id)
+				if (ok) {
 					this.creationList[index].is_digg = false
 
 					if (this.creationList[index].digg_count > 0) {
 						this.creationList[index].digg_count -= 1
 					}
-				} else {
-					await digg('creation', creation.creation_id)
+				}
+			} else {
+				const ok = await digg('creation', creation.creation_id)
+				if (ok) {
 					this.creationList[index].is_digg = true
 					this.creationList[index].digg_count += 1
 				}
-			} catch (err) {
-				console.error('点赞操作失败:', err)
-				uni.showToast({ title: '操作失败', icon: 'none' })
-			} finally {
-				creation._digging = false
 			}
+
+			creation._digging = false
 		},
 
 		async searchUsers(reset) {
@@ -822,30 +820,29 @@ export default {
 				this.userLoadingMore = true
 			}
 
-			try {
-				const data = await searchUsers(kw, this.userPage)
-				const list = data && data.user_infos ? data.user_infos : []
-				const mapped = list.map(user => this.normalizeUser(user))
-
-				if (reset) {
-					this.userList = mapped
-				} else {
-					this.userList = this.userList.concat(mapped)
-				}
-
-				this.userHasMore = list.length > 0
-			} catch (err) {
-				console.error('搜索用户失败:', err)
-
+			const data = await searchUsers(kw, this.userPage)
+			if (!data) {
 				if (!reset && this.userPage > 1) {
 					this.userPage -= 1
 				}
-
-				uni.showToast({ title: '搜索失败', icon: 'none' })
-			} finally {
 				this.userLoading = false
 				this.userLoadingMore = false
+				return
 			}
+
+			const list = data && data.user_infos ? data.user_infos : []
+			const mapped = list.map(user => this.normalizeUser(user))
+
+			if (reset) {
+				this.userList = mapped
+			} else {
+				this.userList = this.userList.concat(mapped)
+			}
+
+			this.userHasMore = list.length > 0
+
+			this.userLoading = false
+			this.userLoadingMore = false
 		},
 
 		normalizeUser(user) {
@@ -925,7 +922,6 @@ export default {
 
 			if (ok) {
 				user.is_following = true
-				uni.showToast({ title: '关注成功', icon: 'success' })
 			}
 		},
 
@@ -948,7 +944,6 @@ export default {
 
 			if (ok) {
 				user.is_following = false
-				uni.showToast({ title: '已取消关注', icon: 'success' })
 			}
 		},
 

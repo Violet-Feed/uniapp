@@ -4,6 +4,8 @@ import { getUserInfos } from '@/request/user.js'
 
 let installed = false
 let permissionPromptVisible = false
+let appInForeground = true
+let appVisibilityListenerInstalled = false
 
 const DEFAULT_USER_AVATAR = '/static/user_avatar.png'
 const DEFAULT_AGENT_AVATAR = '/static/ai_avatar.png'
@@ -20,6 +22,94 @@ const safeString = (value) => {
 const safeNumber = (value, fallback = 0) => {
 	const n = Number(value)
 	return Number.isFinite(n) ? n : fallback
+}
+
+const normalizeRoute = (route) => {
+	if (!route) return ''
+
+	const value = safeString(route)
+
+	return value.startsWith('/') ? value : `/${value}`
+}
+
+const getCurrentPageInfo = () => {
+	try {
+		const pages = getCurrentPages()
+		const page = pages && pages.length > 0 ? pages[pages.length - 1] : null
+
+		if (!page) {
+			return {
+				route: '',
+				options: {}
+			}
+		}
+
+		return {
+			route: normalizeRoute(page.route || page.$page?.route || ''),
+			options: page.options || page.$page?.options || {}
+		}
+	} catch (err) {
+		return {
+			route: '',
+			options: {}
+		}
+	}
+}
+
+const isAppInForeground = () => {
+	return appInForeground
+}
+
+export const setNotifyAppInForeground = (value) => {
+	appInForeground = !!value
+}
+
+const installAppVisibilityListener = () => {
+	if (appVisibilityListenerInstalled) return
+
+	appVisibilityListenerInstalled = true
+
+	try {
+		if (typeof uni.onAppShow === 'function') {
+			uni.onAppShow(() => {
+				appInForeground = true
+			})
+		}
+
+		if (typeof uni.onAppHide === 'function') {
+			uni.onAppHide(() => {
+				appInForeground = false
+			})
+		}
+	} catch (err) {
+		console.error('installAppVisibilityListener failed:', err)
+	}
+}
+
+const isCurrentConversationPage = (conId) => {
+	if (!conId) return false
+
+	const { route, options } = getCurrentPageInfo()
+
+	if (route !== '/pages/im/conversation') {
+		return false
+	}
+
+	const currentConId = options.conId || options.con_id || ''
+
+	return safeString(currentConId) === safeString(conId)
+}
+
+const isCurrentNoticePage = (group) => {
+	const { route, options } = getCurrentPageInfo()
+
+	if (route !== '/pages/im/notice') {
+		return false
+	}
+
+	const currentGroup = options.group || options.noticeGroup || 1
+
+	return safeNumber(currentGroup, 1) === safeNumber(group, 1)
 }
 
 const hasAskedNotifyPermission = () => {
@@ -160,7 +250,6 @@ const createLocalNotification = ({ title, content, payload, icon }) => {
 		const authorized = getNotificationAuthorized()
 
 		if (authorized !== 'authorized') {
-			console.warn('通知权限未开启，跳过本地通知:', authorized)
 			return
 		}
 
@@ -171,11 +260,11 @@ const createLocalNotification = ({ title, content, payload, icon }) => {
 			sound: 'system',
 			cover: false,
 			delay: 0,
-			success() {
-				console.log('本地通知创建成功:', title, content)
-			},
-			fail(err) {
-				console.error('本地通知创建失败:', err)
+			success() { 				
+				console.log('本地通知创建成功:', title, content) 			
+			}, 			
+			fail(err) { 				
+				console.error('本地通知创建失败:', err) 			
 			}
 		}
 
@@ -207,37 +296,137 @@ const parsePushPayload = (res) => {
 		}
 	}
 
+	if (raw.payload) {
+		if (typeof raw.payload === 'string') {
+			try {
+				return JSON.parse(raw.payload)
+			} catch (err) {
+				return raw
+			}
+		}
+
+		if (typeof raw.payload === 'object') {
+			return raw.payload
+		}
+	}
+
 	return raw
+}
+
+const navigateToConversation = (payload = {}) => {
+	const conId = safeString(payload.con_id || payload.conId || '')
+	const name = safeString(payload.name || payload.con_name || payload.conName || '聊天')
+	const conType = safeString(payload.con_type || payload.conType || '')
+
+	if (!conId) return
+
+	const url = `/pages/im/conversation?conId=${conId}&name=${name}&conType=${conType}`
+
+	const { route, options } = getCurrentPageInfo()
+	const currentConId = safeString(options.conId || options.con_id || '')
+
+	if (route === '/pages/im/conversation') {
+		if (currentConId === conId) {
+			return
+		}
+
+		uni.redirectTo({
+			url,
+			fail() {
+				uni.navigateTo({
+					url,
+					fail() {
+						uni.reLaunch({
+							url,
+							fail(err) {
+								console.error('open conversation failed:', err)
+							}
+						})
+					}
+				})
+			}
+		})
+
+		return
+	}
+
+	uni.navigateTo({
+		url,
+		fail() {
+			uni.redirectTo({
+				url,
+				fail() {
+					uni.reLaunch({
+						url,
+						fail(err) {
+							console.error('open conversation failed:', err)
+						}
+					})
+				}
+			})
+		}
+	})
+}
+
+const navigateToNotice = (payload = {}) => {
+	const group = safeString(payload.group || 1)
+	const url = `/pages/im/notice?group=${group}`
+
+	const { route, options } = getCurrentPageInfo()
+	const currentGroup = safeNumber(options.group || options.noticeGroup || 1, 1)
+
+	if (route === '/pages/im/notice') {
+		if (currentGroup === safeNumber(group, 1)) {
+			return
+		}
+
+		uni.redirectTo({
+			url,
+			fail() {
+				uni.navigateTo({
+					url,
+					fail(err) {
+						console.error('open notice failed:', err)
+					}
+				})
+			}
+		})
+
+		return
+	}
+
+	uni.navigateTo({
+		url,
+		fail() {
+			uni.redirectTo({
+				url,
+				fail(err) {
+					console.error('open notice failed:', err)
+				}
+			})
+		}
+	})
 }
 
 const handleNotificationClick = (payload = {}) => {
 	const type = payload.type || ''
 
 	if (type === 'conversation') {
-		const conId = encodeURIComponent(payload.con_id || '')
-		const name = encodeURIComponent(payload.name || '聊天')
-		const conType = encodeURIComponent(payload.con_type || '')
-
-		if (!conId) return
-
-		uni.navigateTo({
-			url: `/pages/im/conversation?conId=${conId}&name=${name}&conType=${conType}`
-		})
+		navigateToConversation(payload)
 		return
 	}
 
 	if (type === 'notice') {
-		const group = encodeURIComponent(payload.group || 1)
-
-		uni.navigateTo({
-			url: `/pages/im/notice?group=${group}`
-		})
+		navigateToNotice(payload)
 		return
 	}
 
 	if (type === 'material') {
-		uni.navigateTo({
-			url: '/pages/workspace/workspace'
+		uni.switchTab({
+			url: '/pages/workspace/workspace',
+			fail(err) {
+				console.error('open material page failed:', err)
+			}
 		})
 	}
 }
@@ -245,8 +434,6 @@ const handleNotificationClick = (payload = {}) => {
 const installPushClickListener = () => {
 	// #ifdef APP-PLUS
 	uni.onPushMessage((res) => {
-		console.log('收到通知事件:', res)
-
 		if (res?.type !== 'click') return
 
 		const payload = parsePushPayload(res)
@@ -346,10 +533,14 @@ const handleNormal = async (packet) => {
 		const conId = msgBody.con_id
 		if (!conId) return
 
+		if (isAppInForeground() && isCurrentConversationPage(conId)) {
+			return
+		}
+
 		const conversation = await DB.getConversationById(conId)
 		if (!conversation) return
 
-		const senderList = await getMemberInfosBySendersEnsure(conId, [
+		const senderList = await getMemberInfosBySendersEnsure(conId, msgBody.con_short_id, [
 			{
 				sender_type: safeNumber(msgBody.sender_type),
 				sender_id: msgBody.sender_id
@@ -378,7 +569,7 @@ const handleNormal = async (packet) => {
 			payload: {
 				type: 'conversation',
 				con_id: safeString(conversation.con_id || conId),
-				name: conversationName,
+				name: safeString(conversationName),
 				con_type: safeString(conversation.con_type || msgBody.con_type)
 			}
 		})
@@ -552,6 +743,10 @@ const handleNotice = async (packet) => {
 			return
 		}
 
+		if (isAppInForeground() && isCurrentNoticePage(group)) {
+			return
+		}
+
 		const noticeBody = getNoticeBody(packet)
 		const noticeType = safeNumber(noticeBody.notice_type)
 		const senderId = noticeBody.sender_id
@@ -580,6 +775,8 @@ export const installNotifyListener = () => {
 
 	installed = true
 
+	installAppVisibilityListener()
+
 	uni.$on('normal', handleNormal)
 	uni.$on('material', handleMaterial)
 	uni.$on('notice', handleNotice)
@@ -587,8 +784,6 @@ export const installNotifyListener = () => {
 	installPushClickListener()
 
 	ensureNotificationAuthorized()
-
-	console.log('notify listener installed')
 }
 
 export const uninstallNotifyListener = () => {
@@ -599,8 +794,6 @@ export const uninstallNotifyListener = () => {
 	uni.$off('normal', handleNormal)
 	uni.$off('material', handleMaterial)
 	uni.$off('notice', handleNotice)
-
-	console.log('notify listener uninstalled')
 }
 
 export const checkNotifyPermission = () => {

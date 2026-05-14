@@ -797,7 +797,12 @@ export default {
 	white-space: nowrap;
 }
 
-.state-box,
+.state-box {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40rpx 0;
+}
 
 .state-text {
 	color: #98a2b3;

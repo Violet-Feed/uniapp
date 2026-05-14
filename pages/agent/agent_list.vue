@@ -360,12 +360,9 @@ export default {
 			this.isRefreshing = true;
 			this.pullDistance = PULL_TRIGGER_DISTANCE;
 
-			try {
-				await this.refreshList();
-			} finally {
-				this.isRefreshing = false;
-				this.pullDistance = 0;
-			}
+			await this.refreshList();
+			this.isRefreshing = false;
+			this.pullDistance = 0;
 		},
 
 		initResponsiveLayout() {
@@ -434,22 +431,16 @@ export default {
 			this.page = 1;
 			this.finished = false;
 
-			try {
-				const res = await getAgentsByUser({ page: 1 });
-				if (res === undefined) return;
-
-				const list = this.normalizeAgents(res?.agents);
-				this.agents = list;
-				this.finished = list.length === 0;
-			} catch (e) {
-				console.error('刷新智能体列表失败：', e);
-				uni.showToast({
-					title: '加载失败',
-					icon: 'none'
-				});
-			} finally {
+			const res = await getAgentsByUser({ page: 1 });
+			if (!res) {
 				this.loading = false;
+				return;
 			}
+
+			const list = this.normalizeAgents(res?.agents);
+			this.agents = list;
+			this.finished = list.length === 0;
+			this.loading = false;
 		},
 
 		async loadMore() {
@@ -458,28 +449,23 @@ export default {
 			this.loadingMore = true;
 			const nextPage = this.page + 1;
 
-			try {
-				const res = await getAgentsByUser({ page: nextPage });
-				if (res === undefined) return;
-
-				const list = this.normalizeAgents(res?.agents);
-
-				if (list.length === 0) {
-					this.finished = true;
-					return;
-				}
-
-				this.agents = this.mergeAgents(this.agents, list);
-				this.page = nextPage;
-			} catch (e) {
-				console.error('加载更多智能体失败：', e);
-				uni.showToast({
-					title: '加载失败',
-					icon: 'none'
-				});
-			} finally {
+			const res = await getAgentsByUser({ page: nextPage });
+			if (!res) {
 				this.loadingMore = false;
+				return;
 			}
+
+			const list = this.normalizeAgents(res?.agents);
+
+			if (list.length === 0) {
+				this.finished = true;
+				this.loadingMore = false;
+				return;
+			}
+
+			this.agents = this.mergeAgents(this.agents, list);
+			this.page = nextPage;
+			this.loadingMore = false;
 		},
 
 		normalizeAgents(list) {
@@ -569,26 +555,16 @@ export default {
 				success: async (res) => {
 					if (!res.confirm) return;
 
-					try {
-						const ok = await deleteAgent({
-							agentId: item.agent_id
-						});
+					const ok = await deleteAgent({
+						agentId: item.agent_id
+					});
 
-						if (!ok) {
-							throw new Error('deleteAgent 返回失败');
-						}
-
+					if (ok) {
 						this.agents = this.agents.filter(agent => agent.agent_id !== item.agent_id);
 
 						uni.showToast({
 							title: '删除成功',
 							icon: 'success'
-						});
-					} catch (e) {
-						console.error('删除智能体失败：', e);
-						uni.showToast({
-							title: '删除失败',
-							icon: 'none'
 						});
 					}
 				}
@@ -794,7 +770,12 @@ export default {
 	white-space: nowrap;
 }
 
-.state-box,
+.state-box {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40rpx 0;
+}
 
 .state-text {
 	color: #98a2b3;

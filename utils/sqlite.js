@@ -13,6 +13,9 @@ function isOpen() {
 }
 
 function openSqlite() {
+  if (isOpen()) {
+    return Promise.resolve()
+  }	
   return new Promise((resolve, reject) => {
     plus.sqlite.openDatabase({
       name: dbName,

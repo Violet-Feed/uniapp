@@ -460,60 +460,51 @@ export default {
 
 			this.loading = true
 
-			try {
-				const res = await getCreationsByRec(getApp().globalData.userId)
-
-				const list = Array.isArray(res)
-					? res
-					: (res && (res.creations || res.list))
-						? (res.creations || res.list)
-						: []
-
-				const mapped = list.map(item => {
-					const materialType = Number(item.material_type)
-					const isVideo = materialType === 2
-
-					return {
-						creation_id: item.creation_id,
-						user_id: item.user_id,
-						image: item.cover_url || item.material_url || this.defaultImage,
-						title: item.title || '未命名作品',
-						author: {
-							avatar: item.avatar || item.author_avatar || this.defaultAvatar,
-							name: item.username || item.author_name || '未知作者',
-							user_id: item.user_id
-						},
-						type: isVideo ? 'video' : 'image',
-						material_type: materialType,
-						likes: item.digg_count || item.like_count || 0,
-						is_digg: !!item.is_digg
-					}
-				})
-
-				if (append) {
-					this.creations = this.creations.concat(mapped)
-					this.currentPage = page
-				} else {
-					this.creations = mapped
-					this.currentPage = page
-				}
-
-				const pageSize = 20
-				this.hasMore = list.length >= pageSize && mapped.length > 0
-			} catch (err) {
-				console.error('加载创作列表失败：', err)
-
-				if (append && this.currentPage > 1) {
-					this.currentPage -= 1
-				}
-
-				uni.showToast({
-					title: '加载失败，请重试',
-					icon: 'none'
-				})
-			} finally {
+			const res = await getCreationsByRec(getApp().globalData.userId)
+			if (!res) {
 				this.loading = false
+				return
 			}
+
+			const list = Array.isArray(res)
+				? res
+				: (res && (res.creations || res.list))
+					? (res.creations || res.list)
+					: []
+
+			const mapped = list.map(item => {
+				const materialType = Number(item.material_type)
+				const isVideo = materialType === 2
+
+				return {
+					creation_id: item.creation_id,
+					user_id: item.user_id,
+					image: item.cover_url || item.material_url || this.defaultImage,
+					title: item.title || '未命名作品',
+					author: {
+						avatar: item.avatar || item.author_avatar || this.defaultAvatar,
+						name: item.username || item.author_name || '未知作者',
+						user_id: item.user_id
+					},
+					type: isVideo ? 'video' : 'image',
+					material_type: materialType,
+					likes: item.digg_count || item.like_count || 0,
+					is_digg: !!item.is_digg
+				}
+			})
+
+			if (append) {
+				this.creations = this.creations.concat(mapped)
+				this.currentPage = page
+			} else {
+				this.creations = mapped
+				this.currentPage = page
+			}
+
+			const pageSize = 20
+			this.hasMore = list.length >= pageSize && mapped.length > 0
+
+			this.loading = false
 		},
 
 		async refreshList() {
@@ -556,7 +547,7 @@ export default {
 			}
 
 			uni.showToast({
-				title: '请输入搜索词',
+				title: '请输入搜索内容',
 				icon: 'none'
 			})
 		},
@@ -571,26 +562,21 @@ export default {
 
 			item._digging = true
 
-			try {
-				if (item.is_digg) {
-					await cancelDigg('creation', item.creation_id)
+			if (item.is_digg) {
+				const ok = await cancelDigg('creation', item.creation_id)
+				if (ok) {
 					item.is_digg = false
 					if (item.likes > 0) item.likes -= 1
-				} else {
-					await digg('creation', item.creation_id)
+				}
+			} else {
+				const ok = await digg('creation', item.creation_id)
+				if (ok) {
 					item.is_digg = true
 					item.likes += 1
 				}
-			} catch (e) {
-				console.error('点赞操作失败：', e)
-
-				uni.showToast({
-					title: '操作失败',
-					icon: 'none'
-				})
-			} finally {
-				item._digging = false
 			}
+
+			item._digging = false
 		},
 
 		goToCreationDetail(creation) {

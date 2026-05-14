@@ -39,6 +39,7 @@ export default {
 	},
 	
 	onHide() {
+		console.log("app hide")
 	    flushClickReportQueue()
 	},
 
