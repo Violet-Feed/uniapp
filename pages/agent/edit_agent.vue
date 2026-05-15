@@ -32,7 +32,7 @@
 		>
 			<view class="form-wrap" :style="formWrapStyle">
 				<view class="avatar-section" :style="avatarSectionStyle">
-					<view class="avatar-click" :style="avatarClickStyle" @click="chooseAvatar">
+					<view class="avatar-click" :style="avatarClickStyle" @click="openAvatarSourcePopup">
 						<image
 							class="avatar-preview"
 							:style="avatarStyle"
@@ -110,6 +110,13 @@
 			@close="closeAvatarCropper"
 			@confirm="onAgentAvatarCropped"
 		/>
+
+		<view class="avatar-source-mask" v-if="avatarSourceVisible" @click="closeAvatarSourcePopup">
+			<view class="avatar-source-panel" @click.stop>
+				<view class="avatar-source-item" @click="chooseAvatarForCrop('camera')">拍照</view>
+				<view class="avatar-source-item" @click="chooseAvatarForCrop('album')">从相册选择</view>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -139,6 +146,7 @@ export default {
 				visible: false,
 				src: ''
 			},
+			avatarSourceVisible: false,
 			form: {
 				agentName: '',
 				avatarUri: '',
@@ -328,6 +336,14 @@ export default {
 		this.initResponsiveLayout();
 	},
 
+	onBackPress() {
+		if (this.avatarCropper.visible) {
+			this.closeAvatarCropper()
+			return true
+		}
+		return false
+	},
+
 	onPullDownRefresh() {
 		this.loadDetail();
 	},
@@ -489,17 +505,27 @@ export default {
 			this.form.personality = e?.detail?.value || '';
 		},
 
-		chooseAvatar() {
-			if (this.uploadingAvatar || this.submitting || this.loading) return;
+		openAvatarSourcePopup() {
+			if (this.uploadingAvatar || this.submitting || this.loading) return
+			this.avatarSourceVisible = true
+		},
+
+		closeAvatarSourcePopup() {
+			this.avatarSourceVisible = false
+		},
+
+		chooseAvatarForCrop(sourceType) {
+			if (this.uploadingAvatar || this.submitting || this.loading) return
+
+			this.closeAvatarSourcePopup()
 
 			uni.chooseImage({
 				count: 1,
 				sizeType: ['compressed'],
-				sourceType: ['album', 'camera'],
+				sourceType: [sourceType],
 				success: (res) => {
 					const filePath = res?.tempFilePaths?.[0];
 					if (!filePath) return;
-
 					this.avatarCropper = {
 						visible: true,
 						src: filePath
@@ -807,5 +833,41 @@ export default {
 .state-text {
 	color: #98a2b3;
 	font-weight: 400;
+}
+
+.avatar-source-mask {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1200;
+	background: rgba(0, 0, 0, 0.36);
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	box-sizing: border-box;
+}
+.avatar-source-panel {
+	width: 100%;
+	padding: 16rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+	box-sizing: border-box;
+}
+.avatar-source-item {
+	height: 96rpx;
+	line-height: 96rpx;
+	text-align: center;
+	background: #ffffff;
+	color: #222222;
+	font-size: 30rpx;
+	font-weight: 400;
+	box-sizing: border-box;
+}
+.avatar-source-item:first-child {
+	border-radius: 28rpx 28rpx 0 0;
+}
+.avatar-source-item:last-child {
+	border-radius: 0 0 28rpx 28rpx;
+	border-top: 1px solid #f1f1f1;
 }
 </style>

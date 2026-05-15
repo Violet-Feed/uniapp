@@ -1,6 +1,6 @@
 import JSONbig from 'json-bigint';
 
-const BASE_URL = 'http://127.0.0.1:3000/api';
+const BASE_URL = 'http://8.130.134.60:3000/api';
 
 const SHOW_ERROR_TOAST_URLS = [
 	'/user/login',
@@ -183,8 +183,9 @@ export const httpRequestBackBool = async (url, data) => {
 
 export const uploadImage = async (filePath, type) => {
 	const token = getApp().globalData.token;
-	console.log('upload',filePath, type);
-	try {
+	console.log('upload', filePath, type);
+
+	return new Promise((resolve) => {
 		uni.uploadFile({
 			url: BASE_URL + '/upload_image',
 			filePath,
@@ -242,12 +243,5 @@ export const uploadImage = async (filePath, type) => {
 				resolve(undefined);
 			}
 		});
-	} catch (err) {
-		console.error('调用 uploadFile 失败', err);
-		uni.showToast({
-			title: '上传失败',
-			icon: 'none'
-		});
-		resolve(undefined);
-	}
+	});
 };

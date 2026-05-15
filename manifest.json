@@ -18,7 +18,10 @@
         /* 模块配置 */
         "modules" : {
             "SQLite" : {},
-            "Share" : {}
+            "Share" : {},
+            "Push" : {},
+            "VideoPlayer" : {},
+            "Camera" : {}
         },
         /* 应用发布信息 */
         "distribute" : {
@@ -46,11 +49,17 @@
             /* ios打包配置 */
             "ios" : {
                 "urltypes" : "violet",
-                "dSYMs" : true
+                "dSYMs" : false
             },
             /* SDK配置 */
             "sdkConfigs" : {
-                "share" : {}
+                "share" : {
+                    "qq" : {
+                        "appid" : "1904013923",
+                        "UniversalLinks" : ""
+                    }
+                },
+                "push" : {}
             },
             "icons" : {
                 "android" : {
@@ -87,9 +96,9 @@
             "splashscreen" : {
                 "androidStyle" : "default",
                 "android" : {
-                    "hdpi" : "unpackage/res/start/480x762.png",
-                    "xhdpi" : "unpackage/res/start/720x1242.png",
-                    "xxhdpi" : "unpackage/res/start/1080x1882.png"
+                    "hdpi" : "unpackage/res/start/start.9.png",
+                    "xhdpi" : "unpackage/res/start/start.9.png",
+                    "xxhdpi" : "unpackage/res/start/start.9.png"
                 },
                 "iosStyle" : "common"
             }

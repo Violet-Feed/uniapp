@@ -32,8 +32,6 @@ export const getMaterialByUser = async (page) => {
 export const createCreation = async (payload) => {
 	const data = {
 		material_id: payload.material_id,
-		material_type: payload.material_type,
-		material_url: payload.material_url,
 		title: payload.title,
 		content: payload.content,
 		category: payload.category

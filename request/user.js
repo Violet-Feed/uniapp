@@ -7,7 +7,7 @@ export const login = async (username,password) => {
 	};
 	const dataJson = JSONbig.stringify(data);
 	let res = await uni.request({
-		url: 'http://127.0.0.1:3000/api/user/login',
+		url: 'http://8.130.134.60:3000/api/user/login',
 		method: 'POST',
 		header: {
 			'content-type': 'application/json'
@@ -20,6 +20,11 @@ export const login = async (username,password) => {
 		console.log(res);
 		if (res.code === 1000) {
 			return res.data;
+		}else if (res.code === 1002){
+			uni.showToast({
+				title: res.message,
+				icon: 'none'
+			});
 		}else {
 			uni.showToast({
 				title: '服务器错误',
@@ -51,7 +56,7 @@ export const register = async (username,password,confirmPassword) => {
 	};
 	const dataJson = JSONbig.stringify(data);
 	let res = await uni.request({
-		url: 'http://127.0.0.1:3000/api/user/register',
+		url: 'http://8.130.134.60:3000/api/user/register',
 		method: 'POST',
 		header: {
 			'content-type': 'application/json'
@@ -64,6 +69,11 @@ export const register = async (username,password,confirmPassword) => {
 		console.log(res);
 		if (res.code === 1000) {
 			return res.data;
+		}else if (res.code === 1002){
+			uni.showToast({
+				title: res.message,
+				icon: 'none'
+			});
 		}else {
 			uni.showToast({
 				title: '服务器错误',

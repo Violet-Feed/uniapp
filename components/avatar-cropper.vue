@@ -31,7 +31,7 @@
           v-if="imageReady"
           class="crop-image"
           :src="imagePath"
-          mode="widthFix"
+          mode="scaleToFill"
           :style="imageStyle"
           draggable="false"
         />
@@ -141,12 +141,15 @@ export default {
     },
 
     imageStyle() {
-      const width = this.getDisplayWidth()
-
+      const baseWidth = this.naturalWidth * this.minScale
+      const baseHeight = this.naturalHeight * this.minScale
+      const visualScale = this.minScale ? this.scale / this.minScale : 1
+    
       return [
-        `width:${width}px`,
-        `left:${this.imgLeft}px`,
-        `top:${this.imgTop}px`
+        `width:${baseWidth}px`,
+        `height:${baseHeight}px`,
+        `transform:matrix(${visualScale},0,0,${visualScale},${this.imgLeft},${this.imgTop})`,
+        'transform-origin:0 0'
       ].join(';')
     },
 
@@ -552,7 +555,7 @@ export default {
 }
 
 .header-side {
-  width: 120rpx;
+  width: 150rpx;
   height: 60rpx;
   display: flex;
   align-items: center;
@@ -586,8 +589,9 @@ export default {
 
 .confirm-btn {
   margin: 0;
-  padding: 0 24rpx;
-  min-width: 104rpx;
+  padding: 0;
+  width: 132rpx;
+  min-width: 132rpx;
   height: 58rpx;
   line-height: 58rpx;
   border-radius: 29rpx;
@@ -599,6 +603,9 @@ export default {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .confirm-btn.disabled {
@@ -623,9 +630,13 @@ export default {
 
 .crop-image {
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 1;
   display: block;
-  will-change: left, top, width;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-origin: 0 0;
 }
 
 .dim {

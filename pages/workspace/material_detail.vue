@@ -577,7 +577,7 @@ export default {
 					fail: (err) => {
 						console.error('保存图片失败：', err)
 						uni.showToast({
-							title: '保存失败，请检查相册权限',
+							title: '保存失败',
 							icon: 'none'
 						})
 					},
@@ -659,7 +659,7 @@ export default {
 					fail: (err) => {
 						console.error('保存视频失败：', err)
 						uni.showToast({
-							title: '保存失败，请检查相册权限',
+							title: '保存失败',
 							icon: 'none'
 						})
 					},

@@ -26,10 +26,12 @@ import {
 } from '@/uni_modules/violet-tcp'
 // #endif
 
-const DEFAULT_HOST = '127.0.0.1'
+const DEFAULT_HOST = '8.130.134.60'
 const DEFAULT_PORT = 3001
 const HEAD_LENGTH = 5
 const HEARTBEAT_INTERVAL = 5000
+const HEARTBEAT_TIMEOUT = 20000
+const RECONNECT_DELAY = 1000
 
 class Socket {
 	socket = null
@@ -37,6 +39,7 @@ class Socket {
 	socketReader = null
 	listenIntervalId = null
 	heartIntervalId = null
+	heartbeatCheckIntervalId = null
 	reconnectTimer = null
 	headLength = HEAD_LENGTH
 	userId = getApp().globalData.userId
@@ -45,6 +48,7 @@ class Socket {
 	port = DEFAULT_PORT
 	started = false
 	connecting = false
+	lastHeartbeatTime = 0
 
 	constructor(options = {}) {
 		this.host = options.host || DEFAULT_HOST
@@ -184,7 +188,7 @@ class Socket {
 				console.error('读取消息出错:', e)
 				this.close()
 			}
-		}, 10)
+		}, 100)
 	}
 
 	readFullyAndroid(length) {
@@ -207,6 +211,7 @@ class Socket {
 	handleRawPacket(packetType, dataByte) {
 		try {
 			if (packetType == encodePacketType.Heartbeat) {
+				this.lastHeartbeatTime = Date.now()
 				return
 			}
 
@@ -246,9 +251,20 @@ class Socket {
 	startHeartbeat() {
 		this.clearHeartbeat()
 
+		this.lastHeartbeatTime = Date.now()
+
 		this.heartIntervalId = setInterval(() => {
 			this.sendPacket(encodePacketType.Heartbeat, new Uint8Array(0))
 		}, HEARTBEAT_INTERVAL)
+
+		this.heartbeatCheckIntervalId = setInterval(() => {
+			const now = Date.now()
+
+			if (now - this.lastHeartbeatTime > HEARTBEAT_TIMEOUT) {
+				console.warn('TCP heartbeat timeout, reconnect')
+				this.reconnect()
+			}
+		}, 1000)
 	}
 
 	clearHeartbeat() {
@@ -256,6 +272,22 @@ class Socket {
 			clearInterval(this.heartIntervalId)
 			this.heartIntervalId = null
 		}
+
+		if (this.heartbeatCheckIntervalId) {
+			clearInterval(this.heartbeatCheckIntervalId)
+			this.heartbeatCheckIntervalId = null
+		}
+	}
+
+	reconnect() {
+		if (this.reconnectTimer) return
+
+		this.close()
+
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = null
+			this.start()
+		}, RECONNECT_DELAY)
 	}
 
 	sendPacket(packetType, dataByte) {

@@ -623,6 +623,12 @@ export default {
 
     handleItemClick(n) {
       if (!n) return
+
+      if (this.toSafeNumber(n.notice_type) === 2) {
+        this.goToUser(n.sender_id)
+        return
+      }
+
       if (!n.ref_id) return
       this.goToCreationByRef(n)
     },

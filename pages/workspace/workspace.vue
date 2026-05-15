@@ -181,7 +181,7 @@
         </view>
 
         <view class="input-row" :style="inputRowStyle">
-          <view class="upload-btn" :style="inputButtonStyle" @click="uploadImage">
+          <view class="upload-btn" :style="inputButtonStyle" @click="openImageSourcePopup">
             <text class="iconfont icon-fujian upload-icon"></text>
           </view>
 
@@ -215,6 +215,13 @@
       v-if="!keyboardVisible"
       active-path="pages/workspace/workspace"
     />
+
+    <view class="avatar-source-mask" v-if="imageSourceVisible" @click="closeImageSourcePopup">
+      <view class="avatar-source-panel" @click.stop>
+        <view class="avatar-source-item" @click="selectMediaSource('camera')">拍照</view>
+        <view class="avatar-source-item" @click="selectMediaSource('album')">从相册选择</view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -268,6 +275,7 @@ export default {
       prompt: '',
       uploadedImage: '',
       uploadedSourceUrl: '',
+      imageSourceVisible: false,
       generationType: 'image',
       generating: false,
 
@@ -512,6 +520,14 @@ export default {
     this.initLayout()
     this.loadMaterials(true)
     uni.$on('material', this.handleMaterialEvent)
+  },
+
+  onBackPress() {
+    if (this.materialAction.visible) {
+      this.closeMaterialOptions()
+      return true
+    }
+    return false
   },
 
   onUnload() {
@@ -980,11 +996,21 @@ export default {
       this.generationType = type
     },
 
-    uploadImage() {
+    openImageSourcePopup() {
+      this.imageSourceVisible = true
+    },
+
+    closeImageSourcePopup() {
+      this.imageSourceVisible = false
+    },
+
+    selectMediaSource(sourceType) {
+      this.closeImageSourcePopup()
+
       uni.chooseImage({
         count: 1,
         sizeType: ['compressed'],
-        sourceType: ['album', 'camera'],
+        sourceType: [sourceType],
         success: async (res) => {
           const localPath = res.tempFilePaths[0]
           this.uploadedImage = localPath
@@ -992,13 +1018,13 @@ export default {
 
           uni.showLoading({ title: '上传中...' })
 
-			const uploadRes = await uploadImage(localPath, 'material_source')
-			if (!uploadRes || !uploadRes.source_url) {
-			  this.uploadedImage = ''
-			  return
-			}
-			this.uploadedSourceUrl = uploadRes.source_url
-			uni.hideLoading()
+          const uploadRes = await uploadImage(localPath, 'material_source')
+          if (!uploadRes || !uploadRes.source_url) {
+            this.uploadedImage = ''
+            return
+          }
+          this.uploadedSourceUrl = uploadRes.source_url
+          uni.hideLoading()
         },
         fail: (err) => {
           console.error('选择图片失败：', err)
@@ -1370,7 +1396,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: #f5f5f7;
+  background: #fefefe;
   overflow: hidden;
   box-sizing: border-box;
   pointer-events: none;
@@ -1804,5 +1830,45 @@ export default {
   to {
     transform: rotate(360deg);
   }
+}
+
+.avatar-source-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.36);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.avatar-source-panel {
+  width: 100%;
+  padding: 16rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.avatar-source-item {
+  height: 96rpx;
+  line-height: 96rpx;
+  text-align: center;
+  background: #ffffff;
+  color: #222222;
+  font-size: 30rpx;
+  font-weight: 400;
+  box-sizing: border-box;
+}
+
+.avatar-source-item:first-child {
+  border-radius: 28rpx 28rpx 0 0;
+}
+
+.avatar-source-item:last-child {
+  border-radius: 0 0 28rpx 28rpx;
+  border-top: 1px solid #f1f1f1;
 }
 </style>

@@ -984,7 +984,7 @@ export default {
 
 .empty-icon {
 	margin-bottom: 14px;
-	color: #d8d8d8;
+	color: #d8a25d !important;
 	line-height: 1;
 }
 

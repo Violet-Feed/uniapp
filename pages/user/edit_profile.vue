@@ -17,7 +17,7 @@
 
 		<view class="content" :style="contentStyle">
 			<view class="card" :style="cardStyle">
-				<view class="cell" :style="cellStyle" @click="handleEditAvatar">
+				<view class="cell" :style="cellStyle" @click="openAvatarSourcePopup">
 					<text class="cell-label" :style="cellLabelStyle">头像</text>
 					<view class="cell-right">
 						<image class="avatar" :style="avatarStyle" :src="avatar || defaultAvatar" mode="aspectFill"></image>
@@ -101,6 +101,13 @@
 			@confirm="onUserAvatarCropped"
 		/>
 
+		<view class="avatar-source-mask" v-if="avatarSourceVisible" @click="closeAvatarSourcePopup">
+			<view class="avatar-source-panel" @click.stop>
+				<view class="avatar-source-item" @click="chooseAvatarForCrop('camera')">拍照</view>
+				<view class="avatar-source-item" @click="chooseAvatarForCrop('album')">从相册选择</view>
+			</view>
+		</view>
+
 		<view class="loading-mask" v-if="submitting">
 			<view class="loading-box" :style="loadingBoxStyle">提交中...</view>
 		</view>
@@ -139,6 +146,8 @@ export default {
 				visible: false,
 				src: ''
 			},
+
+			avatarSourceVisible: false,
 
 			submitting: false,
 
@@ -283,6 +292,15 @@ export default {
 
 	onShow() {
 		this.initResponsiveLayout()
+	},
+
+	onBackPress() {
+		if (this.avatarCropper.visible) {
+			this.closeAvatarCropper()
+			return true
+		}
+
+		return false
 	},
 
 	methods: {
@@ -495,23 +513,24 @@ export default {
 			this.submitting = false
 		},
 
-		handleEditAvatar() {
+		openAvatarSourcePopup() {
 			if (this.submitting) return
+			this.avatarSourceVisible = true
+		},
 
-			uni.showActionSheet({
-				itemList: ['从相册选择', '拍照'],
-				success: (res) => {
-					const sourceType = res.tapIndex === 1 ? ['camera'] : ['album']
-					this.chooseAvatarForCrop(sourceType)
-				}
-			})
+		closeAvatarSourcePopup() {
+			this.avatarSourceVisible = false
 		},
 
 		chooseAvatarForCrop(sourceType) {
+			if (this.submitting) return
+
+			this.closeAvatarSourcePopup()
+
 			uni.chooseImage({
 				count: 1,
 				sizeType: ['compressed'],
-				sourceType,
+				sourceType: [sourceType],
 				success: (res) => {
 					const filePath = res.tempFilePaths?.[0]
 					if (!filePath) return
@@ -532,11 +551,13 @@ export default {
 		},
 
 		async onUserAvatarCropped(filePath) {
+			console.log(222);
 			this.closeAvatarCropper()
 			await this.uploadUserAvatar(filePath)
 		},
 
 		async uploadUserAvatar(filePath) {
+			console.log(111);
 			if (!filePath || this.submitting) return
 
 			this.submitting = true
@@ -778,5 +799,45 @@ export default {
 	border-radius: 14px;
 	font-weight: 400;
 	box-sizing: border-box;
+}
+
+.avatar-source-mask {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1200;
+	background: rgba(0, 0, 0, 0.36);
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	box-sizing: border-box;
+}
+
+.avatar-source-panel {
+	width: 100%;
+	padding: 16rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+	box-sizing: border-box;
+}
+
+.avatar-source-item {
+	height: 96rpx;
+	line-height: 96rpx;
+	text-align: center;
+	background: #ffffff;
+	color: #222222;
+	font-size: 30rpx;
+	font-weight: 400;
+	box-sizing: border-box;
+}
+
+.avatar-source-item:first-child {
+	border-radius: 28rpx 28rpx 0 0;
+}
+
+.avatar-source-item:last-child {
+	border-radius: 0 0 28rpx 28rpx;
+	border-top: 1px solid #f1f1f1;
 }
 </style>

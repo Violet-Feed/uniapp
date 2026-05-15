@@ -36,7 +36,7 @@
 					<view class="add-icon">
 						<text class="icon">+</text>
 					</view>
-					<text class="member-name">添加</text>
+					<text class="member-name">邀请</text>
 				</view>
 
 				<view class="member-item remove-btn" v-if="isGroupOwner" @click="goToRemoveMember">
@@ -57,7 +57,7 @@
 
 		<!-- 群聊信息区域 -->
 		<view class="info-section">
-			<view class="info-item" @click="chooseGroupAvatar">
+			<view class="info-item" @click="openAvatarSourcePopup">
 				<text class="info-label">群头像</text>
 				<view class="info-content">
 					<image class="group-avatar" :src="groupAvatar || '/static/group_avatar.png'" mode="aspectFill"></image>
@@ -118,6 +118,13 @@
 			@close="closeAvatarCropper"
 			@confirm="onGroupAvatarCropped"
 		/>
+
+		<view class="avatar-source-mask" v-if="avatarSourceVisible" @click="closeAvatarSourcePopup">
+			<view class="avatar-source-panel" @click.stop>
+				<view class="avatar-source-item" @click="chooseGroupAvatarForCrop('camera')">拍照</view>
+				<view class="avatar-source-item" @click="chooseGroupAvatarForCrop('album')">从相册选择</view>
+			</view>
+		</view>
 
 		<!-- 群资料详情弹窗 -->
 		<view class="desc-mask" v-if="showDescriptionPopup" @click="closeDescriptionViewer">
@@ -208,7 +215,9 @@ export default {
 			avatarCropper: {
 				visible: false,
 				src: ''
-			}
+			},
+
+			avatarSourceVisible: false
 		};
 	},
 
@@ -255,6 +264,14 @@ export default {
 
 	onShow() {
 		this.initHeaderLayout();
+	},
+
+	onBackPress() {
+		if (this.avatarCropper.visible) {
+			this.closeAvatarCropper()
+			return true
+		}
+		return false
 	},
 
 	methods: {
@@ -346,13 +363,24 @@ export default {
 			this.isExpanded = !this.isExpanded;
 		},
 
-		chooseGroupAvatar() {
-			if (this.updating) return;
+		openAvatarSourcePopup() {
+			if (this.updating) return
+			this.avatarSourceVisible = true
+		},
+
+		closeAvatarSourcePopup() {
+			this.avatarSourceVisible = false
+		},
+
+		chooseGroupAvatarForCrop(sourceType) {
+			if (this.updating) return
+
+			this.closeAvatarSourcePopup()
 
 			uni.chooseImage({
 				count: 1,
 				sizeType: ['compressed'],
-				sourceType: ['album', 'camera'],
+				sourceType: [sourceType],
 				success: res => {
 					const filePath = res?.tempFilePaths?.[0] || '';
 					if (!filePath) return;
@@ -972,5 +1000,41 @@ export default {
 .confirm-btn {
 	color: #8a5a2b;
 	background: rgba(253, 231, 209, 1);
+}
+
+.avatar-source-mask {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 1200;
+	background: rgba(0, 0, 0, 0.36);
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	box-sizing: border-box;
+}
+.avatar-source-panel {
+	width: 100%;
+	padding: 16rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+	box-sizing: border-box;
+}
+.avatar-source-item {
+	height: 96rpx;
+	line-height: 96rpx;
+	text-align: center;
+	background: #ffffff;
+	color: #222222;
+	font-size: 30rpx;
+	font-weight: 400;
+	box-sizing: border-box;
+}
+.avatar-source-item:first-child {
+	border-radius: 28rpx 28rpx 0 0;
+}
+.avatar-source-item:last-child {
+	border-radius: 0 0 28rpx 28rpx;
+	border-top: 1px solid #f1f1f1;
 }
 </style>

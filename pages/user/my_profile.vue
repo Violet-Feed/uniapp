@@ -1322,7 +1322,7 @@ export default {
 .tab-bar {
 	display: flex;
 	align-items: center;
-	background: #f8f9fa;
+	background: #fefefe;
 	border-bottom: none;
 	position: sticky;
 	top: 0;
@@ -1341,7 +1341,7 @@ export default {
 	transition: all 0.24s;
 	color: #666;
 	box-sizing: border-box;
-	background: #f8f9fa;
+	background: #fefefe;
 }
 
 .tab-item.active {
@@ -1372,7 +1372,7 @@ export default {
 	bottom: 0;
 	width: 24px;
 	height: 2px;
-	background: rgba(253, 231, 209, 1);
+	background: rgba(138, 90, 43, 1.0);
 	border-radius: 2px;
 	animation: slideIn 0.24s ease;
 }

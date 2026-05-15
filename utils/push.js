@@ -202,7 +202,7 @@ const ensureNotificationAuthorized = ({ forcePrompt = false } = {}) => {
 	// #ifdef APP-PLUS
 	const status = getNotificationAuthorized()
 
-	if (status === 'authorized') {
+	if (status !== 'denied') {
 		return true
 	}
 
@@ -216,12 +216,10 @@ const ensureNotificationAuthorized = ({ forcePrompt = false } = {}) => {
 
 	permissionPromptVisible = true
 
-	const isDenied = status === 'denied'
-
 	uni.showModal({
 		title: '开启通知权限',
 		content: '开启通知权限后，可以及时收到聊天、素材生成和互动通知提醒。',
-		confirmText: isDenied ? '去设置' : '去开启',
+		confirmText: '去开启',
 		cancelText: '暂不开启',
 		success(res) {
 			markNotifyPermissionAsked()
@@ -249,7 +247,7 @@ const createLocalNotification = ({ title, content, payload, icon }) => {
 	try {
 		const authorized = getNotificationAuthorized()
 
-		if (authorized !== 'authorized') {
+		if (authorized === 'denied') {
 			return
 		}
 
@@ -782,7 +780,7 @@ export const installNotifyListener = () => {
 	uni.$on('notice', handleNotice)
 
 	installPushClickListener()
-
+	
 	ensureNotificationAuthorized()
 }
 

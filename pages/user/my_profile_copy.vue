@@ -1199,7 +1199,7 @@ export default {
 	bottom: 0;
 	width: 24px;
 	height: 2px;
-	background: rgba(253, 231, 209, 1);
+	background: rgba(138, 90, 43, 1.0);
 	border-radius: 2px;
 	animation: slideIn 0.24s ease;
 }

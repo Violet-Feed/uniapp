@@ -1608,17 +1608,25 @@ export default {
     },
 
     shareToWechat() {
-      this.shareByUni({
-        provider: 'weixin',
-        scene: 'WXSceneSession'
+      uni.showToast({
+        title: '开发中',
+        icon: 'none'
       })
+      // this.shareByUni({
+      //   provider: 'weixin',
+      //   scene: 'WXSceneSession'
+      // })
     },
 
     shareToTimeline() {
-      this.shareByUni({
-        provider: 'weixin',
-        scene: 'WXSceneTimeline'
+      uni.showToast({
+        title: '开发中',
+        icon: 'none'
       })
+      // this.shareByUni({
+      //   provider: 'weixin',
+      //   scene: 'WXSceneTimeline'
+      // })
     },
 
     shareToQQ() {
@@ -1631,7 +1639,7 @@ export default {
       const title = this.creation.title || '分享一个作品'
       const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
       const imageUrl = this.creation.coverImage || this.creation.images[0] || ''
-      const href = this.creation.shareUrl || `http://127.0.0.1:3000/share.html?creationId=${this.creationId}`
+      const href = this.creation.shareUrl || `http://8.130.134.60:3000/share.html?creationId=${this.creationId}`
 
       return {
         title,

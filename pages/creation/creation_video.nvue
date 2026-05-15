@@ -620,6 +620,9 @@ export default {
       authorId: '',
 
       videoContext: null,
+      videoTopOffset: 0,
+      videoNaturalWidth: 0,
+      videoNaturalHeight: 0,
       videoTouchTimer: null,
       videoTouchStartX: 0,
       videoTouchStartY: 0,
@@ -820,10 +823,12 @@ export default {
     },
 
     videoStyle() {
+      const offset = Number(this.videoTopOffset || 0)
+
       return (
         'width:' + this.windowWidth + 'px;' +
-        'height:' + (this.windowHeight + VIDEO_TOP_OFFSET) + 'px;' +
-        'top:-' + VIDEO_TOP_OFFSET + 'px;'
+        'height:' + (this.windowHeight + offset) + 'px;' +
+        'top:-' + offset + 'px;'
       )
     },
 
@@ -1255,6 +1260,13 @@ export default {
         this.commentMetaFontSize = clamp(Math.floor(windowWidth * 0.03), 11, 12)
         this.commentLikeIconSize = clamp(Math.floor(windowWidth * 0.049), 18, 20)
         this.sendBtnWidth = clamp(Math.floor(windowWidth * 0.15), 54, 60)
+
+        if (this.videoNaturalWidth && this.videoNaturalHeight) {
+          this.videoTopOffset = this.calculateSafeVideoTopOffset(
+            this.videoNaturalWidth,
+            this.videoNaturalHeight
+          )
+        }
       } catch (err) {
         this.windowWidth = 375
         this.windowHeight = 667
@@ -1283,6 +1295,12 @@ export default {
 
       const c = res.creation
       const isVideo = Number(c.material_type) === 2
+      const materialUrl = c.material_url || ''
+      const coverImage = c.cover_url || materialUrl || ''
+
+      this.videoTopOffset = 0
+      this.videoNaturalWidth = 0
+      this.videoNaturalHeight = 0
 
       this.creation.creationId = c.creation_id || this.creationId
       this.creation.userId = c.user_id || this.authorId
@@ -1293,12 +1311,79 @@ export default {
       this.creation.time = c.create_time || ''
       this.creation.location = c.location || ''
       this.creation.shareUrl = c.share_url || c.shareUrl || ''
-      this.creation.coverImage = c.cover_url || c.material_url || ''
-      this.creation.videoUrl = isVideo ? (c.material_url || '') : ''
+      this.creation.coverImage = coverImage
+      this.creation.videoUrl = ''
+
+      if (isVideo) {
+        await this.prepareVideoLayoutBeforeRender(coverImage)
+        this.creation.videoUrl = materialUrl
+      }
 
       if (c.user_id) this.authorId = c.user_id
 
       return true
+    },
+
+    getImageInfoSafe(src) {
+      return new Promise(resolve => {
+        if (!src || /\.mp4(\?|#|$)/i.test(src)) {
+          resolve(null)
+          return
+        }
+
+        uni.getImageInfo({
+          src,
+          success: info => {
+            resolve(info || null)
+          },
+          fail: () => {
+            resolve(null)
+          }
+        })
+      })
+    },
+
+    calculateSafeVideoTopOffset(width, height) {
+      const mediaWidth = Number(width || 0)
+      const mediaHeight = Number(height || 0)
+      const screenWidth = Number(this.windowWidth || 0)
+      const screenHeight = Number(this.windowHeight || 0)
+
+      if (!mediaWidth || !mediaHeight || !screenWidth || !screenHeight) {
+        return 0
+      }
+
+      const mediaRatio = mediaWidth / mediaHeight
+      const screenRatio = screenWidth / screenHeight
+
+      if (mediaRatio <= screenRatio) {
+        return 0
+      }
+
+      const displayHeight = screenWidth / mediaRatio
+      const verticalSpace = Math.max(0, screenHeight - displayHeight)
+
+      if (verticalSpace <= 0) {
+        return 0
+      }
+
+      return Math.floor(Math.min(VIDEO_TOP_OFFSET, verticalSpace))
+    },
+
+    async prepareVideoLayoutBeforeRender(coverImage) {
+      const info = await this.getImageInfoSafe(coverImage)
+
+      if (!info || !info.width || !info.height) {
+        this.videoTopOffset = 0
+        return
+      }
+
+      this.videoNaturalWidth = Number(info.width || 0)
+      this.videoNaturalHeight = Number(info.height || 0)
+      this.videoTopOffset = this.calculateSafeVideoTopOffset(
+        this.videoNaturalWidth,
+        this.videoNaturalHeight
+      )
     },
 
     async fetchAuthorInfo() {
@@ -2266,17 +2351,25 @@ export default {
     },
 
     shareToWechat() {
-      this.shareByUni({
-        provider: 'weixin',
-        scene: 'WXSceneSession'
+      uni.showToast({
+        title: '开发中',
+        icon: 'none'
       })
+      // this.shareByUni({
+      //   provider: 'weixin',
+      //   scene: 'WXSceneSession'
+      // })
     },
 
     shareToTimeline() {
-      this.shareByUni({
-        provider: 'weixin',
-        scene: 'WXSceneTimeline'
+      uni.showToast({
+        title: '开发中',
+        icon: 'none'
       })
+      // this.shareByUni({
+      //   provider: 'weixin',
+      //   scene: 'WXSceneTimeline'
+      // })
     },
 
     shareToQQ() {
@@ -2289,7 +2382,7 @@ export default {
       const title = this.creation.title || '分享一个作品'
       const summary = this.creation.detail || '我发现了一个不错的作品，快来看看吧'
       const imageUrl = this.creation.coverImage || ''
-      const href = this.creation.shareUrl || `http://127.0.0.1:3000/share.html?creationId=${this.creationId}`
+      const href = this.creation.shareUrl || `http://8.130.134.60:3000/share.html?creationId=${this.creationId}`
 
       return {
         title,

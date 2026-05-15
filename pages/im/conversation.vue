@@ -74,25 +74,24 @@
                                 >
                                     <view class="share-image-wrapper" :style="shareImageWrapperStyle">
                                         <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                        <view class="share-video-badge" :style="shareVideoBadgeStyle" v-if="isShareVideo(message)">
-                                            <text class="share-video-badge-icon" :style="shareVideoBadgeIconStyle">▶</text>
+                                        <view class="share-video-badge" v-if="isShareVideo(message)">
+                                            <text class="share-video-badge-icon">▶</text>
                                         </view>
                                     </view>
 
                                     <view class="share-card-content" :style="shareCardContentStyle">
-                                        <view class="share-card-title-container" :style="shareTitleContainerStyle">
-                                            <text class="share-card-title" :style="shareTitleStyle">{{ getShareTitle(message) }}</text>
+                                        <view class="share-card-title-container">
+                                            <text class="share-card-title">{{ getShareTitle(message) }}</text>
                                         </view>
 
-                                        <view class="share-card-footer" :style="shareFooterStyle">
+                                        <view class="share-card-footer">
                                             <view class="share-card-author" @click.stop="goToShareUserPage(message)">
                                                 <image
                                                     class="share-author-avatar"
-                                                    :style="shareAuthorAvatarStyle"
                                                     :src="getShareAuthorAvatar(message)"
                                                     mode="aspectFill"
                                                 ></image>
-                                                <text class="share-author-name" :style="shareAuthorNameStyle">
+                                                <text class="share-author-name">
                                                     {{ getShareAuthorName(message) }}
                                                 </text>
                                             </view>
@@ -153,25 +152,24 @@
                             >
                                 <view class="share-image-wrapper" :style="shareImageWrapperStyle">
                                     <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                    <view class="share-video-badge" :style="shareVideoBadgeStyle" v-if="isShareVideo(message)">
-                                        <text class="share-video-badge-icon" :style="shareVideoBadgeIconStyle">▶</text>
+                                    <view class="share-video-badge" v-if="isShareVideo(message)">
+                                        <text class="share-video-badge-icon">▶</text>
                                     </view>
                                 </view>
 
                                 <view class="share-card-content" :style="shareCardContentStyle">
-                                    <view class="share-card-title-container" :style="shareTitleContainerStyle">
-                                        <text class="share-card-title" :style="shareTitleStyle">{{ getShareTitle(message) }}</text>
+                                    <view class="share-card-title-container">
+                                        <text class="share-card-title">{{ getShareTitle(message) }}</text>
                                     </view>
 
-                                    <view class="share-card-footer" :style="shareFooterStyle">
+                                    <view class="share-card-footer">
                                         <view class="share-card-author" @click.stop="goToShareUserPage(message)">
                                             <image
                                                 class="share-author-avatar"
-                                                :style="shareAuthorAvatarStyle"
                                                 :src="getShareAuthorAvatar(message)"
                                                 mode="aspectFill"
                                             ></image>
-                                            <text class="share-author-name" :style="shareAuthorNameStyle">
+                                            <text class="share-author-name">
                                                 {{ getShareAuthorName(message) }}
                                             </text>
                                         </view>
@@ -368,14 +366,9 @@ export default {
             systemLineHeight: 13,
 
             shareCardWidth: 176,
-            shareCardHeight: 235,
-            shareImageHeight: 188,
-            shareContentHeight: 47,
-            shareTitleFontSize: 12,
-            shareTitleLineHeight: 18,
-            shareAuthorFontSize: 10,
-            shareAuthorAvatarSize: 16,
-            shareVideoBadgeSize: 20,
+            shareCardHeight: 246,
+            shareImageHeight: 176,
+            shareContentHeight: 70,
 			
             inputBottomOffset: 0,
             inputFocused: false,
@@ -600,38 +593,10 @@ export default {
         },
 
         shareCardContentStyle() {
-            return 'height:' + this.shareContentHeight + 'px;padding:' + Math.max(5, Math.floor(this.shareContentHeight * 0.12)) + 'px ' + Math.max(6, Math.floor(this.shareContentHeight * 0.15)) + 'px;';
+            return 'height:' + this.shareContentHeight + 'px;';
         },
 
-        shareTitleContainerStyle() {
-            return 'height:' + this.shareTitleLineHeight + 'px;';
-        },
-
-        shareTitleStyle() {
-            return 'font-size:' + this.shareTitleFontSize + 'px;line-height:' + this.shareTitleLineHeight + 'px;';
-        },
-
-        shareFooterStyle() {
-            return 'height:' + Math.max(18, this.shareAuthorAvatarSize + 2) + 'px;';
-        },
-
-        shareAuthorAvatarStyle() {
-            return 'width:' + this.shareAuthorAvatarSize + 'px;height:' + this.shareAuthorAvatarSize + 'px;border-radius:' + Math.floor(this.shareAuthorAvatarSize / 2) + 'px;';
-        },
-
-        shareAuthorNameStyle() {
-            return 'font-size:' + this.shareAuthorFontSize + 'px;line-height:' + Math.max(14, this.shareAuthorAvatarSize) + 'px;';
-        },
-
-        shareVideoBadgeStyle() {
-            return 'width:' + this.shareVideoBadgeSize + 'px;height:' + this.shareVideoBadgeSize + 'px;border-radius:' + Math.floor(this.shareVideoBadgeSize / 2) + 'px;';
-        },
-
-        shareVideoBadgeIconStyle() {
-            return 'font-size:' + clamp(Math.floor(this.shareVideoBadgeSize * 0.52), 10, 13) + 'px;';
-        },
-		
-		floatingUnreadCount() {
+        floatingUnreadCount() {
 		    return this.floatingUnreadIds.length;
 		},
 		
@@ -1122,14 +1087,9 @@ export default {
                 this.systemLineHeight = this.timeLineHeight;
 
                 this.shareCardWidth = clamp(Math.floor(windowWidth * 0.47), 168, 204);
-                this.shareCardHeight = Math.floor(this.shareCardWidth * 4 / 3);
-                this.shareContentHeight = clamp(Math.floor(this.shareCardWidth * 0.27), 45, 56);
-                this.shareImageHeight = this.shareCardHeight - this.shareContentHeight;
-                this.shareTitleFontSize = clamp(Math.floor(windowWidth * 0.032), 12, 14);
-                this.shareTitleLineHeight = this.shareTitleFontSize + 6;
-                this.shareAuthorFontSize = clamp(Math.floor(windowWidth * 0.027), 10, 12);
-                this.shareAuthorAvatarSize = clamp(Math.floor(windowWidth * 0.045), 16, 19);
-                this.shareVideoBadgeSize = clamp(Math.floor(windowWidth * 0.056), 20, 24);
+                this.shareCardHeight = Math.floor(this.shareCardWidth * 7 / 5);
+                this.shareImageHeight = this.shareCardWidth;
+                this.shareContentHeight = this.shareCardHeight - this.shareImageHeight;
             } catch (err) {
                 this.windowHeight = 667;
                 this.windowWidth = 375;
@@ -1181,9 +1141,9 @@ export default {
                 this.systemLineHeight = 14;
                 this.messageSidePadding = 10;
                 this.shareCardWidth = 176;
-                this.shareCardHeight = 235;
-                this.shareContentHeight = 47;
-                this.shareImageHeight = 188;
+                this.shareCardHeight = 246;
+                this.shareContentHeight = 70;
+                this.shareImageHeight = 176;
                 this.shareTitleFontSize = 12;
                 this.shareTitleLineHeight = 18;
                 this.shareAuthorFontSize = 10;
@@ -2192,7 +2152,7 @@ export default {
 .chat-container {
     position: relative;
     height: 100vh;
-    background: #fdfdfd;
+    background: #fefefe;
     overflow: hidden;
     font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
@@ -2203,7 +2163,7 @@ export default {
     left: 0;
     right: 0;
     z-index: 120;
-    background: #fdfdfd;
+    background: #fefefe;
     border-bottom: none;
     box-sizing: border-box;
 }
@@ -2258,7 +2218,7 @@ export default {
     right: 0;
     overflow-y: auto;
     box-sizing: border-box;
-    background: #fdfdfd;
+    background: #fefefe;
 }
 
 .messages {
@@ -2422,23 +2382,19 @@ export default {
 }
 
 .share-card {
-    border-radius: 9px;
+    background: #ffffff;
+    border-radius: 10px;
     overflow: hidden;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.055);
+    box-shadow: 0 1px 7px rgba(0, 0, 0, 0.06);
     transition: all 0.24s;
 }
 
 .share-card-left {
     align-self: flex-start;
-    background: #f0f2f5;
 }
 
 .share-card-right {
     align-self: flex-end;
-    background: rgba(253, 231, 209, 1);
 }
 
 .share-card:active {
@@ -2457,19 +2413,25 @@ export default {
     width: 100%;
     height: 100%;
     display: block;
+    object-fit: cover;
+    object-position: center center;
 }
 
 .share-video-badge {
     position: absolute;
-    top: 6px;
-    right: 6px;
+    top: 7px;
+    right: 7px;
+    width: 24px;
+    height: 24px;
     background: rgba(0, 0, 0, 0.42);
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .share-video-badge-icon {
+    font-size: 12px;
     color: rgba(255, 255, 255, 0.94);
     line-height: 1;
     margin-left: 1px;
@@ -2477,17 +2439,22 @@ export default {
 }
 
 .share-card-content {
+    padding: 7px 8px 6px;
     box-sizing: border-box;
-    background: #f0f2f5;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .share-card-title-container {
-    overflow: hidden;
+    min-height: 22px;
 }
 
 .share-card-title {
+    font-size: 15px;
     font-weight: 400;
     color: #333;
+    line-height: 22px;
     display: block;
     white-space: nowrap;
     overflow: hidden;
@@ -2498,29 +2465,36 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    height: 31px;
+    margin-top: 5px;
 }
 
 .share-card-author {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex: 1;
     min-width: 0;
 }
 
 .share-author-avatar {
-    border: 1px solid rgba(240, 240, 240, 0.8);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #f0f0f0;
+    object-fit: cover;
     flex-shrink: 0;
     background: #f0f0f0;
     box-sizing: border-box;
 }
 
 .share-author-name {
+    font-size: 14px;
+    font-weight: 400;
     color: #666;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-weight: 400;
 }
 
 .system-message {
@@ -2593,7 +2567,7 @@ export default {
     align-items: flex-start;
     padding-left: 10px;
     padding-right: 10px;
-    background: #fdfdfd;
+    background: #fefefe;
     border-top: none;
     gap: 8px;
     box-sizing: border-box;
@@ -2610,7 +2584,7 @@ export default {
     justify-content: center;
     padding-left: 10px;
     padding-right: 10px;
-    background: #fdfdfd;
+    background: #fefefe;
     border-top: none;
     box-sizing: border-box;
     z-index: 110;

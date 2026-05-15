@@ -514,8 +514,6 @@ export default {
 
 			const payload = {
 				material_id: this.materialId,
-				material_type: this.materialType,
-				material_url: this.materialUrl,
 				title: this.title.trim(),
 				content: this.content.trim(),
 				category: this.selectedCategory ? this.selectedCategory.value : ''

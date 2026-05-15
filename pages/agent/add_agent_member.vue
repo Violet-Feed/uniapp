@@ -17,7 +17,7 @@
 						:style="navBtnStyle"
 						@click.stop="confirmAdd"
 					>
-						{{ submitting ? '确定中' : '确定' }}
+						{{ submitting ? '添加中' : '确定' }}
 					</button>
 				</view>
 			</view>
