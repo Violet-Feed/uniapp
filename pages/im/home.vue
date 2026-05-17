@@ -3,9 +3,20 @@
         <!-- 顶部消息栏：包含状态栏 / 刘海区域，消息和加号位于下半部分 -->
         <view class="header-bar" :style="headerBarStyle">
             <view class="header-content" :style="headerContentStyle">
-                <text class="header-title" :style="headerTitleDynamicStyle">消息</text>
+                <view v-if="imInitLoading" class="header-title-loading">
+                    <view class="header-loading-spinner"></view>
+                    <text class="header-loading-text" :style="headerTitleDynamicStyle">连接中</text>
+                </view>
+
+                <text v-else class="header-title" :style="headerTitleDynamicStyle">消息</text>
+
                 <view class="header-actions">
-                    <view class="action-btn" :style="actionButtonStyle" @click="showDropdown = !showDropdown">
+                    <view
+                        class="action-btn"
+                        :class="{ disabled: imInitLoading }"
+                        :style="actionButtonStyle"
+                        @click="toggleDropdown"
+                    >
                         <text class="iconfont icon-jiahao action-icon" :style="actionIconDynamicStyle"></text>
                     </view>
                 </view>
@@ -190,8 +201,12 @@ export default {
             conversationLoading: false,
             conversationHasMore: true,
             conversationLoadArmed: true,
+            conversationRefreshPending: false,
             conversationScrollBoxHeight: 0,
             privateProfileTtlMs: 24 * 60 * 60 * 1000,
+
+            imInitLoading: false,
+            imInitFinishing: false,
 
             windowHeight: 667,
             windowWidth: 375,
@@ -205,7 +220,7 @@ export default {
             noticeAvatarSize: 46,
             actionButtonSize: 36,
             tabbarSpacerHeight: 66,
-            
+
             headerTitleFontSize: 18,
             actionIconFontSize: 25,
 
@@ -225,6 +240,7 @@ export default {
             normalListener: null,
             commandListener: null,
             noticeListener: null,
+            appListener: null,
             deletingConId: '',
 
             conversationTouch: {
@@ -347,9 +363,15 @@ export default {
 
     onLoad() {
         this.initResponsiveLayout();
+
+        this.imInitLoading = getApp().globalData.imInitStatus === true;
+        this.imInitFinishing = false;
+
         this.loadMoreConversations(true);
+        this.loadNoticeCounts();
 
         this.normalListener = (data) => {
+            if (this.imInitLoading) return;
             if (!data || !data.msg_body) return;
 
             this.userConIndex = data.user_con_index;
@@ -379,6 +401,8 @@ export default {
                 this.conversationList.unshift(conversation);
             } else {
                 DB.getConversationById(msgBody.con_id).then((res) => {
+                    if (this.imInitLoading) return;
+
                     if (res) {
                         const conversation = this.normalizeConversationPreview(res);
                         this.conversationList.unshift(conversation);
@@ -391,6 +415,7 @@ export default {
         uni.$on('normal', this.normalListener);
 
         this.commandListener = async (data) => {
+            if (this.imInitLoading) return;
             if (!data || !data.msg_body) return;
 
             for (let i = 0; i < this.conversationList.length; i++) {
@@ -449,6 +474,8 @@ export default {
         uni.$on('command', this.commandListener);
 
         this.noticeListener = (data) => {
+            if (this.imInitLoading) return;
+
             const g = data && typeof data.group === 'number' ? data.group : 0;
             const op = data && typeof data.op_type === 'number' ? data.op_type : 0;
 
@@ -474,11 +501,45 @@ export default {
 
         uni.$on('notice', this.noticeListener);
 
-        this.loadNoticeCounts();
+        this.appListener = async (data) => {
+            if (!data || data.module !== 'im') return;
+        
+            if (data.type === 'beginInit') {
+                this.handleBeginImInit();
+                return;
+            }
+        
+            if (data.type === 'finishInit') {
+                await this.handleFinishImInit();
+                return;
+            }
+        
+            if (data.type === 'userRefresh') {
+                this.handleUserProfileRefresh(data.data || []);
+                return;
+            }
+        
+            if (data.type === 'agentRefresh') {
+                this.handleAgentProfileRefresh(data.data || []);
+            }
+        };
+        
+        uni.$on('app', this.appListener);
+
+        uni.$on('app', this.appListener);
     },
 
     onShow() {
         this.initResponsiveLayout();
+
+        const globalInitLoading = getApp().globalData.imInitStatus === true;
+
+        if (globalInitLoading && !this.imInitLoading) {
+            this.handleBeginImInit();
+        } else if (!globalInitLoading && this.imInitLoading && !this.imInitFinishing) {
+            this.handleFinishImInit();
+        }
+
         this.$nextTick(() => this.updateConversationScrollBoxHeight());
     },
 
@@ -498,19 +559,155 @@ export default {
         if (this.noticeListener) {
             uni.$off('notice', this.noticeListener);
         }
+
+        if (this.appListener) {
+            uni.$off('app', this.appListener);
+        }
     },
 
     methods: {
-		closeAppSplash() {
-		    // #ifdef APP-PLUS
-		    setTimeout(() => {
-		      try {
-		        plus.navigator.closeSplashscreen()
-		      } catch (err) {}
-		    }, 80)
-		    // #endif
+        closeAppSplash() {
+            // #ifdef APP-PLUS
+            setTimeout(() => {
+                try {
+                    plus.navigator.closeSplashscreen();
+                } catch (err) {}
+            }, 80);
+            // #endif
+        },
+
+        handleBeginImInit() {
+            getApp().globalData.imInitStatus = true;
+
+            this.imInitLoading = true;
+            this.imInitFinishing = false;
+            this.conversationRefreshPending = false;
+
+            this.showDropdown = false;
+            this.hideConversationAction();
+        },
+
+        async handleFinishImInit() {
+            if (this.imInitFinishing) {
+                this.conversationRefreshPending = true;
+                return;
+            }
+
+            getApp().globalData.imInitStatus = true;
+
+            this.imInitLoading = true;
+            this.showDropdown = false;
+            this.hideConversationAction();
+
+            if (this.conversationLoading) {
+                this.conversationRefreshPending = true;
+                return;
+            }
+
+            this.imInitFinishing = true;
+
+            try {
+                this.userConIndex = Number(getApp().globalData.userConIndex || 0);
+                this.conversationHasMore = true;
+                this.conversationLoadArmed = true;
+
+                await this.loadMoreConversations(true);
+                await this.loadNoticeCounts();
+            } catch (err) {
+                console.error('handleFinishImInit failed', err);
+            } finally {
+                this.imInitFinishing = false;
+
+                if (this.conversationRefreshPending) {
+                    this.conversationRefreshPending = false;
+
+                    this.$nextTick(() => {
+                        this.handleFinishImInit();
+                    });
+
+                    return;
+                }
+
+                getApp().globalData.imInitStatus = false;
+                this.imInitLoading = false;
+            }
+        },
+		
+		handleUserProfileRefresh(upserts) {
+		    if (!Array.isArray(upserts) || upserts.length === 0) return;
+		
+		    const userMap = new Map();
+		
+		    for (const user of upserts) {
+		        if (!user || user.user_id === null || user.user_id === undefined) continue;
+		        userMap.set(String(user.user_id), user);
+		    }
+		
+		    if (userMap.size === 0) return;
+		
+		    for (let i = 0; i < this.conversationList.length; i++) {
+		        const conversation = this.conversationList[i];
+		
+		        if (!conversation) continue;
+		        if (Number(conversation.con_type) !== 1) continue;
+		        if (conversation.peer_id === null || conversation.peer_id === undefined) continue;
+		
+		        const user = userMap.get(String(conversation.peer_id));
+		        if (!user) continue;
+		
+		        const nextName = user.username || conversation.name || '用户';
+		        const nextAvatar = user.avatar_uri || conversation.avatar_uri || '/static/user_avatar.png';
+		
+		        if (String(conversation.name || '') !== String(nextName || '')) {
+		            this.$set(conversation, 'name', nextName);
+		        }
+		
+		        if (String(conversation.avatar_uri || '') !== String(nextAvatar || '')) {
+		            this.$set(conversation, 'avatar_uri', nextAvatar);
+		        }
+		    }
 		},
-		  
+		
+		handleAgentProfileRefresh(upserts) {
+		    if (!Array.isArray(upserts) || upserts.length === 0) return;
+		
+		    const agentMap = new Map();
+		
+		    for (const agent of upserts) {
+		        if (!agent || agent.agent_id === null || agent.agent_id === undefined) continue;
+		        agentMap.set(String(agent.agent_id), agent);
+		    }
+		
+		    if (agentMap.size === 0) return;
+		
+		    for (let i = 0; i < this.conversationList.length; i++) {
+		        const conversation = this.conversationList[i];
+		
+		        if (!conversation) continue;
+		        if (Number(conversation.con_type) !== 4) continue;
+		        if (conversation.peer_id === null || conversation.peer_id === undefined) continue;
+		
+		        const agent = agentMap.get(String(conversation.peer_id));
+		        if (!agent) continue;
+		
+		        const nextName = agent.agent_name || conversation.name || 'AI';
+		        const nextAvatar = agent.avatar_uri || conversation.avatar_uri || '/static/ai_avatar.png';
+		
+		        if (String(conversation.name || '') !== String(nextName || '')) {
+		            this.$set(conversation, 'name', nextName);
+		        }
+		
+		        if (String(conversation.avatar_uri || '') !== String(nextAvatar || '')) {
+		            this.$set(conversation, 'avatar_uri', nextAvatar);
+		        }
+		    }
+		},
+
+        toggleDropdown() {
+            if (this.imInitLoading) return;
+            this.showDropdown = !this.showDropdown;
+        },
+
         initResponsiveLayout() {
             try {
                 const sys = uni.getSystemInfoSync();
@@ -525,104 +722,104 @@ export default {
                 this.safeBottom = Number(safeAreaInsets.bottom || 0);
 
                 const layoutWidth = Math.min(windowWidth, 390);
-                
+
                 const smallScreenBoost = layoutWidth <= 360 ? 1 : 0;
                 const tinyScreenBoost = layoutWidth <= 330 ? 1 : 0;
-                
+
                 const tabbarBaseHeight = Math.max(
                     52,
                     Math.min(58, Math.floor(layoutWidth * 0.146))
                 );
-                
+
                 this.tabbarSpacerHeight = tabbarBaseHeight + this.safeBottom + 10;
-                
+
                 const headerContentHeight = Math.max(
                     42,
                     Math.min(48, Math.floor(layoutWidth * 0.122))
                 );
-                
+
                 this.headerHeight = statusBarHeight + headerContentHeight;
-                
+
                 this.conversationItemHeight = Math.max(
                     68,
                     Math.min(74, Math.floor(layoutWidth * 0.185))
                 );
-                
+
                 this.noticeRowHeight = Math.max(
                     84,
                     Math.min(94, Math.floor(layoutWidth * 0.238))
                 );
-                
+
                 this.avatarSize = Math.max(
                     46,
                     Math.min(50, Math.floor(this.conversationItemHeight * 0.68))
                 );
-                
+
                 this.noticeAvatarSize = Math.max(
                     44,
                     Math.min(50, Math.floor(this.noticeRowHeight * 0.535))
                 );
-                
+
                 this.actionButtonSize = Math.max(
                     34,
                     Math.min(38, Math.floor(headerContentHeight * 0.78))
                 );
-                
+
                 this.headerTitleFontSize = Math.max(
                     17,
                     Math.min(19, Math.floor(headerContentHeight * 0.4) + smallScreenBoost)
                 );
-                
+
                 this.actionIconFontSize = Math.max(
                     24,
                     Math.min(27, Math.floor(headerContentHeight * 0.56) + smallScreenBoost)
                 );
-                
+
                 this.conversationNameFontSize = Math.max(
                     16,
                     Math.min(18, Math.floor(this.conversationItemHeight * 0.238) + smallScreenBoost + tinyScreenBoost)
                 );
-                
+
                 this.lastMessageFontSize = Math.max(
                     13,
                     Math.min(14, Math.floor(this.conversationItemHeight * 0.18) + smallScreenBoost)
                 );
-                
+
                 this.conversationTimeFontSize = Math.max(
                     11,
                     Math.min(12, Math.floor(this.conversationItemHeight * 0.152) + smallScreenBoost)
                 );
-                
+
                 this.unreadBadgeFontSize = Math.max(
                     10,
                     Math.min(11, Math.floor(this.conversationItemHeight * 0.145) + smallScreenBoost)
                 );
-                
+
                 this.unreadBadgeHeight = Math.max(
                     17,
                     Math.min(19, Math.floor(this.conversationItemHeight * 0.245))
                 );
-                
+
                 this.unreadBadgeMinWidth = Math.max(
                     20,
                     Math.min(22, Math.floor(this.conversationItemHeight * 0.3))
                 );
-                
+
                 this.noticeNameFontSize = Math.max(
                     13,
                     Math.min(14, Math.floor(this.noticeRowHeight * 0.15) + smallScreenBoost)
                 );
-                
+
                 this.noticeIconFontSize = Math.max(
                     22,
                     Math.min(25, Math.floor(this.noticeAvatarSize * 0.5) + smallScreenBoost)
                 );
-                
+
                 this.systemIconFontSize = Math.max(
                     24,
                     Math.min(27, Math.floor(this.noticeAvatarSize * 0.54) + smallScreenBoost)
                 );
-                
+
                 this.conversationSideWidth = Math.max(
                     52,
                     Math.min(58, Math.floor(layoutWidth * 0.145))
@@ -742,6 +939,14 @@ export default {
                 console.error('loadMoreConversations failed', err);
             } finally {
                 this.conversationLoading = false;
+
+                if (this.conversationRefreshPending && !this.imInitFinishing) {
+                    this.conversationRefreshPending = false;
+
+                    this.$nextTick(() => {
+                        this.handleFinishImInit();
+                    });
+                }
             }
         },
 
@@ -832,16 +1037,16 @@ export default {
                     this.NOTICE_GROUP.FOLLOW,
                     this.NOTICE_GROUP.ACTION
                 ];
-        
+
                 const res = await getNoitceCounts({ groups });
                 const countMap = res?.notice_count || {};
-        
+
                 this.systemNoticeCount = Number(countMap?.[this.NOTICE_GROUP.SYSTEM] || 0);
                 this.followNoticeCount = Number(countMap?.[this.NOTICE_GROUP.FOLLOW] || 0);
                 this.actionNoticeCount = Number(countMap?.[this.NOTICE_GROUP.ACTION] || 0);
             } catch (err) {
                 console.error('loadNoticeCounts failed', err);
-        
+
                 this.systemNoticeCount = 0;
                 this.followNoticeCount = 0;
                 this.actionNoticeCount = 0;
@@ -849,22 +1054,29 @@ export default {
         },
 
         openNotice(group) {
+            if (this.imInitLoading) return;
+
             uni.navigateTo({
                 url: `/pages/im/notice?group=${group}`
             });
         },
 
         goToCreateConversationPage() {
+            if (this.imInitLoading) return;
+
             this.showDropdown = false;
             uni.navigateTo({ url: '/pages/im/create' });
         },
 
         goToAgentPage() {
+            if (this.imInitLoading) return;
+
             this.showDropdown = false;
             uni.navigateTo({ url: '/pages/agent/agent_list' });
         },
 
         openChat(conversation) {
+            if (this.imInitLoading) return;
             if (this.conversationTouch.moved) return;
 
             uni.navigateTo({
@@ -873,6 +1085,8 @@ export default {
         },
 
         onConversationTouchStart(e) {
+            if (this.imInitLoading) return;
+
             const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {};
             this.conversationTouch = {
                 startX: touch.clientX ?? touch.pageX ?? 0,
@@ -882,6 +1096,8 @@ export default {
         },
 
         onConversationTouchMove(e) {
+            if (this.imInitLoading) return;
+
             const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {};
             const x = touch.clientX ?? touch.pageX ?? 0;
             const y = touch.clientY ?? touch.pageY ?? 0;
@@ -905,34 +1121,32 @@ export default {
         },
 
         showDeleteConversationAction(e, conversation) {
+            if (this.imInitLoading) return;
             if (this.conversationTouch.moved) return;
             if (!conversation?.con_short_id || this.deletingConId) return;
-        
+
             const point = this.getLongPressPoint(e);
             const menuWidth = 68;
             const menuHeight = 36;
             const sys = uni.getSystemInfoSync();
-        
+
             const safeTop = this.headerHeight + 8;
             const safeBottom = Number(this.safeBottom || 0) + 12;
-        
-            // X 轴跟随手指，只做屏幕边界限制
+
             let left = point.x - menuWidth / 2;
             left = Math.max(8, Math.min(left, sys.windowWidth - menuWidth - 8));
-        
-            // Y 轴只向上偏移一点，避免被手指挡住，但不要离太远
+
             let top = point.y - menuHeight - 40;
-        
-            // 上方空间不够时，放到手指下方一点点
+
             if (top < safeTop) {
                 top = point.y + 40;
             }
-        
+
             top = Math.max(
                 safeTop,
                 Math.min(top, sys.windowHeight - safeBottom - menuHeight)
             );
-        
+
             this.conversationAction = {
                 visible: true,
                 left,
@@ -974,6 +1188,8 @@ export default {
         },
 
         confirmDeleteConversation(conversation) {
+            if (this.imInitLoading) return;
+
             const name = conversation?.name || '该会话';
 
             uni.showModal({
@@ -990,6 +1206,8 @@ export default {
         },
 
         async deleteConversation(conversation) {
+            if (this.imInitLoading) return;
+
             const conShortId = conversation?.con_short_id;
             const conId = conversation?.con_id;
             const lastMessageId = conversation?.last_message_id;
@@ -1060,7 +1278,7 @@ export default {
             if (diff < 0) return '刚刚';
             if (diff < 60) return '刚刚';
             if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+            if (diff < 86400) return Math.floor(diff / 86400) + '天前';
             if (diff < 604800) return Math.floor(diff / 86400) + '天前';
 
             const date = new Date(value * 1000);
@@ -1110,6 +1328,30 @@ export default {
     line-height: 1;
 }
 
+.header-title-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 100%;
+}
+
+.header-loading-spinner {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid rgba(143, 144, 152, 0.28);
+    border-top-color: #8f9098;
+    box-sizing: border-box;
+    animation: spin 0.8s linear infinite;
+}
+
+.header-loading-text {
+    color: #111;
+    font-weight: 400;
+    line-height: 1;
+}
+
 .header-actions {
     position: absolute;
     right: 10px;
@@ -1132,6 +1374,10 @@ export default {
 
 .action-btn:active {
     transform: scale(0.94);
+}
+
+.action-btn.disabled {
+    opacity: 0.36;
 }
 
 .action-icon {
@@ -1181,6 +1427,15 @@ export default {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
     }
 }
 

@@ -135,6 +135,7 @@ export default {
 			materialId: '',
 			materialType: 1,
 			materialUrl: '',
+			coverUrl: '',
 			promptText: '',
 
 			saving: false,
@@ -406,31 +407,29 @@ export default {
 
 		initParams(options) {
 			this.materialId = this.decodeValue(
-				options.id ||
 				options.material_id ||
-				options.materialId ||
 				''
 			)
 
 			this.materialType = Number(
 				this.decodeValue(
-					options.type ||
 					options.material_type ||
-					options.materialType ||
 					1
 				)
 			) || 1
 
 			this.materialUrl = this.decodeValue(
-				options.url ||
 				options.material_url ||
-				options.materialUrl ||
+				''
+			)
+			
+			this.coverUrl = this.decodeValue(
+				options.cover_url ||
 				''
 			)
 
 			this.promptText = this.decodeValue(
 				options.prompt ||
-				options.promptText ||
 				''
 			)
 		},
@@ -462,6 +461,7 @@ export default {
 			const materialId = encodeURIComponent(this.materialId)
 			const materialType = encodeURIComponent(String(this.materialType))
 			const materialUrl = encodeURIComponent(this.materialUrl)
+			const coverUrl = encodeURIComponent(this.coverUrl)
 			const prompt = encodeURIComponent(this.promptText || '')
 
 			uni.navigateTo({
@@ -469,6 +469,7 @@ export default {
 					`/pages/workspace/publish?material_id=${materialId}` +
 					`&material_type=${materialType}` +
 					`&material_url=${materialUrl}` +
+					`&cover_url=${coverUrl}` +
 					`&prompt=${prompt}`
 			})
 		},

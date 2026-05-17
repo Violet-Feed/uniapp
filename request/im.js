@@ -9,6 +9,19 @@ import {
 } from "@/utils/im-cache.js";
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 
+export const getMessageByInit = async () => {
+	getApp().globalData.imInitStatus = true;
+	uni.$emit('app', {module:"im",type:"beginInit"});
+	if (getApp().globalData.userCmdIndex == '') {
+		await getInitInfo();
+	} else {
+		await getCommandByUser();
+	}
+	await getMessageByUser();
+	uni.$emit('app', {module:"im",type:"finishInit"});
+	getApp().globalData.imInitStatus = false;
+};
+
 export const getInitInfo = async () => {
 	const { userId } = getApp().globalData;
 	const res = await httpRequestBackData("/im/get_init_info", {});
@@ -141,7 +154,7 @@ export const getCommandByUser = async () => {
   let hasMore = true;
   while (hasMore) {
     hasMore = false;
-    const userCmdIndex = getApp().globalData.userCmdIndex;
+    const userCmdIndex = Number(getApp().globalData.userCmdIndex || 0);
     const res = await httpRequestBackData("/im/get_command_by_user", {
       user_cmd_index: userCmdIndex + 1,
       limit: PAGE_LIMIT

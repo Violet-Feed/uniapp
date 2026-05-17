@@ -201,7 +201,7 @@ const openAppNotificationSetting = () => {
 const ensureNotificationAuthorized = ({ forcePrompt = false } = {}) => {
 	// #ifdef APP-PLUS
 	const status = getNotificationAuthorized()
-
+	console.log("push auth:", status)
 	if (status !== 'denied') {
 		return true
 	}

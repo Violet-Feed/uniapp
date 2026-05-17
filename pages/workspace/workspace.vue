@@ -1315,6 +1315,7 @@ export default {
       const materialId = material.material_id || ''
       const materialType = material.material_type || 1
       const materialUrl = material.material_url || material.cover_url || ''
+      const coverUrl = material.cover_url || ''
       const prompt = material.prompt || material.displayTitle || ''
 
       if (status === 1 || uiStatus === 'generating') {
@@ -1351,9 +1352,10 @@ export default {
 
       uni.navigateTo({
         url:
-          `/pages/workspace/material_detail?id=${encodeURIComponent(materialId)}` +
-          `&type=${encodeURIComponent(materialType)}` +
-          `&url=${encodeURIComponent(materialUrl)}` +
+          `/pages/workspace/material_detail?material_id=${encodeURIComponent(materialId)}` +
+          `&material_type=${encodeURIComponent(materialType)}` +
+          `&material_url=${encodeURIComponent(materialUrl)}` +
+          `&cover_url=${encodeURIComponent(coverUrl)}` +
           `&prompt=${encodeURIComponent(prompt)}`
       })
     }

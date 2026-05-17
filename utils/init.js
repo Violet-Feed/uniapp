@@ -2,11 +2,6 @@ import JSONbig from 'json-bigint';
 import DB from '@/utils/sqlite.js';
 import Socket from '@/utils/socket.js';
 import {
-	getMessageByUser,
-	getCommandByUser,
-	getInitInfo
-} from '@/request/im.js';
-import {
 	getUserProfile
 } from '@/request/user.js';
 import { enqueueEntityAvatars } from '@/utils/im-cache';
@@ -117,14 +112,6 @@ export const init = async () => {
 		const socket = new Socket();
 		app.globalData.socket = socket;
 		socket.start();
-
-		if (app.globalData.userCmdIndex == '') {
-			await getInitInfo();
-		} else {
-			await getCommandByUser();
-		}
-
-		await getMessageByUser();
 
 		return true;
 	} catch (err) {

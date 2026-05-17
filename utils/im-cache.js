@@ -510,6 +510,7 @@ const profileRefreshQueue = createQueue({
 
       if (upserts.length > 0) {
         await DB.upsertUsers(upserts);
+		uni.$emit('app', {module:"im",type:"userRefresh",data:upserts});
       }
       if (needAvatarIds.length > 0) {
         enqueueEntityAvatars("user", needAvatarIds);
@@ -578,6 +579,7 @@ const profileRefreshQueue = createQueue({
 
       if (upserts.length > 0) {
         await DB.upsertAgents(upserts);
+		uni.$emit('app', {module:"im",type:"agentRefresh",data:upserts});
       }
       if (needAvatarIds.length > 0) {
         enqueueEntityAvatars("agent", needAvatarIds);

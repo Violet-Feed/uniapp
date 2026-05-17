@@ -8,6 +8,7 @@ import {
 	decodeNoticePacket
 } from '@/proto_gen/packet.js'
 import {
+	getMessageByInit,
 	getConversationInfo,
 	transformContent,
 	handleCommandMessage
@@ -30,8 +31,8 @@ const DEFAULT_HOST = '8.130.134.60'
 const DEFAULT_PORT = 3001
 const HEAD_LENGTH = 5
 const HEARTBEAT_INTERVAL = 5000
-const HEARTBEAT_TIMEOUT = 20000
-const RECONNECT_DELAY = 1000
+const HEARTBEAT_TIMEOUT = 11000
+const RECONNECT_DELAY = 500
 
 class Socket {
 	socket = null
@@ -62,12 +63,14 @@ class Socket {
 		}
 	}
 
-	start() {
+	start = async () => {
 		if (this.started || this.connecting) return
 
 		this.started = true
 		this.connecting = true
 		this.userId = getApp().globalData.userId
+
+		await getMessageByInit()
 
 		if (this.platform === 'android') {
 			this.startAndroid()
@@ -98,7 +101,7 @@ class Socket {
 				StrictMode.setThreadPolicy(policy)
 			}
 
-			console.log('Android TCP 连接服务器中...', this.host, this.port)
+			console.log('Android TCP 连接服务器中...')
 
 			this.socket = new JavaSocket(this.host, this.port)
 			this.socket.setSoTimeout(1000)
@@ -122,7 +125,7 @@ class Socket {
 	startIOS() {
 		// #ifdef APP-IOS
 		try {
-			console.log('iOS TCP 连接服务器中...', this.host, this.port)
+			console.log('iOS TCP 连接服务器中...')
 
 			startTcp({
 				host: this.host,
@@ -281,7 +284,7 @@ class Socket {
 
 	reconnect() {
 		if (this.reconnectTimer) return
-
+		console.log("TCP 重连")
 		this.close()
 
 		this.reconnectTimer = setTimeout(() => {

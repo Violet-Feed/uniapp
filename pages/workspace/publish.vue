@@ -1,6 +1,6 @@
 <template>
 	<view class="publish-page">
-		<view class="nav-bar" :style="navBarStyle">
+		<view v-if="!coverCropper.visible" class="nav-bar" :style="navBarStyle">
 			<view class="nav-content" :style="navContentStyle">
 				<view class="nav-left" @click.stop="goBack">
 					<text class="iconfont icon-fanhui back-icon" :style="backIconStyle"></text>
@@ -15,7 +15,7 @@
 		</view>
 
 		<view class="content" :style="contentStyle">
-			<view class="media-section" :style="mediaSectionStyle">
+			<view v-if="!coverCropper.visible" class="media-section" :style="mediaSectionStyle">
 				<video
 					v-if="isVideo && materialUrl && !videoHiddenForScroll"
 					class="material-video"
@@ -55,6 +55,40 @@
 				<view v-else class="media-empty" :style="mediaInnerStyle">
 					<text class="iconfont icon-neirongchuangzuo media-empty-icon"></text>
 					<text class="media-empty-text">素材不存在</text>
+				</view>
+			</view>
+
+			<view class="cover-card" :style="coverCardStyle">
+				<view class="cover-header">
+					<view class="section-title-wrap">
+						<view class="section-dot"></view>
+						<text class="section-title" :style="sectionTitleStyle">封面预览</text>
+					</view>
+				</view>
+
+				<view
+					class="cover-preview"
+					:style="coverPreviewStyle"
+					@click="openCoverSourcePopup"
+				>
+					<image
+						v-if="coverUrl"
+						class="cover-image"
+						:src="coverUrl"
+						mode="aspectFill"
+						@error="onCoverError"
+					></image>
+
+					<view v-else class="cover-empty">
+						<text class="iconfont icon-neirongchuangzuo cover-empty-icon"></text>
+						<text class="cover-empty-text">暂无封面</text>
+					</view>
+
+					<view class="cover-mask">
+						<text class="cover-mask-text">
+							{{ uploadingCover ? '封面上传中' : '点击修改封面' }}
+						</text>
+					</view>
 				</view>
 			</view>
 
@@ -136,11 +170,13 @@
 		<view class="bottom-bar" :style="bottomBarStyle">
 			<button
 				class="submit-btn"
-				:class="{ disabled: !canPublish }"
+				:class="{ disabled: !canPublish || uploadingCover }"
 				:style="submitBtnStyle"
 				@click="handlePublish"
 			>
-				<text class="submit-btn-text" :style="submitTextStyle">发布</text>
+				<text class="submit-btn-text" :style="submitTextStyle">
+					{{ uploadingCover ? '封面上传中' : '发布' }}
+				</text>
 			</button>
 		</view>
 
@@ -156,11 +192,40 @@
 				@click.stop="closePreview"
 			></image>
 		</view>
+
+		<avatar-cropper
+			:visible="coverCropper.visible"
+			:src="coverCropper.src"
+			title="裁剪封面"
+			mask-shape="rect"
+			@close="closeCoverCropper"
+			@confirm="onCoverCropped"
+		/>
+
+		<view
+			class="cover-source-mask"
+			v-if="coverSourceVisible"
+			@click="closeCoverSourcePopup"
+		>
+			<view class="cover-source-panel" @click.stop>
+				<view class="cover-source-item" @click="chooseCoverForCrop('camera')">拍照</view>
+				<view class="cover-source-item" @click="chooseCoverForCrop('album')">从相册选择</view>
+				<view
+					class="cover-source-item"
+					:class="{ disabled: !coverUrl }"
+					@click="cropOriginalCover"
+				>
+					裁剪原封面
+				</view>
+			</view>
+		</view>
 	</view>
 </template>
 
 <script>
 import { createCreation } from '@/request/creation.js'
+import { uploadImage } from '@/request/common.js'
+import AvatarCropper from '@/components/avatar-cropper.vue'
 
 const PAGE_BG = '#f5f5f7'
 const THEME_YELLOW = 'rgba(253, 231, 209, 1)'
@@ -171,11 +236,16 @@ const clamp = (value, min, max) => {
 }
 
 export default {
+	components: {
+		AvatarCropper
+	},
+
 	data() {
 		return {
 			materialId: '',
 			materialType: 1,
 			materialUrl: '',
+			coverUrl: '',
 
 			title: '',
 			content: '',
@@ -195,6 +265,13 @@ export default {
 				url: ''
 			},
 
+			coverCropper: {
+				visible: false,
+				src: ''
+			},
+			coverSourceVisible: false,
+			uploadingCover: false,
+
 			windowWidth: 375,
 			windowHeight: 667,
 			statusBarHeight: 0,
@@ -208,6 +285,7 @@ export default {
 			pagePaddingX: 14,
 
 			mediaHeight: 330,
+			coverHeight: 200,
 
 			cardRadius: 16,
 			cardPaddingX: 14,
@@ -287,6 +365,21 @@ export default {
 			)
 		},
 
+		coverCardStyle() {
+			return (
+				'border-radius:' + this.cardRadius + 'px;' +
+				'padding:' + this.cardPaddingY + 'px ' + this.cardPaddingX + 'px;' +
+				'margin:' + this.cardGap + 'px ' + this.pagePaddingX + 'px 0;'
+			)
+		},
+
+		coverPreviewStyle() {
+			return (
+				'height:' + this.coverHeight + 'px;' +
+				'border-radius:' + Math.floor(this.cardRadius * 0.86) + 'px;'
+			)
+		},
+
 		formCardStyle() {
 			return (
 				'border-radius:' + this.cardRadius + 'px;' +
@@ -354,6 +447,20 @@ export default {
 		this.initResponsiveLayout()
 	},
 
+	onBackPress() {
+		if (this.coverCropper.visible) {
+			this.closeCoverCropper()
+			return true
+		}
+
+		if (this.coverSourceVisible) {
+			this.closeCoverSourcePopup()
+			return true
+		}
+
+		return false
+	},
+
 	onPageScroll(e) {
 		if (!this.isVideo) return
 
@@ -388,17 +495,18 @@ export default {
 				this.pagePaddingBottom = clamp(Math.floor(windowWidth * 0.052), 18, 28)
 				this.pagePaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
 
+				this.cardRadius = clamp(Math.floor(windowWidth * 0.042), 14, 18)
+				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.cardPaddingY = clamp(Math.floor(windowWidth * 0.038), 12, 18)
+				this.cardGap = clamp(Math.floor(windowWidth * 0.034), 10, 14)
+
 				const availableHeight = windowHeight - this.navHeight - safeBottom
 				this.mediaHeight = clamp(
 					Math.floor(Math.min(windowWidth * 1.04, availableHeight * 0.42)),
 					250,
 					420
 				)
-
-				this.cardRadius = clamp(Math.floor(windowWidth * 0.042), 14, 18)
-				this.cardPaddingX = clamp(Math.floor(windowWidth * 0.038), 12, 18)
-				this.cardPaddingY = clamp(Math.floor(windowWidth * 0.038), 12, 18)
-				this.cardGap = clamp(Math.floor(windowWidth * 0.034), 10, 14)
+				this.coverHeight = windowWidth - this.pagePaddingX * 2 - this.cardPaddingX * 2
 
 				this.inputHeight = clamp(Math.floor(windowWidth * 0.112), 40, 46)
 				this.textareaHeight = clamp(Math.floor(windowHeight * 0.17), 106, 138)
@@ -425,13 +533,14 @@ export default {
 				this.pagePaddingTop = 10
 				this.pagePaddingBottom = 24
 				this.pagePaddingX = 14
-
-				this.mediaHeight = 330
-
+				
 				this.cardRadius = 16
 				this.cardPaddingX = 14
 				this.cardPaddingY = 14
 				this.cardGap = 12
+
+				this.mediaHeight = 330
+				this.coverHeight = this.windowWidth - this.pagePaddingX * 2 - this.cardPaddingX * 2
 
 				this.inputHeight = 42
 				this.textareaHeight = 116
@@ -453,6 +562,7 @@ export default {
 			this.materialId = this.decodeValue(options.material_id || options.materialId || '')
 			this.materialType = Number(this.decodeValue(options.material_type || options.materialType || 1)) || 1
 			this.materialUrl = this.decodeValue(options.material_url || options.materialUrl || '')
+			this.coverUrl = this.decodeValue(options.cover_url || options.coverUrl || '')
 		},
 
 		decodeValue(value) {
@@ -467,6 +577,16 @@ export default {
 		},
 
 		goBack() {
+			if (this.coverCropper.visible) {
+				this.closeCoverCropper()
+				return
+			}
+
+			if (this.coverSourceVisible) {
+				this.closeCoverSourcePopup()
+				return
+			}
+
 			uni.navigateBack()
 		},
 
@@ -503,7 +623,149 @@ export default {
 			this.selectedCategoryIndex = Number(e.detail.value)
 		},
 
+		openCoverSourcePopup() {
+			if (this.uploadingCover) return
+			this.coverSourceVisible = true
+		},
+
+		closeCoverSourcePopup() {
+			this.coverSourceVisible = false
+		},
+
+		chooseCoverForCrop(sourceType) {
+			if (this.uploadingCover) return
+
+			this.closeCoverSourcePopup()
+
+			uni.chooseImage({
+				count: 1,
+				sizeType: ['compressed'],
+				sourceType: [sourceType],
+				success: (res) => {
+					const filePath = res?.tempFilePaths?.[0]
+					if (!filePath) return
+					this.openCoverCropper(filePath)
+				},
+				fail: () => {}
+			})
+		},
+
+		cropOriginalCover() {
+			if (this.uploadingCover) return
+
+			this.closeCoverSourcePopup()
+
+			if (!this.coverUrl) {
+				uni.showToast({
+					title: '暂无原封面',
+					icon: 'none'
+				})
+				return
+			}
+
+			if (/^https?:\/\//i.test(this.coverUrl)) {
+				uni.downloadFile({
+					url: this.coverUrl,
+					success: (res) => {
+						if (res.statusCode === 200 && res.tempFilePath) {
+							this.openCoverCropper(res.tempFilePath)
+							return
+						}
+
+						this.openCoverCropper(this.coverUrl)
+					},
+					fail: () => {
+						this.openCoverCropper(this.coverUrl)
+					}
+				})
+				return
+			}
+
+			this.openCoverCropper(this.coverUrl)
+		},
+
+		openCoverCropper(src) {
+			if (!src) return
+
+			this.coverCropper = {
+				visible: true,
+				src
+			}
+		},
+
+		closeCoverCropper() {
+			this.coverCropper = {
+				visible: false,
+				src: ''
+			}
+		},
+
+		async onCoverCropped(filePath) {
+			this.closeCoverCropper()
+			await this.uploadCover(filePath)
+		},
+
+		async uploadCover(filePath) {
+			if (!filePath || this.uploadingCover) return
+
+			this.uploadingCover = true
+
+			try {
+				const uploadRes = await uploadImage(filePath, 'creation_cover')
+				const coverUrl = this.parseImageUrl(uploadRes)
+
+				if (!coverUrl) {
+					uni.showToast({
+						title: '封面上传失败',
+						icon: 'none'
+					})
+					return
+				}
+
+				this.coverUrl = coverUrl
+			} catch (err) {
+				console.error('封面上传失败：', err)
+				uni.showToast({
+					title: '封面上传失败',
+					icon: 'none'
+				})
+			} finally {
+				this.uploadingCover = false
+			}
+		},
+
+		parseImageUrl(uploadRes) {
+			if (!uploadRes) return ''
+			if (typeof uploadRes === 'string') return uploadRes
+
+			if (typeof uploadRes === 'object') {
+				return (
+					uploadRes.source_url ||
+					uploadRes.sourceUrl ||
+					uploadRes.cover_url ||
+					uploadRes.coverUrl ||
+					uploadRes.url ||
+					uploadRes?.data?.source_url ||
+					uploadRes?.data?.sourceUrl ||
+					uploadRes?.data?.cover_url ||
+					uploadRes?.data?.coverUrl ||
+					uploadRes?.data?.url ||
+					''
+				)
+			}
+
+			return ''
+		},
+
 		async handlePublish() {
+			if (this.uploadingCover) {
+				uni.showToast({
+					title: '封面上传中',
+					icon: 'none'
+				})
+				return
+			}
+
 			if (!this.canPublish) {
 				uni.showToast({
 					title: '请填写标题并选择标签',
@@ -514,6 +776,7 @@ export default {
 
 			const payload = {
 				material_id: this.materialId,
+				cover_url: this.coverUrl,
 				title: this.title.trim(),
 				content: this.content.trim(),
 				category: this.selectedCategory ? this.selectedCategory.value : ''
@@ -536,6 +799,13 @@ export default {
 		onMediaError() {
 			uni.showToast({
 				title: '素材加载失败',
+				icon: 'none'
+			})
+		},
+
+		onCoverError() {
+			uni.showToast({
+				title: '封面加载失败',
 				icon: 'none'
 			})
 		},
@@ -717,10 +987,79 @@ export default {
 	font-weight: 400;
 }
 
+.cover-card,
 .form-card {
 	background: #ffffff;
 	box-shadow: 0 6rpx 24rpx rgba(31, 35, 41, 0.04);
 	box-sizing: border-box;
+}
+
+.cover-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+
+.cover-preview {
+	position: relative;
+	width: 100%;
+	overflow: hidden;
+	background: #fafafa;
+	box-sizing: border-box;
+}
+
+.cover-image {
+	width: 100%;
+	height: 100%;
+	display: block;
+	background: #f0f1f3;
+}
+
+.cover-empty {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	background: #fafafa;
+	box-sizing: border-box;
+}
+
+.cover-empty-icon {
+	font-size: 42px;
+	color: rgba(253, 190, 120, 1);
+	line-height: 1;
+	font-weight: 400;
+}
+
+.cover-empty-text {
+	margin-top: 8px;
+	color: #999999;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.cover-mask {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 34px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.36);
+	box-sizing: border-box;
+}
+
+.cover-mask-text {
+	color: #ffffff;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1;
 }
 
 .section {
@@ -866,5 +1205,52 @@ export default {
 .image-preview-img {
 	width: 100%;
 	height: 100%;
+}
+
+.cover-source-mask {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 12000;
+	background: rgba(0, 0, 0, 0.36);
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	box-sizing: border-box;
+}
+
+.cover-source-panel {
+	width: 100%;
+	padding: 16rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+	box-sizing: border-box;
+}
+
+.cover-source-item {
+	height: 96rpx;
+	line-height: 96rpx;
+	text-align: center;
+	background: #ffffff;
+	color: #222222;
+	font-size: 30rpx;
+	font-weight: 400;
+	box-sizing: border-box;
+}
+
+.cover-source-item:first-child {
+	border-radius: 28rpx 28rpx 0 0;
+}
+
+.cover-source-item + .cover-source-item {
+	border-top: 1px solid #f1f1f1;
+}
+
+.cover-source-item:last-child {
+	border-radius: 0 0 28rpx 28rpx;
+}
+
+.cover-source-item.disabled {
+	color: #b8b8b8;
 }
 </style>
