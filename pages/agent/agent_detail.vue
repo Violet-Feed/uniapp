@@ -404,7 +404,17 @@ export default {
 					owner_id: remoteAgent.owner_id || 0n,
 					modify_time: Date.now()
 				});
-
+				if (avatarChanged || oldAgent.agent_name != (remoteAgent.agent_name || 'AI')){
+					uni.$emit('app', {module:"im",type:"agentRefresh",data:[{
+						agent_id: this.agentId,
+						agent_name: remoteAgent.agent_name || 'AI',
+						avatar_uri: avatarUri,
+						local_avatar_uri: localAvatarUri,
+						description: remoteAgent.description || '',
+						owner_id: remoteAgent.owner_id || 0n,
+						modify_time: Date.now()
+					}]});
+				}
 				if (!avatarUri.startsWith('/static/') && (avatarChanged || !oldLocalAvatarUri)) {
 					enqueueEntityAvatars('agent', [this.agentId]);
 				}

@@ -13,7 +13,6 @@
                 <view class="header-actions">
                     <view
                         class="action-btn"
-                        :class="{ disabled: imInitLoading }"
                         :style="actionButtonStyle"
                         @click="toggleDropdown"
                     >
@@ -111,17 +110,11 @@
                         ></image>
                     </view>
 
-                    <view class="conversation-content">
-                        <view class="conversation-main">
+                    <view class="conversation-body">
+                        <view class="name-row">
                             <text class="conversation-name" :style="conversationNameDynamicStyle">
                                 {{ conversation.name }}
                             </text>
-                            <text class="last-message" :style="lastMessageDynamicStyle">
-                                {{ conversation.last_message || '' }}
-                            </text>
-                        </view>
-
-                        <view class="conversation-side" :style="conversationSideStyle">
                             <text
                                 class="conversation-time"
                                 :style="conversationTimeDynamicStyle"
@@ -129,7 +122,12 @@
                             >
                                 {{ formatTime(conversation.last_message_time) }}
                             </text>
+                        </view>
 
+                        <view class="message-row">
+                            <text class="last-message" :style="lastMessageDynamicStyle">
+                                {{ conversation.last_message || '' }}
+                            </text>
                             <view
                                 class="side-unread-badge"
                                 :style="unreadBadgeDynamicStyle"
@@ -207,6 +205,8 @@ export default {
 
             imInitLoading: false,
             imInitFinishing: false,
+			homeEventQueue: [],
+			homeEventProcessing: false,
 
             windowHeight: 667,
             windowWidth: 375,
@@ -371,132 +371,21 @@ export default {
         this.loadNoticeCounts();
 
         this.normalListener = (data) => {
-            if (this.imInitLoading) return;
             if (!data || !data.msg_body) return;
-
-            this.userConIndex = data.user_con_index;
-
-            const msgBody = data.msg_body;
-            const lastMessageType = Number(msgBody.msg_type ?? msgBody.msgType ?? 0);
-            const lastMessageRaw = msgBody.msg_content || '';
-
-            let index = -1;
-
-            for (let i = 0; i < this.conversationList.length; i++) {
-                if (this.conversationList[i].con_id == msgBody.con_id) {
-                    this.conversationList[i].badge_count = Number(data.badge_count);
-                    this.conversationList[i].user_con_index = data.user_con_index;
-                    this.conversationList[i].last_message_id = msgBody.msg_id;
-                    this.conversationList[i].last_message_type = lastMessageType;
-                    this.conversationList[i].last_message = this.buildLastMessagePreview(lastMessageRaw, lastMessageType);
-                    this.conversationList[i].last_message_time = msgBody.create_time;
-
-                    index = i;
-                    break;
-                }
-            }
-
-            if (index !== -1) {
-                const conversation = this.conversationList.splice(index, 1)[0];
-                this.conversationList.unshift(conversation);
-            } else {
-                DB.getConversationById(msgBody.con_id).then((res) => {
-                    if (this.imInitLoading) return;
-
-                    if (res) {
-                        const conversation = this.normalizeConversationPreview(res);
-                        this.conversationList.unshift(conversation);
-                        this.refreshPrivateProfilesInPage([conversation]);
-                    }
-                });
-            }
+            this.enqueueHomeEvent('normal', data);
         };
 
         uni.$on('normal', this.normalListener);
 
         this.commandListener = async (data) => {
-            if (this.imInitLoading) return;
             if (!data || !data.msg_body) return;
-
-            for (let i = 0; i < this.conversationList.length; i++) {
-                if (this.conversationList[i].con_id == data.msg_body.con_id) {
-                    const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
-
-                    if (data.msg_body.msg_type == 100) {
-                        if (cmdMessage.type == 3) {
-                            this.conversationList[i].name = cmdMessage.content || '群聊';
-                        } else if (cmdMessage.type == 4) {
-                            this.conversationList[i].avatar_uri = cmdMessage.content || '/static/conv_avatar.png';
-                        }
-                    } else if (data.msg_body.msg_type == 101) {
-                        this.conversationList[i].read_index_end = cmdMessage.read_index_end;
-                        this.conversationList[i].read_badge_count = cmdMessage.read_badge_count;
-                    } else if (data.msg_body.msg_type == 102) {
-                        const msgId = cmdMessage.msg_id;
-
-                        if (String(msgId) == String(this.conversationList[i].last_message_id)) {
-                            const extraMap = JSONbig.parse(cmdMessage.extra || '{}');
-                            const isRecall = extraMap.is_recall === true;
-
-                            if (isRecall) {
-                                let nickname = '用户';
-                                const selfUserId = getApp().globalData.userId;
-
-                                if (String(data.msg_body.sender_id) === String(selfUserId)) {
-                                    nickname = '你';
-                                } else {
-                                    const members = await getMemberInfosBySendersEnsure(
-                                        data.msg_body.con_id,
-                                        data.msg_body.con_short_id,
-                                        [
-                                            {
-                                                sender_type: 1,
-                                                sender_id: data.msg_body.sender_id
-                                            }
-                                        ]
-                                    );
-
-                                    const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
-                                    nickname = member?.nick_name || '用户';
-                                }
-
-                                this.conversationList[i].last_message_type = 0;
-                                this.conversationList[i].last_message = `${nickname}撤回了一条消息`;
-                            }
-                        }
-                    }
-
-                    break;
-                }
-            }
+            this.enqueueHomeEvent('command', data);
         };
 
         uni.$on('command', this.commandListener);
 
         this.noticeListener = (data) => {
-            if (this.imInitLoading) return;
-
-            const g = data && typeof data.group === 'number' ? data.group : 0;
-            const op = data && typeof data.op_type === 'number' ? data.op_type : 0;
-
-            const isSystem = g === this.NOTICE_GROUP.SYSTEM;
-            const isFollow = g === this.NOTICE_GROUP.FOLLOW;
-            const isAction = g === this.NOTICE_GROUP.ACTION;
-
-            if (!isSystem && !isFollow && !isAction) return;
-
-            if (op === 1) {
-                if (isSystem) this.systemNoticeCount = Number(this.systemNoticeCount || 0) + 1;
-                if (isFollow) this.followNoticeCount = Number(this.followNoticeCount || 0) + 1;
-                if (isAction) this.actionNoticeCount = Number(this.actionNoticeCount || 0) + 1;
-                return;
-            }
-
-            if (op === 2) {
-                if (isSystem) this.systemNoticeCount = 0;
-                if (isFollow) this.followNoticeCount = 0;
-                if (isAction) this.actionNoticeCount = 0;
-            }
+            this.enqueueHomeEvent('notice', data);
         };
 
         uni.$on('notice', this.noticeListener);
@@ -515,17 +404,15 @@ export default {
             }
         
             if (data.type === 'userRefresh') {
-                this.handleUserProfileRefresh(data.data || []);
+                this.enqueueHomeEvent('userRefresh', data.data || []);
                 return;
             }
         
             if (data.type === 'agentRefresh') {
-                this.handleAgentProfileRefresh(data.data || []);
+                this.enqueueHomeEvent('agentRefresh', data.data || []);
             }
         };
         
-        uni.$on('app', this.appListener);
-
         uni.$on('app', this.appListener);
     },
 
@@ -566,72 +453,203 @@ export default {
     },
 
     methods: {
-        closeAppSplash() {
-            // #ifdef APP-PLUS
-            setTimeout(() => {
-                try {
-                    plus.navigator.closeSplashscreen();
-                } catch (err) {}
-            }, 80);
-            // #endif
-        },
-
         handleBeginImInit() {
-            getApp().globalData.imInitStatus = true;
-
             this.imInitLoading = true;
             this.imInitFinishing = false;
             this.conversationRefreshPending = false;
-
-            this.showDropdown = false;
-            this.hideConversationAction();
         },
 
-        async handleFinishImInit() {
-            if (this.imInitFinishing) {
-                this.conversationRefreshPending = true;
-                return;
-            }
-
-            getApp().globalData.imInitStatus = true;
-
-            this.imInitLoading = true;
-            this.showDropdown = false;
-            this.hideConversationAction();
-
-            if (this.conversationLoading) {
-                this.conversationRefreshPending = true;
-                return;
-            }
-
-            this.imInitFinishing = true;
-
-            try {
-                this.userConIndex = Number(getApp().globalData.userConIndex || 0);
-                this.conversationHasMore = true;
-                this.conversationLoadArmed = true;
-
-                await this.loadMoreConversations(true);
-                await this.loadNoticeCounts();
-            } catch (err) {
-                console.error('handleFinishImInit failed', err);
-            } finally {
-                this.imInitFinishing = false;
-
-                if (this.conversationRefreshPending) {
-                    this.conversationRefreshPending = false;
-
-                    this.$nextTick(() => {
-                        this.handleFinishImInit();
-                    });
-
-                    return;
-                }
-
-                getApp().globalData.imInitStatus = false;
-                this.imInitLoading = false;
-            }
-        },
+		async handleFinishImInit() {
+			if (this.imInitFinishing) return;
+		
+			this.imInitLoading = true;
+			this.imInitFinishing = true;
+		
+			try {
+				while (this.conversationLoading) {
+					await new Promise(resolve => setTimeout(resolve, 100));
+				}
+		
+				this.userConIndex = Number(getApp().globalData.userConIndex || 0);
+				this.conversationHasMore = true;
+				this.conversationLoadArmed = true;
+		
+				await this.loadMoreConversations(true);
+				await this.loadNoticeCounts();
+			} catch (err) {
+				console.error('handleFinishImInit failed', err);
+			} finally {
+				this.imInitFinishing = false;
+				this.imInitLoading = false;
+			}
+			await this.drainHomeEventQueue();
+		},
+		
+		enqueueHomeEvent(type, data) {
+		    this.homeEventQueue.push({
+		        type,
+		        data
+		    });
+		
+		    this.drainHomeEventQueue();
+		},
+		
+		async drainHomeEventQueue() {
+		    if (this.homeEventProcessing) return;
+		    if (this.imInitLoading || this.imInitFinishing) return;
+		
+		    this.homeEventProcessing = true;
+		    try {
+		        while (this.homeEventQueue.length > 0) {
+		            if (this.imInitLoading || this.imInitFinishing) break;
+		
+		            const event = this.homeEventQueue.shift();
+		            if (!event) return;
+		            if (event.type === 'normal') {
+		                await this.handleHomeNormalEvent(event.data);
+		                return;
+		            }
+		            if (event.type === 'command') {
+		                await this.handleHomeCommandEvent(event.data);
+		                return;
+		            }
+		            if (event.type === 'notice') {
+		                this.handleHomeNoticeEvent(event.data);
+		                return;
+		            }
+		            if (event.type === 'userRefresh') {
+		                this.handleUserProfileRefresh(event.data || []);
+		                return;
+		            }
+		            if (event.type === 'agentRefresh') {
+		                this.handleAgentProfileRefresh(event.data || []);
+		            }
+		        }
+		    } catch (err) {
+		        console.error('drainHomeEventQueue failed', err);
+		    } finally {
+		        this.homeEventProcessing = false;
+		    }
+		},
+		
+		async handleHomeNormalEvent(data) {
+		    if (!data || !data.msg_body) return;
+		
+		    this.userConIndex = data.user_con_index;
+		
+		    const msgBody = data.msg_body;
+		    const lastMessageType = Number(msgBody.msg_type ?? msgBody.msgType ?? 0);
+		    const lastMessageRaw = msgBody.msg_content || '';
+		
+		    let index = -1;
+		
+		    for (let i = 0; i < this.conversationList.length; i++) {
+		        if (this.conversationList[i].con_id == msgBody.con_id) {
+		            this.conversationList[i].badge_count = Number(data.badge_count);
+		            this.conversationList[i].user_con_index = data.user_con_index;
+		            this.conversationList[i].last_message_id = msgBody.msg_id;
+		            this.conversationList[i].last_message_type = lastMessageType;
+		            this.conversationList[i].last_message = this.buildLastMessagePreview(lastMessageRaw, lastMessageType);
+		            this.conversationList[i].last_message_time = msgBody.create_time;
+		
+		            index = i;
+		            break;
+		        }
+		    }
+		
+		    if (index !== -1) {
+		        const conversation = this.conversationList.splice(index, 1)[0];
+		        this.conversationList.unshift(conversation);
+		        return;
+		    }
+		
+		    const res = await DB.getConversationById(msgBody.con_id);
+		
+		    if (res) {
+		        const conversation = this.normalizeConversationPreview(res);
+		        this.conversationList.unshift(conversation);
+		    }
+		},
+		
+		async handleHomeCommandEvent(data) {
+		    if (!data || !data.msg_body) return;
+		
+		    for (let i = 0; i < this.conversationList.length; i++) {
+		        if (this.conversationList[i].con_id == data.msg_body.con_id) {
+		            const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
+		
+		            if (data.msg_body.msg_type == 100) {
+		                if (cmdMessage.type == 3) {
+		                    this.conversationList[i].name = cmdMessage.content || '群聊';
+		                } else if (cmdMessage.type == 4) {
+		                    this.conversationList[i].avatar_uri = cmdMessage.content || '/static/conv_avatar.png';
+		                }
+		            } else if (data.msg_body.msg_type == 101) {
+		                this.conversationList[i].read_index_end = cmdMessage.read_index_end;
+		                this.conversationList[i].read_badge_count = cmdMessage.read_badge_count;
+		            } else if (data.msg_body.msg_type == 102) {
+		                const msgId = cmdMessage.msg_id;
+		
+		                if (String(msgId) == String(this.conversationList[i].last_message_id)) {
+		                    const extraMap = JSONbig.parse(cmdMessage.extra || '{}');
+		                    const isRecall = extraMap.is_recall === true;
+		
+		                    if (isRecall) {
+		                        let nickname = '用户';
+		                        const selfUserId = getApp().globalData.userId;
+		
+		                        if (String(data.msg_body.sender_id) === String(selfUserId)) {
+		                            nickname = '你';
+		                        } else {
+		                            const members = await getMemberInfosBySendersEnsure(
+		                                data.msg_body.con_id,
+		                                data.msg_body.con_short_id,
+		                                [
+		                                    {
+		                                        sender_type: 1,
+		                                        sender_id: data.msg_body.sender_id
+		                                    }
+		                                ]
+		                            );
+		
+		                            const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
+		                            nickname = member?.nick_name || '用户';
+		                        }
+		
+		                        this.conversationList[i].last_message_type = 0;
+		                        this.conversationList[i].last_message = `${nickname}撤回了一条消息`;
+		                    }
+		                }
+		            }
+		
+		            break;
+		        }
+		    }
+		},
+		
+		handleHomeNoticeEvent(data) {
+		    const g = data && typeof data.group === 'number' ? data.group : 0;
+		    const op = data && typeof data.op_type === 'number' ? data.op_type : 0;
+		
+		    const isSystem = g === this.NOTICE_GROUP.SYSTEM;
+		    const isFollow = g === this.NOTICE_GROUP.FOLLOW;
+		    const isAction = g === this.NOTICE_GROUP.ACTION;
+		
+		    if (!isSystem && !isFollow && !isAction) return;
+		
+		    if (op === 1) {
+		        if (isSystem) this.systemNoticeCount = Number(this.systemNoticeCount || 0) + 1;
+		        if (isFollow) this.followNoticeCount = Number(this.followNoticeCount || 0) + 1;
+		        if (isAction) this.actionNoticeCount = Number(this.actionNoticeCount || 0) + 1;
+		        return;
+		    }
+		
+		    if (op === 2) {
+		        if (isSystem) this.systemNoticeCount = 0;
+		        if (isFollow) this.followNoticeCount = 0;
+		        if (isAction) this.actionNoticeCount = 0;
+		    }
+		},
 		
 		handleUserProfileRefresh(upserts) {
 		    if (!Array.isArray(upserts) || upserts.length === 0) return;
@@ -704,7 +722,6 @@ export default {
 		},
 
         toggleDropdown() {
-            if (this.imInitLoading) return;
             this.showDropdown = !this.showDropdown;
         },
 
@@ -939,14 +956,6 @@ export default {
                 console.error('loadMoreConversations failed', err);
             } finally {
                 this.conversationLoading = false;
-
-                if (this.conversationRefreshPending && !this.imInitFinishing) {
-                    this.conversationRefreshPending = false;
-
-                    this.$nextTick(() => {
-                        this.handleFinishImInit();
-                    });
-                }
             }
         },
 
@@ -1054,29 +1063,22 @@ export default {
         },
 
         openNotice(group) {
-            if (this.imInitLoading) return;
-
             uni.navigateTo({
                 url: `/pages/im/notice?group=${group}`
             });
         },
 
         goToCreateConversationPage() {
-            if (this.imInitLoading) return;
-
             this.showDropdown = false;
             uni.navigateTo({ url: '/pages/im/create' });
         },
 
         goToAgentPage() {
-            if (this.imInitLoading) return;
-
             this.showDropdown = false;
             uni.navigateTo({ url: '/pages/agent/agent_list' });
         },
 
         openChat(conversation) {
-            if (this.imInitLoading) return;
             if (this.conversationTouch.moved) return;
 
             uni.navigateTo({
@@ -1085,8 +1087,6 @@ export default {
         },
 
         onConversationTouchStart(e) {
-            if (this.imInitLoading) return;
-
             const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {};
             this.conversationTouch = {
                 startX: touch.clientX ?? touch.pageX ?? 0,
@@ -1096,8 +1096,6 @@ export default {
         },
 
         onConversationTouchMove(e) {
-            if (this.imInitLoading) return;
-
             const touch = e?.changedTouches?.[0] || e?.touches?.[0] || {};
             const x = touch.clientX ?? touch.pageX ?? 0;
             const y = touch.clientY ?? touch.pageY ?? 0;
@@ -1121,7 +1119,6 @@ export default {
         },
 
         showDeleteConversationAction(e, conversation) {
-            if (this.imInitLoading) return;
             if (this.conversationTouch.moved) return;
             if (!conversation?.con_short_id || this.deletingConId) return;
 
@@ -1188,8 +1185,6 @@ export default {
         },
 
         confirmDeleteConversation(conversation) {
-            if (this.imInitLoading) return;
-
             const name = conversation?.name || '该会话';
 
             uni.showModal({
@@ -1206,8 +1201,6 @@ export default {
         },
 
         async deleteConversation(conversation) {
-            if (this.imInitLoading) return;
-
             const conShortId = conversation?.con_short_id;
             const conId = conversation?.con_id;
             const lastMessageId = conversation?.last_message_id;
@@ -1266,23 +1259,38 @@ export default {
         },
 
         formatTime(timestamp) {
-            if (timestamp === null || timestamp === undefined || timestamp === '') return '';
+            if (!timestamp) return ''
 
-            let value = Number(timestamp);
-            if (!Number.isFinite(value) || value <= 0) return '';
-            if (value > 1e12) value = Math.floor(value / 1000);
+            let ms = Number(timestamp)
+            if (!Number.isFinite(ms) || ms <= 0) return ''
+            if (ms < 1e12) ms = ms * 1000
 
-            const now = Date.now() / 1000;
-            const diff = now - value;
+            const now = new Date()
+            const target = new Date(ms)
+            const diffMs = now.getTime() - ms
+            const diffSec = Math.floor(diffMs / 1000)
 
-            if (diff < 0) return '刚刚';
-            if (diff < 60) return '刚刚';
-            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-            if (diff < 86400) return Math.floor(diff / 86400) + '天前';
-            if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+            const pad2 = (n) => (n < 10 ? '0' + n : '' + n)
+            const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`
 
-            const date = new Date(value * 1000);
-            return `${date.getMonth() + 1}/${date.getDate()}`;
+            if (diffSec < 3600) return hhmm
+
+            const oneDayMs = 24 * 60 * 60 * 1000
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+            if (ms >= todayStart) return hhmm
+            if (ms >= todayStart - oneDayMs) return `昨天 ${hhmm}`
+
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+            const diffDay = Math.floor(diffMs / oneDayMs)
+
+            if (diffDay < 7) return `周${weekdays[target.getDay()]} ${hhmm}`
+
+            const month = target.getMonth() + 1
+            const day = target.getDate()
+
+            if (target.getFullYear() !== now.getFullYear()) return `${target.getFullYear()}年${month}月${day}日 ${hhmm}`
+            return `${month}月${day}日 ${hhmm}`
         }
     }
 };
@@ -1608,27 +1616,33 @@ export default {
     background: #f2f2f2;
 }
 
-.conversation-content {
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    overflow: hidden;
-}
-
-.conversation-main {
+.conversation-body {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding-right: 6px;
-    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.name-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.message-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1px;
 }
 
 .conversation-name {
+    flex: 1;
+    min-width: 0;
     font-size: 16px;
     font-weight: 400;
     color: #111;
@@ -1639,7 +1653,8 @@ export default {
 }
 
 .last-message {
-    margin-top: 1px;
+    flex: 1;
+    min-width: 0;
     font-size: 12px;
     font-weight: 400;
     line-height: 17px;
@@ -1649,25 +1664,18 @@ export default {
     white-space: nowrap;
 }
 
-.conversation-side {
-    width: 50px;
-    height: 100%;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: center;
-}
-
 .conversation-time {
     font-size: 10px;
     font-weight: 400;
     color: #8f9098;
     line-height: 14px;
-    margin-bottom: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 8px;
 }
 
 .side-unread-badge {
+    flex-shrink: 0;
     min-width: 18px;
     height: 16px;
     padding: 0 5px;
@@ -1681,6 +1689,7 @@ export default {
     justify-content: center;
     box-sizing: border-box;
     line-height: 1;
+    margin-left: 8px;
 }
 
 .load-more-state {

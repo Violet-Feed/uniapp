@@ -73,26 +73,26 @@
                                     @longpress.stop="showMessageActions($event, message)"
                                 >
                                     <view class="share-image-wrapper" :style="shareImageWrapperStyle">
-                                        <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                        <view class="share-video-badge" v-if="isShareVideo(message)">
+                                        <image class="share-card-image" :src="message.share_content.coverUrl" mode="aspectFill"></image>
+                                        <view class="share-video-badge" v-if="Number(message.share_content.materialType) === 2">
                                             <text class="share-video-badge-icon">▶</text>
                                         </view>
                                     </view>
 
                                     <view class="share-card-content" :style="shareCardContentStyle">
                                         <view class="share-card-title-container">
-                                            <text class="share-card-title">{{ getShareTitle(message) }}</text>
+                                            <text class="share-card-title">{{ message.share_content.title || '未命名作品' }}</text>
                                         </view>
 
                                         <view class="share-card-footer">
                                             <view class="share-card-author" @click.stop="goToShareUserPage(message)">
                                                 <image
                                                     class="share-author-avatar"
-                                                    :src="getShareAuthorAvatar(message)"
+                                                    :src="getShareAuthorInfo(message).avatar || userDefaultAvatar"
                                                     mode="aspectFill"
                                                 ></image>
                                                 <text class="share-author-name">
-                                                    {{ getShareAuthorName(message) }}
+                                                    {{ getShareAuthorInfo(message).username || '未知作者' }}
                                                 </text>
                                             </view>
                                         </view>
@@ -151,26 +151,26 @@
                                 @longpress.stop="showMessageActions($event, message)"
                             >
                                 <view class="share-image-wrapper" :style="shareImageWrapperStyle">
-                                    <image class="share-card-image" :src="getShareCoverUrl(message)" mode="aspectFill"></image>
-                                    <view class="share-video-badge" v-if="isShareVideo(message)">
+                                    <image class="share-card-image" :src="message.share_content.coverUrl" mode="aspectFill"></image>
+                                    <view class="share-video-badge" v-if="Number(message.share_content.materialType) === 2">
                                         <text class="share-video-badge-icon">▶</text>
                                     </view>
                                 </view>
 
                                 <view class="share-card-content" :style="shareCardContentStyle">
                                     <view class="share-card-title-container">
-                                        <text class="share-card-title">{{ getShareTitle(message) }}</text>
+                                        <text class="share-card-title">{{ message.share_content.title || '未命名作品' }}</text>
                                     </view>
 
                                     <view class="share-card-footer">
                                         <view class="share-card-author" @click.stop="goToShareUserPage(message)">
                                             <image
                                                 class="share-author-avatar"
-                                                :src="getShareAuthorAvatar(message)"
+                                                :src="getShareAuthorInfo(message).avatar || userDefaultAvatar"
                                                 mode="aspectFill"
                                             ></image>
                                             <text class="share-author-name">
-                                                {{ getShareAuthorName(message) }}
+                                                {{ getShareAuthorInfo(message).username || '未知作者' }}
                                             </text>
                                         </view>
                                     </view>
@@ -307,10 +307,17 @@ export default {
 			
             normalListener: null,
             commandListener: null,
+            appListener: null,
+            
+            imInitLoading: false,
+            imInitFinishing: false,
+			imEventQueue: [],
+			imEventProcessing: false,
+			maxConIndex: 0,
+			
             chatName: '',
             userDefaultAvatar: '/static/user_avatar.png',
             aiDefaultAvatar: '/static/ai_avatar.png',
-            defaultCover: '/static/images/default.png',
             firstPageProfileRefreshed: false,
             groupProfileTtlMs: 7 * 24 * 60 * 60 * 1000,
 
@@ -628,8 +635,7 @@ export default {
             res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
             if (res.length > 0) {
                 await this.fillSenderInfos(res);
-                this.normalizeMessages(res);
-                await this.ensureShareAuthorInfos(res);
+                await this.fillShareInfos(res);
 
                 this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
@@ -641,8 +647,7 @@ export default {
 				if (res) {
 					if (res.length > 0) {
 					    await this.fillSenderInfos(res);
-					    this.normalizeMessages(res);
-					    await this.ensureShareAuthorInfos(res);
+						await this.fillShareInfos(res);
 					
 					    res.reverse();
 					    this.messages = res.concat(this.messages);
@@ -679,97 +684,55 @@ export default {
                     this.conversation.read_badge_count = this.readMarkBaseBadgeCount;
                 }
             }
+			this.refreshMaxConIndexFromMessages();
         }
 
         setTimeout(() => this.scrollToBottom(), 100);
 
+        this.imInitLoading = getApp().globalData.imInitStatus === true;
+        this.imInitFinishing = false;
+        this.commandQueue = [];
+        
         this.normalListener = async (data) => {
             if (!data || !data.msg_body) return;
             if (this.conversation.con_id != data.msg_body.con_id) return;
-
-            const msg = data.msg_body;
-
-            if (String(this.conversation.con_short_id || 0) === '0' && String(msg.con_short_id || 0) !== '0') {
-                this.conversation.con_short_id = msg.con_short_id;
-                for (const item of this.messages) {
-                    if (String(item.con_short_id || 0) === '0') {
-                        item.con_short_id = msg.con_short_id;
-                    }
-                }
-            }
-
-            await this.fillSenderInfos([msg]);
-            this.normalizeMessages([msg]);
-            await this.ensureShareAuthorInfos([msg]);
-
-            if (this.isSelfMessage(msg)) {
-                for (let i = this.messages.length - 1; i >= 0; i--) {
-                    if (String(this.messages[i].msg_id) === String(msg.msg_id)) {
-                        this.messages.splice(i, 1, msg);
-                        return;
-                    }
-                    if (this.messages[i].con_index && BigInt(this.messages[i].con_index) < BigInt(msg.con_index)) {
-                        break;
-                    }
-                }
-            }
-
-            let maxConIndex = 0n;
-            for (let i = this.messages.length - 1; i >= 0; i--) {
-                if (this.messages[i].con_index) {
-                    maxConIndex = BigInt(this.messages[i].con_index);
-                    break;
-                }
-            }
-
-            if (msg.con_index && BigInt(msg.con_index) <= maxConIndex) {
-                return;
-            }
-
-			const shouldScrollToBottom = this.isAtBottom || this.isSelfMessage(msg);
-			
-            this.messages.push(msg);
-
-            if (shouldScrollToBottom) {
-                this.recordPendingReadMessage(msg);
-                this.scrollToBottom();
-            } else {
-                this.addFloatingUnread(msg);
-            }
+            this.enqueueImEvent('normal', data);
         };
-
+        
         uni.$on('normal', this.normalListener);
 
         this.commandListener = async (data) => {
             if (!data || !data.msg_body) return;
-
-            if (this.conversation.con_id == data.msg_body.con_id) {
-                const cmdMessage = JSONbig.parse(data.msg_body.msg_content);
-
-                if (data.msg_body.msg_type == 100) {
-                    this.handleConversationCommand(cmdMessage);
-                } else if (data.msg_body.msg_type == 101) {
-                    this.conversation.read_index_end = cmdMessage.read_index_end;
-                    this.conversation.read_badge_count = cmdMessage.read_badge_count;
-                } else if (data.msg_body.msg_type == 102) {
-                    const msgId = cmdMessage.msg_id;
-                    if (msgId === null || msgId === undefined || msgId === '') return;
-
-                    const index = this.findMessageIndexById(msgId);
-                    if (index === -1) return;
-
-                    this.messages[index].extra = cmdMessage.extra || '{}';
-
-                    const nextMessage = await handleMessageExtra(this.messages[index]);
-                    this.normalizeMessages([nextMessage]);
-                    await this.ensureShareAuthorInfos([nextMessage]);
-
-                    this.messages.splice(index, 1, nextMessage);
-                }
-            }
+            if (this.conversation.con_id != data.msg_body.con_id) return;
+            this.enqueueImEvent('command', data);
         };
 
         uni.$on('command', this.commandListener);
+		
+		this.appListener = async (data) => {
+		    if (!data || data.module !== 'im') return;
+		
+		    if (data.type === 'beginInit') {
+		        this.handleBeginImInit();
+		        return;
+		    }
+		
+		    if (data.type === 'finishInit') {
+		        await this.finishImInit();
+		        return;
+		    }
+		
+		    if (data.type === 'userRefresh') {
+				this.enqueueImEvent('userRefresh', data.data || []);
+		        return;
+		    }
+		
+		    if (data.type === 'agentRefresh') {
+				this.enqueueImEvent('agentRefresh', data.data || []);
+		    }
+		};
+		
+		uni.$on('app', this.appListener);
     },
 
     onShow() {
@@ -785,6 +748,9 @@ export default {
         if (this.commandListener) {
             uni.$off('command', this.commandListener);
         }
+		if (this.appListener) {
+		    uni.$off('app', this.appListener);
+		}
         if (this.inputBlurTimer) {
             clearTimeout(this.inputBlurTimer);
             this.inputBlurTimer = null;
@@ -1001,6 +967,316 @@ export default {
             this.conversation.read_index_end = this.pendingReadIndexEnd;
             this.conversation.read_badge_count = this.pendingReadBadgeCount;
         },
+		
+		refreshMaxConIndexFromMessages() {
+		    for (let i = this.messages.length - 1; i >= 0; i--) {
+		        if (this.messages[i].con_index) {
+		            this.maxConIndex = this.messages[i].con_index;
+		            return;
+		        }
+		    }
+		
+		    this.maxConIndex = 0;
+		},
+		
+		enqueueImEvent(type, data) {
+		    this.imEventQueue.push({
+		        type,
+		        data
+		    });
+		
+		    this.drainImEventQueue();
+		},
+		
+		async drainImEventQueue() {
+		    if (this.imEventProcessing) return;
+		    if (this.imInitLoading || this.imInitFinishing) return;
+		
+		    this.imEventProcessing = true;
+		
+		    try {
+		        while (this.imEventQueue.length > 0) {
+		            if (this.imInitLoading || this.imInitFinishing) break;
+		
+		            const event = this.imEventQueue.shift();
+		            if (!event) return;
+		            if (event.type === 'normal') {
+		                await this.handleNormalMessage(event.data);
+		                return;
+		            }
+		            if (event.type === 'command') {
+		                await this.handleCommandMessage(event.data);
+		                return;
+		            }
+		            if (event.type === 'userRefresh') {
+		                this.handleUserRefresh(event.data || []);
+		                return;
+		            }
+		            if (event.type === 'agentRefresh') {
+		                this.handleAgentRefresh(event.data || []);
+		            }
+		        }
+		    } catch (err) {
+		        console.error('drainImEventQueue failed:', err);
+		    } finally {
+		        this.imEventProcessing = false;
+		    }
+		},
+		
+		handleBeginImInit() {
+		    this.imInitLoading = true;
+		    this.imInitFinishing = false;
+		},
+		
+		async finishImInit() {
+		    if (this.imInitFinishing) return;
+		
+		    this.imInitLoading = true;
+		    this.imInitFinishing = true;
+		
+		    try {
+		        const newMessages = await DB.pullMessageReverse(
+		            this.conversation.con_id,
+		            this.maxConIndex
+		        );
+		
+		        if (newMessages && newMessages.length > 0) {
+					this.maxConIndex = newMessages[newMessages.length - 1].con_index;
+		            await this.fillSenderInfos(newMessages);
+		            await this.fillShareInfos(newMessages);
+            
+		            this.appendNewDbMessages(newMessages);
+		        }
+		    } finally {
+		        this.imInitFinishing = false;
+		        this.imInitLoading = false;
+		    }
+		
+		    await this.drainImEventQueue();
+		},
+		
+		appendNewDbMessages(newMessages) {
+		    if (!newMessages || newMessages.length === 0) return;
+		
+		    const firstIndex = BigInt(newMessages[0].con_index);
+		    const dbMsgIds = new Set(newMessages.map(item => String(item.msg_id)));
+		    const pendingTail = [];
+		
+		    while (this.messages.length > 0) {
+		        const last = this.messages[this.messages.length - 1];
+		
+		        if (!last.con_index) {
+		            this.messages.pop();
+		
+		            if (!dbMsgIds.has(String(last.msg_id))) {
+		                pendingTail.unshift(last);
+		            }
+		
+		            continue;
+		        }
+		
+		        if (BigInt(last.con_index) >= firstIndex) {
+		            this.messages.pop();
+		            continue;
+		        }
+		
+		        break;
+		    }
+		
+		    const shouldScrollToBottom = this.isAtBottom;
+		
+		    this.messages = this.messages.concat(newMessages, pendingTail);
+		
+		    if (shouldScrollToBottom) {
+		        for (const msg of newMessages) {
+		            this.recordPendingReadMessage(msg);
+		        }
+		
+		        this.scrollToBottom();
+		        return;
+		    }
+		
+		    for (const msg of newMessages) {
+		        if (!this.isSelfMessage(msg)) {
+		            this.addFloatingUnread(msg);
+		        }
+		    }
+		},
+		
+		async handleNormalMessage(data) {
+			const msg = data.msg_body;
+			        
+			if (msg.con_index && BigInt(msg.con_index) <= BigInt(this.maxConIndex)) {
+			    return;
+			}
+			if (msg.con_index && BigInt(msg.con_index) > BigInt(this.maxConIndex)) {
+			    this.maxConIndex = msg.con_index;
+			}
+			
+		    if (String(this.conversation.con_short_id || 0) === '0' && String(msg.con_short_id || 0) !== '0') {
+		        this.conversation.con_short_id = msg.con_short_id;
+		        for (const item of this.messages) {
+		            if (String(item.con_short_id || 0) === '0') {
+		                item.con_short_id = msg.con_short_id;
+		            }
+		        }
+		    }
+		
+		    await this.fillSenderInfos([msg]);
+		    await this.fillShareInfos([msg]);
+            
+		    if (this.isSelfMessage(msg)) {
+		        for (let i = this.messages.length - 1; i >= 0; i--) {
+		            if (String(this.messages[i].msg_id) === String(msg.msg_id)) {
+		                this.messages.splice(i, 1, msg);
+		                return;
+		            }
+		            if (this.messages[i].con_index && BigInt(this.messages[i].con_index) < BigInt(msg.con_index)) {
+		                break;
+		            }
+		        }
+		    }
+		
+		    let insertIndex = 0;
+		    for (let i = this.messages.length - 1; i >= 0; i--) {
+		        if (this.messages[i].con_index) {
+		            insertIndex = i + 1;
+		            break;
+		        }
+		    }
+		    this.messages.splice(insertIndex, 0, msg);
+			
+			const shouldScrollToBottom = this.isAtBottom || this.isSelfMessage(msg);
+		    if (shouldScrollToBottom) {
+		        this.recordPendingReadMessage(msg);
+		        this.scrollToBottom();
+		    } else {
+		        this.addFloatingUnread(msg);
+		    }
+		},
+		
+		async handleCommandMessage(data) {
+		    const msgBody = data.msg_body;
+		    const cmdMessage = JSONbig.parse(msgBody.msg_content);
+		
+		    if (msgBody.msg_type == 100) {
+		        this.handleConversationCommand(cmdMessage);
+		    } else if (msgBody.msg_type == 101) {
+		        this.conversation.read_index_end = cmdMessage.read_index_end;
+		        this.conversation.read_badge_count = cmdMessage.read_badge_count;
+		    } else if (msgBody.msg_type == 102) {
+		        const msgId = cmdMessage.msg_id;
+		        if (msgId === null || msgId === undefined || msgId === '') return;
+		
+		        const index = this.findMessageIndexById(msgId);
+		        if (index === -1) return;
+		
+		        this.messages[index].extra = cmdMessage.extra || '{}';
+		
+		        const nextMessage = await handleMessageExtra(this.messages[index]);
+		
+		        this.messages.splice(index, 1, nextMessage);
+		    }
+		},
+		
+		handleUserRefresh(list) {
+		    if (!Array.isArray(list) || list.length === 0) return;
+		
+		    const map = new Map();
+		
+		    for (const user of list) {
+		        if (!user || user.user_id === null || user.user_id === undefined) continue;
+		        map.set(String(user.user_id), user);
+		    }
+		
+		    if (map.size === 0) return;
+		
+		    if (Number(this.conversation.con_type) === 1) {
+		        const user = map.get(String(this.conversation.peer_id));
+		
+		        if (user) {
+		            this.chatName = user.username || this.chatName;
+		            this.conversation.name = this.chatName;
+		            this.conversation.avatar_uri = user.avatar_uri || this.conversation.avatar_uri;
+		            uni.setNavigationBarTitle({ title: this.chatName });
+		        }
+		    }
+		
+		    for (const user of map.values()) {
+		        const senderKey = `1:${String(user.user_id)}`;
+		
+		        if (this.senderInfoMap.has(senderKey)) {
+		            const old = this.senderInfoMap.get(senderKey);
+		
+		            this.senderInfoMap.set(senderKey, {
+		                nick_name: user.username || old.nick_name || '',
+		                avatar_uri: user.avatar_uri || old.avatar_uri || ''
+		            });
+		        }
+		    }
+		
+		    for (let i = this.messages.length - 1; i >= 0; i--) {
+		        const msg = this.messages[i];
+		
+		        if (Number(msg.sender_type) === 1) {
+		            const user = map.get(String(msg.sender_id));
+		
+		            if (user) {
+		                msg.nick_name = user.username || msg.nick_name;
+		                msg.avatar_uri = user.avatar_uri || msg.avatar_uri;
+		            }
+		        }
+		    }
+		},
+		
+		handleAgentRefresh(list) {
+		    if (!Array.isArray(list) || list.length === 0) return;
+		
+		    const map = new Map();
+		
+		    for (const agent of list) {
+		        if (!agent || agent.agent_id === null || agent.agent_id === undefined) continue;
+		        map.set(String(agent.agent_id), agent);
+		    }
+		
+		    if (map.size === 0) return;
+		
+		    if (Number(this.conversation.con_type) === 4) {
+		        const agent = map.get(String(this.conversation.peer_id));
+		
+		        if (agent) {
+		            this.chatName = agent.agent_name || this.chatName;
+		            this.conversation.name = this.chatName;
+		            this.conversation.avatar_uri = agent.avatar_uri || this.conversation.avatar_uri;
+		            uni.setNavigationBarTitle({ title: this.chatName });
+		        }
+		    }
+		
+		    for (const agent of map.values()) {
+		        const senderKey = `2:${String(agent.agent_id)}`;
+		
+		        if (!this.senderInfoMap.has(senderKey)) continue;
+		
+		        const old = this.senderInfoMap.get(senderKey);
+		
+		        this.senderInfoMap.set(senderKey, {
+		            nick_name: agent.agent_name || old.nick_name || '',
+		            avatar_uri: agent.avatar_uri || old.avatar_uri || ''
+		        });
+		    }
+		
+		    for (let i = this.messages.length - 1; i >= 0; i--) {
+		        const msg = this.messages[i];
+		
+		        if (Number(msg.sender_type) !== 2) continue;
+		
+		        const agent = map.get(String(msg.sender_id));
+		        if (!agent) continue;
+		
+		        msg.nick_name = agent.agent_name || msg.nick_name;
+		        msg.avatar_uri = agent.avatar_uri || msg.avatar_uri;
+		    }
+		},
 
         initResponsiveLayout() {
             try {
@@ -1238,15 +1514,13 @@ export default {
                         senders
                     );
 
-                    if (Array.isArray(infos)) {
-                        for (const info of infos) {
-                            const key = `${Number(info.sender_type)}:${String(info.sender_id)}`;
-                            this.senderInfoMap.set(key, {
-                                nick_name: info.nick_name || '',
-                                avatar_uri: info.avatar_uri || ''
-                            });
-                        }
-                    }
+					for (const info of infos) {
+						const key = `${Number(info.sender_type)}:${String(info.sender_id)}`;
+						this.senderInfoMap.set(key, {
+							nick_name: info.nick_name || '',
+							avatar_uri: info.avatar_uri || ''
+						});
+					}
                 } catch (err) {
                     console.error('getMemberInfosBySenders failed:', err);
                 }
@@ -1270,187 +1544,56 @@ export default {
             }
         },
 
-        normalizeMessages(messages) {
-            if (!Array.isArray(messages)) return;
+        async fillShareInfos(messages) {
+            if (!Array.isArray(messages) || !messages.length) return;
+
+            const idSet = new Set();
 
             for (const message of messages) {
                 if (!message) continue;
 
                 if (this.isShareMessage(message)) {
-                    message.share_content = this.parseShareContent(message);
+                    const raw = message.msg_content;
+                    try {
+                        message.share_content = JSONbig.parse(String(raw)) || {};
+                    } catch (err) {
+                        console.error('parse share message failed:', err);
+                        message.share_content = {};
+                    }
+
+                    const authorId = String(message.share_content.authorId || '');
+                    if (authorId && !this.shareAuthorInfoMap.has(authorId)) {
+                        idSet.add(authorId);
+                    }
                 }
             }
+
+            if (!idSet.size) return;
+
+            const userIds = Array.from(idSet);
+
+			const res = await getUserInfos({ userIds });
+			const list = res ? res.user_infos : [];
+
+			for (const user of list) {
+				if (!user) continue;
+				const userId = String(user.user_id || '');
+				if (!userId) continue;
+				this.shareAuthorInfoMap.set(userId, {
+					avatar: user.avatar || '',
+					username: user.username || ''
+				});
+			}
         },
 
         isShareMessage(message) {
             return !!message && Number(message.msg_type ?? message.msgType) === 4;
         },
 
-        parseShareContent(message) {
-            const raw = message?.msg_content ?? message?.content ?? '';
-
-            if (!raw) return {};
-
-            if (typeof raw === 'object') {
-                return raw;
-            }
-
-            try {
-                const data = JSONbig.parse(String(raw));
-                return data && typeof data === 'object' ? data : {};
-            } catch (err) {
-                try {
-                    const data = JSON.parse(String(raw));
-                    return data && typeof data === 'object' ? data : {};
-                } catch (e) {
-                    console.error('parse share message failed:', e);
-                    return {};
-                }
-            }
-        },
-
-        getShareContent(message) {
-            if (!message) return {};
-
-            if (message.share_content && typeof message.share_content === 'object') {
-                return message.share_content;
-            }
-
-            return this.parseShareContent(message);
-        },
-
-        getShareCoverUrl(message) {
-            const share = this.getShareContent(message);
-
-            return share.coverUrl ||
-                share.cover_url ||
-                share.image ||
-                share.materialUrl ||
-                share.material_url ||
-                this.defaultCover;
-        },
-
-        getShareTitle(message) {
-            const share = this.getShareContent(message);
-
-            return share.title || share.name || '未命名作品';
-        },
-
-        getShareAuthorAvatar(message) {
-            const share = this.getShareContent(message);
-            const cached = this.getShareAuthorInfo(message);
-
-            return share.authorAvatarUrl ||
-                share.author_avatar_url ||
-                share.authorAvatar ||
-                share.author_avatar ||
-                share.avatar ||
-                cached.avatar ||
-                this.userDefaultAvatar;
-        },
-
-        getShareAuthorName(message) {
-            const share = this.getShareContent(message);
-            const cached = this.getShareAuthorInfo(message);
-
-            return share.authorName ||
-                share.author_name ||
-                share.username ||
-                cached.username ||
-                cached.name ||
-                '未知作者';
-        },
-
-        isShareVideo(message) {
-            const share = this.getShareContent(message);
-            const materialType = share.materialType ?? share.material_type;
-            const type = share.type ?? share.creationType ?? share.creation_type;
-            return type === 'video' || Number(materialType) === 2;
-        },
-
-        getShareMaterialTypeIcon(message) {
-            return this.isShareVideo(message) ? '▶' : '';
-        },
-
-        getIdString(value) {
-            if (value === null || value === undefined) return '';
-            return String(value);
-        },
-
-        getShareAuthorId(message) {
-            const share = this.getShareContent(message);
-
-            return this.getIdString(
-                share.authorId ??
-                share.author_id ??
-                share.userId ??
-                share.user_id ??
-                ''
-            );
-        },
-
         getShareAuthorInfo(message) {
-            const authorId = this.getShareAuthorId(message);
+            const authorId = String((message.share_content || {}).authorId || '');
             if (!authorId) return {};
-            return this.shareAuthorInfoMap.get(String(authorId)) || {};
-        },
-
-        collectShareAuthorIds(messages) {
-            const idSet = new Set();
-
-            for (const message of messages || []) {
-                if (!this.isShareMessage(message)) continue;
-
-                const authorId = this.getShareAuthorId(message);
-                if (!authorId) continue;
-                if (this.shareAuthorInfoMap.has(String(authorId))) continue;
-
-                idSet.add(String(authorId));
-            }
-
-            return Array.from(idSet);
-        },
-
-        async ensureShareAuthorInfos(messages) {
-            const userIds = this.collectShareAuthorIds(messages);
-            if (!userIds.length) return;
-
-            try {
-                const res = await getUserInfos({ userIds });
-                const list = Array.isArray(res)
-                    ? res
-                    : (res && Array.isArray(res.user_infos))
-                        ? res.user_infos
-                        : (res && Array.isArray(res.users))
-                            ? res.users
-                            : [];
-
-                for (const user of list) {
-                    if (!user) continue;
-
-                    const userId = this.getIdString(user.user_id ?? user.userId ?? user.id ?? '');
-                    if (!userId) continue;
-
-                    this.shareAuthorInfoMap.set(String(userId), {
-                        user_id: userId,
-                        username: user.username || user.name || user.nick_name || '',
-                        name: user.username || user.name || user.nick_name || '',
-                        avatar: user.avatar || user.avatar_url || user.avatarUrl || ''
-                    });
-                }
-            } catch (err) {
-                console.error('get share author infos failed:', err);
-            }
-        },
-
-        getShareCreationId(message) {
-            const share = this.getShareContent(message);
-
-            return this.getIdString(
-                share.creationId ??
-                share.creation_id ??
-                ''
-            );
+            return this.shareAuthorInfoMap.get(authorId) || {};
         },
 
         isSelfMessage(message) {
@@ -1584,7 +1727,7 @@ export default {
         },
 
         goToUserPage(userId) {
-            const targetId = this.getIdString(userId);
+            const targetId = String(userId || '');
             if (!targetId) return;
 
             const currentUserId = getApp().globalData.userId;
@@ -1602,22 +1745,20 @@ export default {
         },
 
         goToShareUserPage(message) {
-            const authorId = this.getShareAuthorId(message);
+            const share = message.share_content;
+            const authorId = String(share.authorId || '');
             this.goToUserPage(authorId);
         },
 
         goToShareCreationDetail(message) {
             if (this.messageTouch.moved) return;
 
-            const share = this.getShareContent(message);
-            const creationId = this.getShareCreationId(message);
+            const share = message.share_content;
+            const creationId = String(share.creationId || '');
             if (!creationId) return;
 
-            const userId = this.getShareAuthorId(message);
-            const materialType = share.materialType ?? share.material_type;
-            const type = share.type ?? share.creationType ?? share.creation_type;
-
-            const isVideo = type === 'video' || Number(materialType) === 2;
+            const userId = String(share.authorId || '');
+            const isVideo = Number(share.materialType) === 2;
 
             const basePath = isVideo
                 ? '/pages/creation/creation_video'
@@ -1653,8 +1794,7 @@ export default {
 
                 let res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
                 await this.fillSenderInfos(res);
-                this.normalizeMessages(res);
-                await this.ensureShareAuthorInfos(res);
+                await this.fillShareInfos(res);
 
                 let newMessages = res.reverse();
 
@@ -1676,8 +1816,7 @@ export default {
 					if (res) {
 						if (res.length > 0) {
 						    await this.fillSenderInfos(res);
-						    this.normalizeMessages(res);
-						    await this.ensureShareAuthorInfos(res);
+						    await this.fillShareInfos(res);
 						
 						    res.reverse();
 						    newMessages = res.concat(newMessages);
@@ -2114,16 +2253,38 @@ export default {
         },
 
         formatTime(timestamp) {
-            const now = Date.now() / 1000;
-            const diff = now - Number(timestamp);
+            if (!timestamp) return ''
 
-            if (diff < 60) return '刚刚';
-            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
-            if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+            let ms = Number(timestamp)
+            if (!Number.isFinite(ms) || ms <= 0) return ''
+            if (ms < 1e12) ms = ms * 1000
 
-            const date = new Date(Number(timestamp) * 1000);
-            return `${date.getMonth() + 1}/${date.getDate()}`;
+            const now = new Date()
+            const target = new Date(ms)
+            const diffMs = now.getTime() - ms
+            const diffSec = Math.floor(diffMs / 1000)
+
+            const pad2 = (n) => (n < 10 ? '0' + n : '' + n)
+            const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`
+
+            if (diffSec < 3600) return hhmm
+
+            const oneDayMs = 24 * 60 * 60 * 1000
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+            if (ms >= todayStart) return hhmm
+            if (ms >= todayStart - oneDayMs) return `昨天 ${hhmm}`
+
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+            const diffDay = Math.floor(diffMs / oneDayMs)
+
+            if (diffDay < 7) return `周${weekdays[target.getDay()]} ${hhmm}`
+
+            const month = target.getMonth() + 1
+            const day = target.getDate()
+
+            if (target.getFullYear() !== now.getFullYear()) return `${target.getFullYear()}年${month}月${day}日 ${hhmm}`
+            return `${month}月${day}日 ${hhmm}`
         },
 
         shouldShowTime(index) {

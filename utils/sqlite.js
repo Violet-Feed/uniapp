@@ -760,6 +760,76 @@ async function pullMessage(conId, beforeConIndex, limit = 20) {
   return mapRowsBigInt(rows, ['sender_id', 'con_short_id', 'client_msg_id', 'msg_id']);
 }
 
+async function pullMessageReverse(conId, conIndex) {
+  await ensureOpen();
+
+  const userId = getLoginUserId();
+  const { msgTable, memberTable, userTable, agentTable } = getTablesByUser(userId);
+
+  const sql = `
+    WITH page AS (
+      SELECT
+        sender_id,
+        sender_type,
+        con_short_id,
+        con_id,
+        con_type,
+        client_msg_id,
+        msg_id,
+        msg_type,
+        msg_content,
+        create_time,
+        extra,
+        con_index
+      FROM ${msgTable}
+      WHERE con_id = ${sqlValue(conId)}
+        AND con_index > ${sqlValue(conIndex)}
+      ORDER BY con_index ASC
+    )
+    SELECT
+      CAST(p.sender_id AS TEXT)      AS sender_id,
+      p.sender_type,
+      CAST(p.con_short_id AS TEXT)   AS con_short_id,
+      p.con_id,
+      p.con_type,
+      CAST(p.client_msg_id AS TEXT)  AS client_msg_id,
+      CAST(p.msg_id AS TEXT)         AS msg_id,
+      p.msg_type,
+      p.msg_content,
+      p.create_time,
+      p.extra,
+      p.con_index,
+
+      CASE
+        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(mem.nick_name, ''), u.username, '')
+        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '')
+        ELSE ''
+      END AS nick_name,
+
+      CASE
+        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri)
+        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri)
+        ELSE ''
+      END AS avatar_uri
+
+    FROM page p
+    LEFT JOIN ${memberTable} mem
+      ON mem.con_id = p.con_id
+     AND mem.member_type = p.sender_type
+     AND mem.member_id = p.sender_id
+    LEFT JOIN ${userTable} u
+      ON p.sender_type = 1
+     AND u.user_id = p.sender_id
+    LEFT JOIN ${agentTable} a
+      ON p.sender_type = 2
+     AND a.agent_id = p.sender_id
+    ORDER BY p.con_index ASC;
+  `;
+
+  const rows = await selectSql(sql);
+  return mapRowsBigInt(rows, ['sender_id', 'con_short_id', 'client_msg_id', 'msg_id']);
+}
+
 /* ----------------------------- 拉取：Members（按 con_id） ----------------------------- */
 
 async function pullUserMembers(conId) {
@@ -1211,6 +1281,7 @@ export default {
   pullConversation,
   pullAllConversation,
   pullMessage,
+  pullMessageReverse,
   pullUserMembers,
   pullAgentMembers,
   getConversationById,

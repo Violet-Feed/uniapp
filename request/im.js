@@ -10,16 +10,12 @@ import {
 import { getMemberInfosBySendersEnsure } from '@/utils/member_info';
 
 export const getMessageByInit = async () => {
-	getApp().globalData.imInitStatus = true;
-	uni.$emit('app', {module:"im",type:"beginInit"});
 	if (getApp().globalData.userCmdIndex == '') {
 		await getInitInfo();
 	} else {
 		await getCommandByUser();
 	}
 	await getMessageByUser();
-	uni.$emit('app', {module:"im",type:"finishInit"});
-	getApp().globalData.imInitStatus = false;
 };
 
 export const getInitInfo = async () => {

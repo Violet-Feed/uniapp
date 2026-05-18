@@ -701,6 +701,33 @@ export default {
 				this.followingCount = res.following_count || 0
 				this.followerCount = res.follower_count || 0
 				this.friendCount = res.friend_count || 0
+				getApp().globalData.username = this.username;
+				getApp().globalData.avatar = this.avatar;
+				
+				const rows = await DB.getUsersByIds([uid])
+				const oldUser = rows && rows.length ? rows[0] : null
+				if (!oldUser) return
+				
+				const oldAvatarUri = oldUser.avatar_uri || ''
+				const oldLocalAvatarUri = oldUser.local_avatar_uri || ''
+				const avatarChanged = remoteAvatar !== '' && avatarUri !== oldAvatarUri
+				const localMissing = remoteAvatar !== '' && !oldLocalAvatarUri
+				const localAvatarUri = avatarUri.startsWith('/static/')
+					? avatarUri
+					: avatarChanged
+						? ''
+						: oldLocalAvatarUri
+				
+				await DB.updateUser(uid, {
+					username,
+					avatar_uri: avatarUri,
+					local_avatar_uri: localAvatarUri,
+					modify_time: Date.now()
+				})
+				
+				if (avatarChanged || localMissing) {
+					enqueueEntityAvatars('user', [uid])
+				}
 				return
 			}
 

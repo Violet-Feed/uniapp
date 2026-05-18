@@ -63,22 +63,23 @@ class Socket {
 		}
 	}
 
-	start = async () => {
+	start() {
 		if (this.started || this.connecting) return
 
 		this.started = true
 		this.connecting = true
 		this.userId = getApp().globalData.userId
-
-		await getMessageByInit()
-
+		
+		getApp().globalData.imInitStatus = true;
+		uni.$emit('app', {module:"im",type:"beginInit"});
+		
 		if (this.platform === 'android') {
 			this.startAndroid()
+			this.startHeartbeatCheck()
 			return
-		}
-
-		if (this.platform === 'ios') {
+		} else if (this.platform === 'ios') {
 			this.startIOS()
+			this.startHeartbeatCheck()
 			return
 		}
 
@@ -211,8 +212,17 @@ class Socket {
 		return data
 	}
 
-	handleRawPacket(packetType, dataByte) {
+	handleRawPacket = async (packetType, dataByte) => {
 		try {
+			if (packetType == encodePacketType.Connect) {
+				if (getApp().globalData.imInitStatus == true){
+					await getMessageByInit()
+					getApp().globalData.imInitStatus = false;
+					uni.$emit('app', {module:"im",type:"finishInit"});
+				}
+				return
+			}
+			
 			if (packetType == encodePacketType.Heartbeat) {
 				this.lastHeartbeatTime = Date.now()
 				return
@@ -251,14 +261,10 @@ class Socket {
 		this.sendPacket(encodePacketType.Connect, dataByte)
 	}
 
-	startHeartbeat() {
-		this.clearHeartbeat()
+	startHeartbeatCheck() {
+		if (this.heartbeatCheckIntervalId) return
 
 		this.lastHeartbeatTime = Date.now()
-
-		this.heartIntervalId = setInterval(() => {
-			this.sendPacket(encodePacketType.Heartbeat, new Uint8Array(0))
-		}, HEARTBEAT_INTERVAL)
 
 		this.heartbeatCheckIntervalId = setInterval(() => {
 			const now = Date.now()
@@ -268,6 +274,17 @@ class Socket {
 				this.reconnect()
 			}
 		}, 1000)
+	}
+
+	startHeartbeat() {
+		if (this.heartIntervalId) {
+			clearInterval(this.heartIntervalId)
+			this.heartIntervalId = null
+		}
+
+		this.heartIntervalId = setInterval(() => {
+			this.sendPacket(encodePacketType.Heartbeat, new Uint8Array(0))
+		}, HEARTBEAT_INTERVAL)
 	}
 
 	clearHeartbeat() {
@@ -308,7 +325,7 @@ class Socket {
 
 	sendPacketAndroid(packetType, dataByte) {
 		if (!this.socketWriter) {
-			console.log('未建立连接，无法发送消息')
+			console.warn('TCP连接未建立，无法发送消息')
 			return
 		}
 

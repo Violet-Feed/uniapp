@@ -802,14 +802,21 @@ export default {
 					: avatarChanged
 						? ''
 						: oldLocalAvatarUri
-
 				await DB.updateUser(uid, {
 					username,
 					avatar_uri: avatarUri,
 					local_avatar_uri: localAvatarUri,
 					modify_time: Date.now()
 				})
-
+				if (avatarChanged || oldUser.username != username){
+					uni.$emit('app', {module:"im",type:"userRefresh",data:[{
+						user_id: uid,
+						username,
+						avatar_uri: avatarUri,
+						local_avatar_uri: localAvatarUri,
+						modify_time: Date.now()
+					}]});
+				}
 				if (avatarChanged || localMissing) {
 					enqueueEntityAvatars('user', [uid])
 				}
