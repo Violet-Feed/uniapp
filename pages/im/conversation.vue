@@ -634,31 +634,32 @@ export default {
             this.conversation = conversation;
 			//this.conIndex为下一个消息应该的index，也就是当前最小index-1
             res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
+			let newMessages = []
             if (res.length > 0) {
-                this.messages = res.reverse();
-                this.conIndex = this.messages[0].con_index - 1;
+                newMessages = res.reverse();
+                this.conIndex = newMessages[0].con_index - 1;
             }
             if (this.conIndex <= this.conversation.min_index) {
                 this.hasMore = false;
-            } else if (this.messages.length < 20) {
-                res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
+            } else if (newMessages.length < 20) {
+                res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - newMessages.length);
 				if (res) {
 					if (res.length > 0) {				
 					    res.reverse();
-					    this.messages = res.concat(this.messages);
-					    this.conIndex = this.messages[0].con_index - 1;
+					    newMessages = res.concat(newMessages);
+					    this.conIndex = newMessages[0].con_index - 1;
 					}
 					if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
 					    this.hasMore = false;
 					}
 				}
             }
-
-            if (this.messages.length > 0) {
-                await this.fillMessageGaps(this.messages)
-				await this.fillSenderInfos(this.messages);
-				await this.fillShareInfos(this.messages);
+            if (newMessages.length > 0) {
+                await this.fillMessageGaps(newMessages)
+				await this.fillSenderInfos(newMessages);
+				await this.fillShareInfos(newMessages);
             }
+			this.messages = newMessages;
 
             this.refreshFirstPageGroupProfiles();
 
