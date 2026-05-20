@@ -20,7 +20,7 @@
 				<view class="cell" :style="cellStyle" @click="openAvatarSourcePopup">
 					<text class="cell-label" :style="cellLabelStyle">头像</text>
 					<view class="cell-right">
-						<image class="avatar" :style="avatarStyle" :src="avatar || defaultAvatar" mode="aspectFill"></image>
+						<image class="avatar" :style="avatarStyle" :src="avatarUri || localAvatarUri || defaultAvatar" @error="onAvatarError" mode="aspectFill"></image>
 						<text class="cell-arrow" :style="cellArrowStyle">›</text>
 					</view>
 				</view>
@@ -135,6 +135,8 @@ export default {
 			userId: null,
 			username: '',
 			avatar: '',
+			avatarUri: '',
+			localAvatarUri: '',
 			defaultAvatar: '/static/user_avatar.png',
 
 			popupType: '',
@@ -392,9 +394,11 @@ export default {
 			if (res) {
 				const info = res.user_info || {}
 				this.username = info.username || getApp().globalData.username || ''
-				this.avatar = info.avatar || getApp().globalData.avatar || this.defaultAvatar
-				getApp().globalData.username = this.username
-				getApp().globalData.avatar = this.avatar
+				const remoteAvatar = info.avatar || getApp().globalData.avatar || ''
+				this.avatarUri = info.avatar || getApp().globalData.avatar || ''
+				this.localAvatarUri = ''
+			getApp().globalData.username = this.username
+				getApp().globalData.avatar = this.avatarUri || this.localAvatarUri || this.defaultAvatar
 				return
 			}
 
@@ -403,7 +407,8 @@ export default {
 				const user = rows?.[0] || null
 				if (user) {
 					this.username = user.username || getApp().globalData.username || ''
-					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					this.avatarUri = user.avatar_uri || ''
+					this.localAvatarUri = user.local_avatar_uri || ''
 					return
 				}
 			} catch (e) {
@@ -411,7 +416,8 @@ export default {
 			}
 
 			this.username = getApp().globalData.username || ''
-			this.avatar = getApp().globalData.avatar || this.defaultAvatar
+			this.avatarUri = getApp().globalData.avatar || ''
+			this.localAvatarUri = ''
 		},
 
 		closePopup() {
@@ -574,9 +580,10 @@ export default {
 				value: url
 			})
 
-			if (ok) {
-				this.avatar = url
-				getApp().globalData.avatar = url
+		if (ok) {
+			this.avatarUri = url
+			this.localAvatarUri = ''
+			getApp().globalData.avatar = url
 
 				try {
 					await DB.updateUser(this.userId, {
@@ -596,9 +603,25 @@ export default {
 				})
 			}
 			this.submitting = false
+		},
+
+		async onAvatarError() {
+			if (this.avatarUri) {
+				this.avatarUri = ''
+				return
+			}
+			if (this.localAvatarUri) {
+				this.localAvatarUri = ''
+				try {
+					await DB.updateUser(this.userId, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 }
+
 </script>
 
 <style>

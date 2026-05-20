@@ -747,7 +747,7 @@ export default {
 				user_id: item.user_id || item.userId || '',
 				material_type: materialType,
 				cover: cover,
-				title: item.title || '未命名创作',
+				title: item.title || '未知创作',
 				username: item.username || item.author_name || '未知作者',
 				avatar: avatar,
 				digg_count: item.digg_count || 0,

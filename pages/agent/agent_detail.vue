@@ -28,13 +28,14 @@
 					<image
 						class="avatar"
 						:style="avatarStyle"
-						:src="agent.local_avatar_uri || agent.avatar_uri || defaultAgentAvatar"
+						:src="agent.avatar_uri || agent.local_avatar_uri || defaultAgentAvatar"
+						@error="onAgentAvatarErr"
 						mode="aspectFill"
 					/>
 
 					<view class="profile-main" :style="profileMainStyle">
 						<text class="agent-name" :style="agentNameStyle">
-							{{ agent.agent_name || '未命名智能体' }}
+							{{ agent.agent_name || '未知能体' }}
 						</text>
 						<text class="agent-time" :style="agentTimeStyle">
 							创建时间：{{ formatTime(agent.create_time) }}
@@ -525,6 +526,21 @@ export default {
 			const mm = String(date.getMinutes()).padStart(2, '0');
 
 			return `${y}-${m}-${d} ${hh}:${mm}`;
+		},
+
+		async onAgentAvatarErr() {
+			if (this.agent.avatar_uri) {
+				this.agent.avatar_uri = ''
+				return
+			}
+			if (this.agent.local_avatar_uri) {
+				this.agent.local_avatar_uri = ''
+				try {
+					await DB.updateAgent(this.agent.agent_id, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 };

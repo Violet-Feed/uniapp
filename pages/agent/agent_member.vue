@@ -59,13 +59,14 @@
 					<image
 						class="avatar"
 						:style="avatarStyle"
-						:src="item.avatar_uri || defaultAvatar"
+						:src="item.avatar_uri || item.local_avatar_uri || defaultAvatar"
+						@error="onAvatarErr(item)"
 						mode="aspectFill"
 					/>
 
 					<view class="agent-main" :style="agentMainStyle">
 						<text class="agent-name" :style="agentNameStyle">
-							{{ item.nick_name || '未命名智能体' }}
+							{{ item.nick_name || item.global_name || '未知智能体' }}
 						</text>
 
 						<text class="agent-desc" :style="agentDescStyle">
@@ -455,6 +456,7 @@ export default {
 				con_id: item?.con_id ? String(item.con_id) : '',
 				agent_id: item?.agent_id ? String(item.agent_id) : '',
 				nick_name: item?.nick_name || '',
+				global_name: item?.global_name || '',
 				avatar_uri: item?.avatar_uri || '',
 				description: item?.description || ''
 			})).filter(item => !!item.agent_id);
@@ -485,7 +487,7 @@ export default {
 		},
 
 		confirmRemoveAgent(item) {
-			const name = item?.nick_name || '该智能体';
+			const name = item?.nick_name || item?.global_name || '该智能体';
 
 			uni.showModal({
 				title: '移出群聊',
@@ -541,6 +543,21 @@ export default {
 			uni.navigateTo({
 				url: `/pages/agent/agent_detail?agentId=${encodeURIComponent(item.agent_id)}`
 			});
+		},
+
+		async onAvatarErr(item) {
+			if (item.avatar_uri) {
+				item.avatar_uri = ''
+				return
+			}
+			if (item.local_avatar_uri) {
+				item.local_avatar_uri = ''
+				try {
+					await DB.updateAgent(item.agent_id, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 };

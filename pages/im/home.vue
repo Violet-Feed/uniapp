@@ -105,7 +105,8 @@
                         <image
                             class="avatar"
                             :style="avatarStyle"
-                            :src="conversation.avatar_uri || '/static/conv_avatar.png'"
+                            :src="conversation.avatar_uri || conversation.local_avatar_uri || '/static/conv_avatar.png'"
+                            @error="onConvAvatarErr(conversation)"
                             mode="aspectFill"
                         ></image>
                     </view>
@@ -613,7 +614,7 @@ export default {
 		                            );
 		
 		                            const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
-		                            nickname = member?.nick_name || '用户';
+		                            nickname = member?.nick_name || member?.global_name || '用户';
 		                        }
 		
 		                        this.conversationList[i].last_message_type = 0;
@@ -1291,6 +1292,21 @@ export default {
 
             if (target.getFullYear() !== now.getFullYear()) return `${target.getFullYear()}年${month}月${day}日 ${hhmm}`
             return `${month}月${day}日 ${hhmm}`
+        },
+
+        async onConvAvatarErr(conv) {
+            if (conv.avatar_uri) {
+                conv.avatar_uri = ''
+                return
+            }
+            if (conv.local_avatar_uri) {
+                conv.local_avatar_uri = ''
+                try {
+                    await DB.updateConversation(conv.con_id, { local_avatar_uri: '', modify_time: Date.now() })
+                } catch (e) {
+                    console.error('清除本地头像失败：', e)
+                }
+            }
         }
     }
 };

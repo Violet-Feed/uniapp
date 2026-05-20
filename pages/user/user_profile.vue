@@ -18,7 +18,7 @@
 				<view class="compact-back-btn" @click="goBack">
 					<text class="iconfont icon-fanhui compact-back-icon"></text>
 				</view>
-				<image class="compact-avatar" :src="avatar || defaultAvatar" mode="aspectFill"></image>
+				<image class="compact-avatar" :src="avatarUri || localAvatarUri || defaultAvatar" @error="onAvatarError" mode="aspectFill"></image>
 				<text class="compact-username">{{ username || '用户' }}</text>
 			</view>
 		</view>
@@ -55,12 +55,13 @@
 
 			<view class="profile-header-content" :style="profileHeaderContentStyle">
 				<view class="avatar-section">
-					<image
-						class="avatar"
-						:style="avatarStyle"
-						:src="avatar || defaultAvatar"
-						mode="aspectFill"
-					></image>
+				<image
+					class="avatar"
+					:style="avatarStyle"
+					:src="avatarUri || localAvatarUri || defaultAvatar"
+					@error="onAvatarError"
+					mode="aspectFill"
+				></image>
 				</view>
 
 				<view class="user-info">
@@ -286,6 +287,8 @@ export default {
 			userId: null,
 			username: '',
 			avatar: '',
+			avatarUri: '',
+			localAvatarUri: '',
 			followerCount: 0,
 			followingCount: 0,
 
@@ -783,7 +786,8 @@ export default {
 				const avatarUri = remoteAvatar || this.defaultAvatar
 
 				this.username = username
-				this.avatar = avatarUri
+				this.avatarUri = remoteAvatar
+				this.localAvatarUri = ''
 				this.followingCount = res.following_count || 0
 				this.followerCount = res.follower_count || 0
 				this.isFollowing = !!res.is_following
@@ -828,7 +832,8 @@ export default {
 				const user = rows && rows.length ? rows[0] : null
 				if (user) {
 					this.username = user.username || ''
-					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					this.avatarUri = user.avatar_uri || ''
+					this.localAvatarUri = user.local_avatar_uri || ''
 					return
 				}
 			} catch (e) {
@@ -836,7 +841,8 @@ export default {
 			}
 
 			this.username = ''
-			this.avatar = this.defaultAvatar
+			this.avatarUri = ''
+			this.localAvatarUri = ''
 			this.followingCount = 0
 			this.followerCount = 0
 			this.isFollowing = false
@@ -870,10 +876,10 @@ export default {
 			const mapped = list.map((item) => ({
 				creation_id: item.creation_id,
 				cover: item.cover_url || item.material_url || this.defaultImage,
-				title: item.title || '未命名作品',
+				title: item.title || '未知作品',
 				user_id: item.user_id,
 				username: this.username || item.username || '未知作者',
-				avatar: this.avatar || item.avatar || this.defaultAvatar,
+				avatar: this.avatarUri || this.localAvatarUri || item.avatar || this.defaultAvatar,
 				digg_count: item.digg_count || 0,
 				is_digg: !!item.is_digg,
 				material_type: item.material_type,
@@ -920,7 +926,7 @@ export default {
 			const mapped = list.map((item) => ({
 				creation_id: item.creation_id,
 				cover: item.cover_url || item.material_url || this.defaultImage,
-				title: item.title || '未命名作品',
+				title: item.title || '未知作品',
 				user_id: item.user_id,
 				username: item.username || '未知作者',
 				avatar: item.avatar || this.defaultAvatar,
@@ -1046,6 +1052,21 @@ export default {
 			if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
 			if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
 			return num.toString()
+		},
+
+		async onAvatarError() {
+			if (this.avatarUri) {
+				this.avatarUri = ''
+				return
+			}
+			if (this.localAvatarUri) {
+				this.localAvatarUri = ''
+				try {
+					await DB.updateUser(this.userId, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 }

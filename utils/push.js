@@ -483,6 +483,7 @@ const getConversationDisplayInfo = (conversation, msgBody) => {
 
 const getSenderDisplayName = (senderInfo, msgBody) => {
 	if (senderInfo?.nick_name) return senderInfo.nick_name
+	if (senderInfo?.global_name) return senderInfo.global_name
 
 	const senderType = safeNumber(msgBody?.sender_type)
 

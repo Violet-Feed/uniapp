@@ -127,7 +127,7 @@
 
 								<view class="member-info" :style="memberInfoStyle">
 									<text class="member-name" :style="memberNameStyle">
-										{{ agent.agent_name || '未命名智能体' }}
+										{{ agent.agent_name || '未知智能体' }}
 									</text>
 									<text class="member-desc" :style="memberDescStyle">
 										{{ agent.description || '暂无描述' }}

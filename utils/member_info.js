@@ -336,8 +336,10 @@ function buildResult(conId, senders, infos) {
 			con_id: conId,
 			sender_type: sender.sender_type,
 			sender_id: sender.sender_id,
-			nick_name: Number(sender.sender_type) === 1 ? '用户' : 'AI',
-			avatar_uri: Number(sender.sender_type) === 1 ? USER_DEFAULT_AVATAR : AI_DEFAULT_AVATAR
+			nick_name: '',
+			global_name: Number(sender.sender_type) === 1 ? '用户' : 'AI',
+			avatar_uri: '',
+			local_avatar_uri: Number(sender.sender_type) === 1 ? USER_DEFAULT_AVATAR : AI_DEFAULT_AVATAR
 		};
 	});
 }

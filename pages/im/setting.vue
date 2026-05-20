@@ -26,10 +26,11 @@
 				>
 					<image
 						class="member-avatar"
-						:src="member.avatar_uri || '/static/user_avatar.png'"
+						:src="member.avatar_uri || member.local_avatar_uri || '/static/user_avatar.png'"
+						@error="onMemberAvatarErr(member)"
 						mode="aspectFill"
 					></image>
-					<text class="member-name">{{ member.nick_name || '未命名' }}</text>
+					<text class="member-name">{{ member.nick_name || member.global_name || '未知用户' }}</text>
 				</view>
 
 				<view class="member-item add-btn" @click="goToAddMember">
@@ -60,7 +61,7 @@
 			<view class="info-item" @click="openAvatarSourcePopup">
 				<text class="info-label">群头像</text>
 				<view class="info-content">
-					<image class="group-avatar" :src="groupAvatar || '/static/group_avatar.png'" mode="aspectFill"></image>
+					<image class="group-avatar" :src="groupAvatar || '/static/group_avatar.png'" mode="aspectFill" @error="groupAvatar = ''"></image>
 					<text class="arrow">›</text>
 				</view>
 			</view>
@@ -611,11 +612,26 @@ export default {
 
 			setTimeout(() => {
 				uni.navigateBack({
-					delta: 2
+					delta: 1
 				});
 			}, 300);
 
 			this.updating = false;
+		},
+
+		async onMemberAvatarErr(member) {
+			if (member.avatar_uri) {
+				member.avatar_uri = ''
+				return
+			}
+			if (member.local_avatar_uri) {
+				member.local_avatar_uri = ''
+				try {
+					await DB.updateUser(member.user_id, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 };

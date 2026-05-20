@@ -66,7 +66,7 @@
 
 					<view class="agent-main" :style="agentMainStyle">
 						<text class="agent-name" :style="agentNameStyle">
-							{{ item.agent_name || '未命名智能体' }}
+							{{ item.agent_name || '未知能体' }}
 						</text>
 
 						<text class="agent-desc" :style="agentDescStyle">

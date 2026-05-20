@@ -480,7 +480,7 @@ export default {
 					creation_id: item.creation_id,
 					user_id: item.user_id,
 					image: item.cover_url || item.material_url || this.defaultImage,
-					title: item.title || '未命名作品',
+					title: item.title || '未知作品',
 					author: {
 						avatar: item.avatar || item.author_avatar || this.defaultAvatar,
 						name: item.username || item.author_name || '未知作者',

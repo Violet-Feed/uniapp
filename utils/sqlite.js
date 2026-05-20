@@ -457,12 +457,17 @@ async function pullConversation(beforeUserConIndex, limit = 50) {
       END AS name,
 
       CASE
-        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
-        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
-        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 1 THEN u.avatar_uri
+        WHEN c.con_type = 4 THEN a.avatar_uri
+        ELSE c.avatar_uri
       END AS avatar_uri,
 
-      c.local_avatar_uri,
+      CASE
+        WHEN c.con_type = 1 THEN u.local_avatar_uri
+        WHEN c.con_type = 4 THEN a.local_avatar_uri
+        ELSE c.local_avatar_uri
+      END AS local_avatar_uri,
+
       c.description,
       CAST(c.owner_id AS TEXT) AS owner_id,
       c.create_time,
@@ -521,12 +526,17 @@ async function pullAllConversation(limit = 1000) {
       END AS name,
 
       CASE
-        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
-        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
-        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 1 THEN u.avatar_uri
+        WHEN c.con_type = 4 THEN a.avatar_uri
+        ELSE c.avatar_uri
       END AS avatar_uri,
 
-      c.local_avatar_uri,
+      CASE
+        WHEN c.con_type = 1 THEN u.local_avatar_uri
+        WHEN c.con_type = 4 THEN a.local_avatar_uri
+        ELSE c.local_avatar_uri
+      END AS local_avatar_uri,
+
       c.description,
       CAST(c.owner_id AS TEXT) AS owner_id,
       c.create_time,
@@ -578,12 +588,17 @@ async function getConversationById(conId) {
       END AS name,
 
       CASE
-        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
-        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
-        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 1 THEN u.avatar_uri
+        WHEN c.con_type = 4 THEN a.avatar_uri
+        ELSE c.avatar_uri
       END AS avatar_uri,
 
-      c.local_avatar_uri,
+      CASE
+        WHEN c.con_type = 1 THEN u.local_avatar_uri
+        WHEN c.con_type = 4 THEN a.local_avatar_uri
+        ELSE c.local_avatar_uri
+      END AS local_avatar_uri,
+
       c.description,
       CAST(c.owner_id AS TEXT) AS owner_id,
       c.create_time,
@@ -640,12 +655,17 @@ async function getConversationByShortId(conShortId) {
       END AS name,
 
       CASE
-        WHEN c.con_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), NULLIF(u.avatar_uri, ''), c.avatar_uri)
-        WHEN c.con_type = 4 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), NULLIF(a.avatar_uri, ''), c.avatar_uri)
-        ELSE COALESCE(NULLIF(c.local_avatar_uri, ''), c.avatar_uri)
+        WHEN c.con_type = 1 THEN u.avatar_uri
+        WHEN c.con_type = 4 THEN a.avatar_uri
+        ELSE c.avatar_uri
       END AS avatar_uri,
 
-      c.local_avatar_uri,
+      CASE
+        WHEN c.con_type = 1 THEN u.local_avatar_uri
+        WHEN c.con_type = 4 THEN a.local_avatar_uri
+        ELSE c.local_avatar_uri
+      END AS local_avatar_uri,
+
       c.description,
       CAST(c.owner_id AS TEXT) AS owner_id,
       c.create_time,
@@ -730,17 +750,25 @@ async function pullMessage(conId, beforeConIndex, limit = 20) {
       p.extra,
       p.con_index,
 
-      CASE
-        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(mem.nick_name, ''), u.username, '')
-        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '')
-        ELSE ''
-      END AS nick_name,
+      mem.nick_name,
 
       CASE
-        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri)
-        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri)
+        WHEN p.sender_type = 1 THEN u.username
+        WHEN p.sender_type = 2 THEN a.agent_name
         ELSE ''
-      END AS avatar_uri
+      END AS global_name,
+
+      CASE
+        WHEN p.sender_type = 1 THEN u.avatar_uri
+        WHEN p.sender_type = 2 THEN a.avatar_uri
+        ELSE ''
+      END AS avatar_uri,
+
+      CASE
+        WHEN p.sender_type = 1 THEN u.local_avatar_uri
+        WHEN p.sender_type = 2 THEN a.local_avatar_uri
+        ELSE ''
+      END AS local_avatar_uri
 
     FROM page p
     LEFT JOIN ${memberTable} mem
@@ -800,17 +828,25 @@ async function pullMessageReverse(conId, conIndex) {
       p.extra,
       p.con_index,
 
-      CASE
-        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(mem.nick_name, ''), u.username, '')
-        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '')
-        ELSE ''
-      END AS nick_name,
+      mem.nick_name,
 
       CASE
-        WHEN p.sender_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri)
-        WHEN p.sender_type = 2 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri)
+        WHEN p.sender_type = 1 THEN u.username
+        WHEN p.sender_type = 2 THEN a.agent_name
         ELSE ''
-      END AS avatar_uri
+      END AS global_name,
+
+      CASE
+        WHEN p.sender_type = 1 THEN u.avatar_uri
+        WHEN p.sender_type = 2 THEN a.avatar_uri
+        ELSE ''
+      END AS avatar_uri,
+
+      CASE
+        WHEN p.sender_type = 1 THEN u.local_avatar_uri
+        WHEN p.sender_type = 2 THEN a.local_avatar_uri
+        ELSE ''
+      END AS local_avatar_uri
 
     FROM page p
     LEFT JOIN ${memberTable} mem
@@ -845,13 +881,15 @@ async function pullUserMembers(conId) {
       CAST(mem.member_id AS TEXT) AS user_id,
       mem.member_type,
 
-      COALESCE(NULLIF(mem.nick_name, ''), u.username, '') AS nick_name,
+      mem.nick_name,
+      u.username AS global_name,
 
       mem.privilege,
       mem.create_time,
       mem.status,
       mem.extra,
-      COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri) AS avatar_uri,
+      u.avatar_uri,
+      u.local_avatar_uri,
       u.modify_time
     FROM ${memberTable} mem
     LEFT JOIN ${userTable} u
@@ -880,13 +918,15 @@ async function pullAgentMembers(conId) {
       CAST(mem.member_id AS TEXT) AS agent_id,
       mem.member_type,
 
-      COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '') AS nick_name,
+      mem.nick_name,
+      a.agent_name AS global_name,
 
       mem.privilege,
       mem.create_time,
       mem.status,
       mem.extra,
-      COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri) AS avatar_uri,
+      a.avatar_uri,
+      a.local_avatar_uri,
       a.description,
       CAST(a.owner_id AS TEXT) AS owner_id,
       a.modify_time
@@ -936,11 +976,13 @@ async function getMemberInfosBySenders(conId, senders) {
       CAST(mem.con_short_id AS TEXT) AS con_short_id,
       mem.con_id,
 
+      mem.nick_name,
+
       CASE
-        WHEN i.sender_type = 1 THEN COALESCE(NULLIF(mem.nick_name, ''), u.username, '')
-        WHEN i.sender_type = 2 THEN COALESCE(NULLIF(mem.nick_name, ''), a.agent_name, '')
+        WHEN i.sender_type = 1 THEN u.username
+        WHEN i.sender_type = 2 THEN a.agent_name
         ELSE ''
-      END AS nick_name,
+      END AS global_name,
 
       mem.privilege,
       mem.create_time,
@@ -948,8 +990,8 @@ async function getMemberInfosBySenders(conId, senders) {
       mem.extra,
 
       CASE
-        WHEN i.sender_type = 1 THEN COALESCE(NULLIF(u.local_avatar_uri, ''), u.avatar_uri)
-        WHEN i.sender_type = 2 THEN COALESCE(NULLIF(a.local_avatar_uri, ''), a.avatar_uri)
+        WHEN i.sender_type = 1 THEN u.avatar_uri
+        WHEN i.sender_type = 2 THEN a.avatar_uri
         ELSE ''
       END AS avatar_uri,
 

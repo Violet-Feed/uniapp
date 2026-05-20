@@ -49,11 +49,11 @@
                     <view class="message message-right" :style="messageRowStyle" v-if="isSelfMessage(message)">
                         <view class="message-content message-content-right" :style="messageContentStyle">
                             <text
-                                v-if="message.nick_name"
+                                v-if="message.nick_name || message.global_name"
                                 class="sender-name sender-name-right"
                                 :style="senderNameRightStyle"
                             >
-                                {{ message.nick_name }}
+                                {{ message.nick_name || message.global_name }}
                             </text>
 
                             <view class="self-bubble-row">
@@ -81,7 +81,7 @@
 
                                     <view class="share-card-content" :style="shareCardContentStyle">
                                         <view class="share-card-title-container">
-                                            <text class="share-card-title">{{ message.share_content.title || '未命名作品' }}</text>
+                                            <text class="share-card-title">{{ message.share_content.title || '未知作品' }}</text>
                                         </view>
 
                                         <view class="share-card-footer">
@@ -118,8 +118,9 @@
                             <image
                                 class="avatar"
                                 :style="avatarStyle"
-                                :src="message.avatar_uri || myAvatar || userDefaultAvatar"
+                                :src="message.avatar_uri || message.local_avatar_uri || userDefaultAvatar"
                                 mode="aspectFill"
+                                @error="onMsgAvatarErr(message)"
                             ></image>
                         </view>
                     </view>
@@ -129,14 +130,15 @@
                             <image
                                 class="avatar"
                                 :style="avatarStyle"
-                                :src="message.avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)"
+                                :src="message.avatar_uri || message.local_avatar_uri || (message.sender_type == 1 ? userDefaultAvatar : aiDefaultAvatar)"
                                 mode="aspectFill"
+                                @error="onMsgAvatarErr(message)"
                             ></image>
                         </view>
 
                         <view class="message-content message-content-left" :style="messageContentStyle">
-                            <text v-if="message.nick_name" class="sender-name" :style="senderNameStyle">
-                                {{ message.nick_name }}
+                            <text v-if="message.nick_name || message.global_name" class="sender-name" :style="senderNameStyle">
+                                {{ message.nick_name || message.global_name }}
                             </text>
 
                             <view
@@ -159,7 +161,7 @@
 
                                 <view class="share-card-content" :style="shareCardContentStyle">
                                     <view class="share-card-title-container">
-                                        <text class="share-card-title">{{ message.share_content.title || '未命名作品' }}</text>
+                                        <text class="share-card-title">{{ message.share_content.title || '未知作品' }}</text>
                                     </view>
 
                                     <view class="share-card-footer">
@@ -283,7 +285,6 @@ export default {
     data() {
         return {
             userId: getApp().globalData.userId,
-            myAvatar: getApp().globalData.avatar,
             senderInfoMap: new Map(),
             shareAuthorInfoMap: new Map(),
             conversation: {},
@@ -1176,6 +1177,33 @@ export default {
 		        const nextMessage = await handleMessageExtra(this.messages[index]);
 		
 		        this.messages.splice(index, 1, nextMessage);
+		    } else if (msgBody.msg_type == 103) {
+		        if (cmdMessage.type == 1) {
+		            uni.showToast({ title: '会话已删除', icon: 'none' });
+		            setTimeout(() => {
+		                uni.navigateBack();
+		            }, 500);
+		        }
+		    } else if (msgBody.msg_type == 104) {
+		        if (cmdMessage.type == 1) {
+		            const newNickName = cmdMessage.content || '';
+		            const senderKey = `${Number(msgBody.sender_type)}:${String(msgBody.sender_id)}`;
+		            const old = this.senderInfoMap.get(senderKey) || {};
+		
+		            this.senderInfoMap.set(senderKey, {
+		                nick_name: newNickName,
+		                global_name: old.global_name || '',
+		                avatar_uri: old.avatar_uri || '',
+		                local_avatar_uri: old.local_avatar_uri || ''
+		            });
+		
+		            for (let i = this.messages.length - 1; i >= 0; i--) {
+		                const msg = this.messages[i];
+		                if (Number(msg.sender_type) !== Number(msgBody.sender_type)) continue;
+		                if (String(msg.sender_id) !== String(msgBody.sender_id)) continue;
+		                msg.nick_name = newNickName;
+		            }
+		        }
 		    }
 		},
 		
@@ -1209,8 +1237,10 @@ export default {
 		            const old = this.senderInfoMap.get(senderKey);
 		
 		            this.senderInfoMap.set(senderKey, {
-		                nick_name: user.username || old.nick_name || '',
-		                avatar_uri: user.avatar_uri || old.avatar_uri || ''
+		                nick_name: old.nick_name || '',
+		                global_name: user.username || old.global_name || '',
+		                avatar_uri: user.avatar_uri || old.avatar_uri || '',
+		                local_avatar_uri: old.local_avatar_uri || ''
 		            });
 		        }
 		    }
@@ -1222,7 +1252,7 @@ export default {
 		            const user = map.get(String(msg.sender_id));
 		
 		            if (user) {
-		                msg.nick_name = user.username || msg.nick_name;
+		                msg.global_name = user.username || msg.global_name;
 		                msg.avatar_uri = user.avatar_uri || msg.avatar_uri;
 		            }
 		        }
@@ -1260,8 +1290,10 @@ export default {
 		        const old = this.senderInfoMap.get(senderKey);
 		
 		        this.senderInfoMap.set(senderKey, {
-		            nick_name: agent.agent_name || old.nick_name || '',
-		            avatar_uri: agent.avatar_uri || old.avatar_uri || ''
+		            nick_name: old.nick_name || '',
+		            global_name: agent.agent_name || old.global_name || '',
+		            avatar_uri: agent.avatar_uri || old.avatar_uri || '',
+		            local_avatar_uri: old.local_avatar_uri || ''
 		        });
 		    }
 		
@@ -1273,7 +1305,7 @@ export default {
 		        const agent = map.get(String(msg.sender_id));
 		        if (!agent) continue;
 		
-		        msg.nick_name = agent.agent_name || msg.nick_name;
+		        msg.global_name = agent.agent_name || msg.global_name;
 		        msg.avatar_uri = agent.avatar_uri || msg.avatar_uri;
 		    }
 		},
@@ -1487,11 +1519,13 @@ export default {
                 if (!message) continue;
                 if (Number(message.sender_type) !== 1 && Number(message.sender_type) !== 2) continue;
 
-                if (message.nick_name || message.avatar_uri) {
+                if (message.nick_name || message.global_name || message.avatar_uri || message.local_avatar_uri) {
                     const key = `${Number(message.sender_type)}:${String(message.sender_id)}`;
                     this.senderInfoMap.set(key, {
                         nick_name: message.nick_name || '',
-                        avatar_uri: message.avatar_uri || ''
+                        global_name: message.global_name || '',
+                        avatar_uri: message.avatar_uri || '',
+                        local_avatar_uri: message.local_avatar_uri || ''
                     });
                     continue;
                 }
@@ -1518,7 +1552,9 @@ export default {
 						const key = `${Number(info.sender_type)}:${String(info.sender_id)}`;
 						this.senderInfoMap.set(key, {
 							nick_name: info.nick_name || '',
-							avatar_uri: info.avatar_uri || ''
+							global_name: info.global_name || '',
+							avatar_uri: info.avatar_uri || '',
+							local_avatar_uri: info.local_avatar_uri || ''
 						});
 					}
                 } catch (err) {
@@ -1537,9 +1573,37 @@ export default {
                     if (!message.nick_name) {
                         message.nick_name = cached.nick_name || '';
                     }
+                    if (!message.global_name) {
+                        message.global_name = cached.global_name || '';
+                    }
                     if (!message.avatar_uri) {
                         message.avatar_uri = cached.avatar_uri || '';
                     }
+                    if (!message.local_avatar_uri) {
+                        message.local_avatar_uri = cached.local_avatar_uri || '';
+                    }
+                }
+            }
+        },
+
+        async onMsgAvatarErr(msg) {
+            if (msg.avatar_uri) {
+                msg.avatar_uri = ''
+                return
+            }
+            if (msg.local_avatar_uri) {
+                msg.local_avatar_uri = ''
+                const key = `${Number(msg.sender_type)}:${String(msg.sender_id)}`
+                const cached = this.senderInfoMap.get(key)
+                if (cached) cached.local_avatar_uri = ''
+                try {
+                    if (Number(msg.sender_type) === 1) {
+                        await DB.updateUser(msg.sender_id, { local_avatar_uri: '', modify_time: Date.now() })
+                    } else if (Number(msg.sender_type) === 2) {
+                        await DB.updateAgent(msg.sender_id, { local_avatar_uri: '', modify_time: Date.now() })
+                    }
+                } catch (e) {
+                    console.error('清除本地头像失败：', e)
                 }
             }
         },
@@ -1660,7 +1724,9 @@ export default {
                             if (Array.isArray(infos) && infos.length > 0) {
                                 selfInfo = {
                                     nick_name: infos[0].nick_name || '',
-                                    avatar_uri: infos[0].avatar_uri || ''
+                                    global_name: infos[0].global_name || '',
+                                    avatar_uri: infos[0].avatar_uri || '',
+                                    local_avatar_uri: infos[0].local_avatar_uri || ''
                                 };
                                 this.senderInfoMap.set(selfKey, selfInfo);
                             }
@@ -1682,12 +1748,16 @@ export default {
                         create_time: Date.now() / 1000,
                         status: -1,
                         nick_name: selfInfo.nick_name || '',
-                        avatar_uri: selfInfo.avatar_uri || this.myAvatar || ''
+                        global_name: selfInfo.global_name || '',
+                        avatar_uri: selfInfo.avatar_uri || '',
+                        local_avatar_uri: selfInfo.local_avatar_uri || ''
                     };
 
                     this.senderInfoMap.set(selfKey, {
                         nick_name: optimisticMessage.nick_name || '',
-                        avatar_uri: optimisticMessage.avatar_uri || ''
+                        global_name: optimisticMessage.global_name || '',
+                        avatar_uri: optimisticMessage.avatar_uri || '',
+                        local_avatar_uri: optimisticMessage.local_avatar_uri || ''
                     });
 
                     if (
@@ -2018,6 +2088,10 @@ export default {
         },
 
         handleConversationCommand(cmdMessage) {
+            if (cmdMessage.type == 2 && String(cmdMessage.content) === String(this.userId)) {
+                this.conversation.is_member = 0;
+            }
+
             if (cmdMessage.type == 3) {
                 const newName = cmdMessage.content || '群聊';
                 this.chatName = newName;

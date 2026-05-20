@@ -412,7 +412,7 @@ export const transformContent = async (message) => {
 			);
 			if (Array.isArray(infos)) {
 				for (const info of infos) {
-					nameMap.set(`${Number(info.sender_type)}_${String(info.sender_id)}`, info.nick_name || '');
+					nameMap.set(`${Number(info.sender_type)}_${String(info.sender_id)}`, info.nick_name || info.global_name || '');
 				}
 			}
 		}
@@ -656,7 +656,7 @@ export const handleCommandMessage = async (msg) => {
 				}
 			]);
 			const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
-			nickname = member?.nick_name || '用户';
+			nickname = member?.nick_name || member?.global_name || '用户';
 		}
       await DB.updateMessage(msgId, {
 		sender_type: 3,
@@ -710,7 +710,7 @@ export const handleMessageExtra = async (message) => {
 				}
 			]);
 			const member = Array.isArray(members) && members.length > 0 ? members[0] : null;
-			nickname = member?.nick_name || '用户';
+			nickname = member?.nick_name || member?.global_name || '用户';
 		}
 		return {
 			...message,

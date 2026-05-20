@@ -18,7 +18,7 @@
 				<view class="compact-back-btn" @click="goBack">
 					<text class="iconfont icon-fanhui compact-back-icon"></text>
 				</view>
-				<image class="compact-avatar" :src="avatar || defaultAvatar" mode="aspectFill"></image>
+				<image class="compact-avatar" :src="avatarUri || localAvatarUri || defaultAvatar" @error="onAvatarError" mode="aspectFill"></image>
 				<text class="compact-username">{{ username || '我的' }}</text>
 			</view>
 		</view>
@@ -55,12 +55,13 @@
 
 			<view class="profile-header-content" :style="profileHeaderContentStyle">
 				<view class="avatar-section">
-					<image
-						class="avatar"
-						:style="avatarStyle"
-						:src="avatar || defaultAvatar"
-						mode="aspectFill"
-					></image>
+				<image
+					class="avatar"
+					:style="avatarStyle"
+					:src="avatarUri || localAvatarUri || defaultAvatar"
+					@error="onAvatarError"
+					mode="aspectFill"
+				></image>
 				</view>
 
 				<view class="user-info">
@@ -266,6 +267,8 @@ export default {
 			userId: null,
 			username: '',
 			avatar: '',
+			avatarUri: '',
+			localAvatarUri: '',
 			friendCount: 0,
 			followingCount: 0,
 			followerCount: 0,
@@ -697,12 +700,15 @@ export default {
 			const res = await getUserProfile(uid, true, true)
 			if (res) {
 				this.username = res.user_info && res.user_info.username ? res.user_info.username : ''
-				this.avatar = res.user_info && res.user_info.avatar ? res.user_info.avatar : this.defaultAvatar
+				const remoteAvatar = res.user_info && res.user_info.avatar ? res.user_info.avatar : ''
+				const avatarUri = remoteAvatar || this.defaultAvatar
+				this.avatarUri = remoteAvatar
+				this.localAvatarUri = ''
 				this.followingCount = res.following_count || 0
 				this.followerCount = res.follower_count || 0
 				this.friendCount = res.friend_count || 0
 				getApp().globalData.username = this.username;
-				getApp().globalData.avatar = this.avatar;
+				getApp().globalData.avatar = avatarUri;
 				
 				const rows = await DB.getUsersByIds([uid])
 				const oldUser = rows && rows.length ? rows[0] : null
@@ -718,12 +724,12 @@ export default {
 						? ''
 						: oldLocalAvatarUri
 				
-				await DB.updateUser(uid, {
-					username,
-					avatar_uri: avatarUri,
-					local_avatar_uri: localAvatarUri,
-					modify_time: Date.now()
-				})
+			await DB.updateUser(uid, {
+				username: this.username,
+				avatar_uri: avatarUri,
+				local_avatar_uri: localAvatarUri,
+				modify_time: Date.now()
+			})
 				
 				if (avatarChanged || localMissing) {
 					enqueueEntityAvatars('user', [uid])
@@ -736,7 +742,8 @@ export default {
 				const user = rows && rows.length ? rows[0] : null
 				if (user) {
 					this.username = user.username || getApp().globalData.username || ''
-					this.avatar = user.local_avatar_uri || user.avatar_uri || this.defaultAvatar
+					this.avatarUri = user.avatar_uri || ''
+					this.localAvatarUri = user.local_avatar_uri || ''
 					return
 				}
 			} catch (e) {
@@ -744,7 +751,8 @@ export default {
 			}
 
 			this.username = getApp().globalData.username || ''
-			this.avatar = getApp().globalData.avatar || this.defaultAvatar
+			this.avatarUri = getApp().globalData.avatar || ''
+			this.localAvatarUri = ''
 		},
 
 		async loadUserWorks(reset = false) {
@@ -773,10 +781,10 @@ export default {
 			const mapped = list.map((item) => ({
 				creation_id: item.creation_id,
 				cover: item.cover_url || item.material_url || this.defaultImage,
-				title: item.title || '未命名作品',
+				title: item.title || '未知作品',
 				user_id: item.user_id,
 				username: item.username || this.username || '未知作者',
-				avatar: item.avatar || this.avatar || this.defaultAvatar,
+				avatar: item.avatar || this.avatarUri || this.localAvatarUri || this.defaultAvatar,
 				digg_count: item.digg_count || 0,
 				is_digg: !!item.is_digg,
 				material_type: item.material_type,
@@ -822,7 +830,7 @@ export default {
 			const mapped = list.map((item) => ({
 				creation_id: item.creation_id,
 				cover: item.cover_url || item.material_url || this.defaultImage,
-				title: item.title || '未命名作品',
+				title: item.title || '未知作品',
 				user_id: item.user_id,
 				username: item.username || '未知作者',
 				avatar: item.avatar || this.defaultAvatar,
@@ -911,6 +919,21 @@ export default {
 			if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
 			if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
 			return num.toString()
+		},
+
+		async onAvatarError() {
+			if (this.avatarUri) {
+				this.avatarUri = ''
+				return
+			}
+			if (this.localAvatarUri) {
+				this.localAvatarUri = ''
+				try {
+					await DB.updateUser(this.userId, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 }

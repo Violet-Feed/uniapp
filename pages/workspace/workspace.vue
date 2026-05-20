@@ -93,7 +93,7 @@
             <view class="card-content" :style="cardContentStyle">
               <view class="card-title-container">
                 <text class="card-title">
-                  {{ material.displayTitle || material.prompt || '未命名作品' }}
+                  {{ material.displayTitle || material.prompt || '未知作品' }}
                 </text>
               </view>
 
@@ -890,7 +890,7 @@ export default {
           ...item,
           status,
           uiStatus: this.mapStatusToUi(status),
-          displayTitle: prompt || '未命名作品',
+          displayTitle: prompt || '未知作品',
           create_time: createTime,
           displayTime: this.formatRelativeTime(createTime)
         }
@@ -985,7 +985,7 @@ export default {
           status,
           uiStatus: this.mapStatusToUi(status),
           prompt: '',
-          displayTitle: '未命名作品',
+          displayTitle: '未知作品',
           create_time: createTime,
           displayTime: this.formatRelativeTime(createTime)
         })
@@ -1153,7 +1153,7 @@ export default {
         create_time: now,
         status: 1,
         uiStatus: 'generating',
-        displayTitle: prompt || '未命名作品',
+        displayTitle: prompt || '未知作品',
         displayTime: this.formatRelativeTime(now)
       }
     },
@@ -1281,7 +1281,7 @@ export default {
           create_time: createTime,
           status,
           uiStatus: this.mapStatusToUi(status),
-          displayTitle: prompt || '未命名作品',
+          displayTitle: prompt || '未知作品',
           displayTime: this.formatRelativeTime(createTime)
         }
 

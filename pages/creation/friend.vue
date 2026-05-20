@@ -59,7 +59,7 @@
 
 							<view class="card-content" :style="cardContentStyle">
 								<view class="card-title-container">
-									<text class="card-title">{{ creation.title || '未命名作品' }}</text>
+									<text class="card-title">{{ creation.title }}</text>
 								</view>
 
 								<view class="card-footer">
@@ -416,7 +416,7 @@ export default {
 					user_id: item.user_id || item.userId || '',
 					material_type: materialType,
 					image: item.cover_url || item.material_url || this.defaultImage,
-					title: item.title || '未命名作品',
+					title: item.title || '未知作品',
 					type: materialType === 2 ? 'video' : 'image',
 					likes: item.digg_count || 0,
 					is_digg: !!item.is_digg,

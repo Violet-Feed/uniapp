@@ -58,12 +58,13 @@
 					<image
 						class="avatar"
 						:style="avatarStyle"
-						:src="item.avatar_uri || defaultAvatar"
+						:src="item.avatar_uri || item.local_avatar_uri || defaultAvatar"
+						@error="onAvatarErr(item)"
 						mode="aspectFill"
 					/>
 
 					<view class="user-main" :style="userMainStyle">
-						<text class="user-name" :style="userNameStyle">{{ item.nick_name || '未命名' }}</text>
+						<text class="user-name" :style="userNameStyle">{{ item.nick_name || item.global_name || '未知用户' }}</text>
 					</view>
 				</view>
 			</view>
@@ -421,7 +422,7 @@ export default {
 			const userId = item?.user_id ? String(item.user_id) : '';
 			if (!userId || this.removingUserId) return;
 
-			const name = item?.nick_name || '该成员';
+			const name = item?.nick_name || item?.global_name || '该成员';
 
 			uni.showModal({
 				title: '移出成员',
@@ -464,6 +465,21 @@ export default {
 
 		goBack() {
 			uni.navigateBack();
+		},
+
+		async onAvatarErr(item) {
+			if (item.avatar_uri) {
+				item.avatar_uri = ''
+				return
+			}
+			if (item.local_avatar_uri) {
+				item.local_avatar_uri = ''
+				try {
+					await DB.updateUser(item.user_id, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除本地头像失败：', e)
+				}
+			}
 		}
 	}
 };
