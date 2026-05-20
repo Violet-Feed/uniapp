@@ -632,12 +632,9 @@ export default {
 
         if (conversation) {
             this.conversation = conversation;
-
+			//this.conIndex为下一个消息应该的index，也就是当前最小index-1
             res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
             if (res.length > 0) {
-                await this.fillSenderInfos(res);
-                await this.fillShareInfos(res);
-
                 this.messages = res.reverse();
                 this.conIndex = this.messages[0].con_index - 1;
             }
@@ -646,19 +643,21 @@ export default {
             } else if (this.messages.length < 20) {
                 res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - this.messages.length);
 				if (res) {
-					if (res.length > 0) {
-					    await this.fillSenderInfos(res);
-						await this.fillShareInfos(res);
-					
+					if (res.length > 0) {				
 					    res.reverse();
 					    this.messages = res.concat(this.messages);
 					    this.conIndex = this.messages[0].con_index - 1;
 					}
-					
 					if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
 					    this.hasMore = false;
 					}
 				}
+            }
+
+            if (this.messages.length > 0) {
+                await this.fillMessageGaps(this.messages)
+				await this.fillSenderInfos(this.messages);
+				await this.fillShareInfos(this.messages);
             }
 
             this.refreshFirstPageGroupProfiles();
@@ -1021,6 +1020,9 @@ export default {
 		        console.error('drainImEventQueue failed:', err);
 		    } finally {
 		        this.imEventProcessing = false;
+				if (this.imEventQueue.length > 0) {
+				    this.drainImEventQueue()
+				}
 		    }
 		},
 		
@@ -1035,17 +1037,23 @@ export default {
 		    this.imInitLoading = true;
 		    this.imInitFinishing = true;
 		
-		    try {
+		try {
 		        const newMessages = await DB.pullMessageReverse(
 		            this.conversation.con_id,
 		            this.maxConIndex
 		        );
 		
 		        if (newMessages && newMessages.length > 0) {
-					this.maxConIndex = newMessages[newMessages.length - 1].con_index;
+		            const loadedMin = Number(newMessages[0].con_index)
+		            const expectedMin = Number(this.maxConIndex) + 1
+		            if (loadedMin > expectedMin) {
+		                const filled = await this.fetchAndFillGap(expectedMin, loadedMin - 1)
+		                newMessages = filled.concat(newMessages)
+		            }
+		            this.maxConIndex = newMessages[newMessages.length - 1].con_index;
+		            await this.fillMessageGaps(newMessages)
 		            await this.fillSenderInfos(newMessages);
 		            await this.fillShareInfos(newMessages);
-            
 		            this.appendNewDbMessages(newMessages);
 		        }
 		    } finally {
@@ -1110,6 +1118,26 @@ export default {
 			if (msg.con_index && BigInt(msg.con_index) <= BigInt(this.maxConIndex)) {
 			    return;
 			}
+
+			if (msg.con_index && BigInt(msg.con_index) > BigInt(this.maxConIndex) + 1n) {
+			    const gapStart = Number(this.maxConIndex) + 1
+			    const gapEnd = Number(msg.con_index) - 1
+			    const filled = await this.fetchAndFillGap(gapStart, gapEnd)
+			    if (filled.length > 0) {
+			        await this.fillSenderInfos(filled)
+			        await this.fillShareInfos(filled)
+		            let insertIndex = 0
+		            for (let i = this.messages.length - 1; i >= 0; i--) {
+		                if (this.messages[i].con_index) {
+		                    insertIndex = i + 1
+		                    break
+		                }
+		            }
+		            this.messages.splice(insertIndex, 0, ...filled)
+			    }
+			    this.maxConIndex = gapEnd
+			}
+
 			if (msg.con_index && BigInt(msg.con_index) > BigInt(this.maxConIndex)) {
 			    this.maxConIndex = msg.con_index;
 			}
@@ -1509,6 +1537,36 @@ export default {
             this.firstPageProfileRefreshed = true;
         },
 
+        async fetchAndFillGap(gapStart, gapEnd) {
+            const count = Number(gapEnd) - Number(gapStart) + 1
+            if (count <= 0) return []
+            const res = await getMessageByConversation(this.conversation.con_short_id, gapEnd, count)
+            if (!res || res.length === 0) return []
+            res.reverse()
+            return res
+        },
+
+        async fillMessageGaps(messages) {
+            if (!messages || messages.length < 2) return
+            const gaps = []
+            for (let i = 0; i < messages.length - 1; i++) {
+                const diff = BigInt(messages[i + 1].con_index) - BigInt(messages[i].con_index)
+                if (diff > 1n) {
+                    gaps.push({
+                        start: Number(messages[i].con_index) + 1,
+                        end: Number(messages[i + 1].con_index) - 1
+                    })
+                }
+            }
+            for (const g of gaps) {
+                const filled = await this.fetchAndFillGap(g.start, g.end)
+                messages.push(...filled)
+            }
+            if (gaps.length > 0) {
+                messages.sort((a, b) => Number(a.con_index) - Number(b.con_index))
+            }
+        },
+
         async fillSenderInfos(messages) {
             if (!Array.isArray(messages) || messages.length === 0) return;
 
@@ -1863,41 +1921,37 @@ export default {
                 this.isLoading = true;
 
                 let res = await DB.pullMessage(this.conversation.con_id, this.conIndex);
-                await this.fillSenderInfos(res);
-                await this.fillShareInfos(res);
-
-                let newMessages = res.reverse();
-
+                let newMessages = []
                 if (res.length > 0) {
-                    if (this.conIndex != newMessages[res.length - 1].con_index) {
-                        console.error('TODO:getByConversation');
+					newMessages = res.reverse();
+                    const loadedMax = Number(newMessages[newMessages.length - 1].con_index)
+                    const expectedMax = Number(this.conIndex)
+                    if (loadedMax < expectedMax) {
+                        const filled = await this.fetchAndFillGap(loadedMax + 1, expectedMax)
+                        newMessages.push(...filled)
                     }
-                    this.conIndex = newMessages[0].con_index - 1;
+					this.conIndex = newMessages[0].con_index - 1;
                 }
-
                 if (this.conIndex <= this.conversation.min_index) {
                     this.hasMore = false;
                 } else if (res.length < 20) {
-                    res = await getMessageByConversation(
-                        this.conversation.con_short_id,
-                        this.conIndex,
-                        20 - res.length
-                    );
+                    res = await getMessageByConversation(this.conversation.con_short_id, this.conIndex, 20 - newMessages.length);
 					if (res) {
 						if (res.length > 0) {
-						    await this.fillSenderInfos(res);
-						    await this.fillShareInfos(res);
-						
 						    res.reverse();
 						    newMessages = res.concat(newMessages);
 						    this.conIndex = newMessages[0].con_index - 1;
 						}
-						
 						if (res.length === 0 || this.conIndex <= this.conversation.min_index) {
 						    this.hasMore = false;
 						}
 					}
                 }
+				if (newMessages.length > 0) {
+					await this.fillMessageGaps(newMessages)
+					await this.fillSenderInfos(newMessages)
+					await this.fillShareInfos(newMessages)
+				}
 
                 const firstMsgId = this.messages.length > 0 ? this.messages[0].msg_id : '';
 

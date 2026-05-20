@@ -530,6 +530,9 @@ export default {
 		        console.error('drainHomeEventQueue failed', err);
 		    } finally {
 		        this.homeEventProcessing = false;
+				if (this.homeEventQueue.length > 0) {
+				    this.drainHomeEventQueue()
+				}
 		    }
 		},
 		

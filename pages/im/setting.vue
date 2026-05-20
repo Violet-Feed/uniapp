@@ -61,7 +61,7 @@
 			<view class="info-item" @click="openAvatarSourcePopup">
 				<text class="info-label">群头像</text>
 				<view class="info-content">
-					<image class="group-avatar" :src="groupAvatar || '/static/group_avatar.png'" mode="aspectFill" @error="groupAvatar = ''"></image>
+					<image class="group-avatar" :src="groupAvatar || groupLocalAvatar || '/static/conv_avatar.png'" mode="aspectFill" @error="onGroupAvatarErr"></image>
 					<text class="arrow">›</text>
 				</view>
 			</view>
@@ -195,6 +195,7 @@ export default {
 			conType: 0,
 			groupName: '',
 			groupAvatar: '',
+			groupLocalAvatar: '',
 			groupDescription: '',
 			selfNickName: '',
 			selfPrivilege: 0,
@@ -300,6 +301,7 @@ export default {
 					this.conShortId = conversation.con_short_id ? String(conversation.con_short_id) : '';
 					this.groupName = conversation.name || '';
 					this.groupAvatar = conversation.avatar_uri || '';
+				this.groupLocalAvatar = conversation.local_avatar_uri || '';
 					this.groupDescription = conversation.description || '';
 				}
 
@@ -617,6 +619,21 @@ export default {
 			}, 300);
 
 			this.updating = false;
+		},
+
+		async onGroupAvatarErr() {
+			if (this.groupAvatar) {
+				this.groupAvatar = ''
+				return
+			}
+			if (this.groupLocalAvatar) {
+				this.groupLocalAvatar = ''
+				try {
+					await DB.updateConversation(this.conId, { local_avatar_uri: '', modify_time: Date.now() })
+				} catch (e) {
+					console.error('清除群本地头像失败：', e)
+				}
+			}
 		},
 
 		async onMemberAvatarErr(member) {

@@ -378,6 +378,11 @@
             <text class="share-option-text">朋友</text>
           </view>
 
+          <view class="share-option" @click="shareToQQ">
+            <text class="iconfont icon-QQ share-option-icon"></text>
+            <text class="share-option-text">QQ</text>
+          </view>
+
           <view class="share-option" @click="shareToWechat">
             <text class="iconfont icon-weixin share-option-icon"></text>
             <text class="share-option-text">微信</text>
@@ -386,11 +391,6 @@
           <view class="share-option" @click="shareToTimeline">
             <text class="iconfont icon-pengyouquan share-option-icon share-option-icon-small"></text>
             <text class="share-option-text">朋友圈</text>
-          </view>
-
-          <view class="share-option" @click="shareToQQ">
-            <text class="iconfont icon-QQ share-option-icon"></text>
-            <text class="share-option-text">QQ</text>
           </view>
         </view>
       </view>
